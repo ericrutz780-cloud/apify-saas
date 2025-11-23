@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import auth
 
 # Import aus "app.routers"
 from app.routers import search
@@ -18,6 +19,7 @@ app.add_middleware(
 
 # Hier binden wir den Router ein
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"]) # <--- NEU: Einbinden
 
 @app.get("/")
 def root():

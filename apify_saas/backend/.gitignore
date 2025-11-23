@@ -1,0 +1,20 @@
+# --- Sicherheit (WICHTIG!) ---
+.env
+
+# --- Python Müll ---
+__pycache__/
+*.pyc
+
+# --- Virtuelle Umgebung (Riesig, nicht hochladen) ---
+venv/
+env/
+.venv/
+
+# --- Mac OS Müll ---
+.DS_Store
+
+# --- VS Code Einstellungen ---
+.vscode/
+
+# --- Jupyter Notebook Checkpoints ---
+.ipynb_checkpoints/

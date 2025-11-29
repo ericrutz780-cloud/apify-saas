@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Search, CreditCard, LogOut, Menu, X, User as UserIcon, Zap } from 'lucide-react';
+import { LayoutDashboard, Search, CreditCard, LogOut, Menu, X, User as UserIcon, Zap, Bookmark } from 'lucide-react';
 import { User } from '../types';
 
 interface LayoutProps {
@@ -16,6 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Search', href: '/search', icon: Search },
+    { name: 'Saved', href: '/saved', icon: Bookmark },
     { name: 'Billing', href: '/billing', icon: CreditCard },
   ];
 
@@ -36,7 +37,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       {/* Top Navigation Bar */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             
             <div className="flex gap-8">
@@ -65,7 +66,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
               </div>
             </div>
 
-            <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
+            <div className="hidden sm:ml-6 sm:items-center sm:flex space-x-4">
               {user && (
                 <div className="flex items-center space-x-3 bg-white pl-3 pr-1 py-1 rounded-full border border-gray-200 shadow-xs">
                   <div className="flex items-center space-x-2 mr-2">
@@ -168,7 +169,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
         )}
       </nav>
 
-      <main className="flex-1 w-full max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+      <main className="flex-1 w-full max-w-screen-xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
     </div>

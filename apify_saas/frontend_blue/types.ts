@@ -1,8 +1,16 @@
+export interface SavedAd {
+  id: string;
+  type: 'meta' | 'tiktok';
+  data: MetaAd | TikTokAd;
+  savedAt: string;
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
   credits: number;
+  savedAds: SavedAd[];
 }
 
 export type Platform = 'meta' | 'tiktok' | 'both';
@@ -11,6 +19,7 @@ export interface SearchParams {
   query: string;
   platform: Platform;
   limit: number;
+  country?: string;
 }
 
 // Meta Ad Models
@@ -32,6 +41,10 @@ export interface MetaAd {
   page_profile_uri: string;
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
+  // New metrics
+  likes: number;
+  impressions: number;
+  spend: number;
 }
 
 // TikTok Ad Models

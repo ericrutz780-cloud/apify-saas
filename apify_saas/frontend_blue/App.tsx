@@ -2,14 +2,51 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import { api } from './services/api';
-import { User, SearchParams, SearchResult } from './types';
+import { User, SearchParams, SearchResult, MetaAd, TikTokAd, SavedAd } from './types';
 import MetaAdCard from './components/MetaAdCard';
 import TikTokAdCard from './components/TikTokAdCard';
+import AdDetailModal from './components/AdDetailModal';
 import { 
     Search, Loader2, AlertCircle, CheckCircle2, CreditCard, Lock, 
     ArrowRight, TrendingUp, Zap, Clock, Filter, Facebook, Instagram, Video,
-    ChevronDown, SlidersHorizontal, BarChart3
+    ChevronDown, SlidersHorizontal, BarChart3, ListFilter, ArrowUpDown, Globe, Bookmark, Trash2, Undo2, X, LayoutTemplate
 } from 'lucide-react';
+
+// --- Constants ---
+const COUNTRIES = [
+    { code: 'ALL', name: 'All Countries' },
+    { code: 'US', name: 'United States' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'CA', name: 'Canada' },
+    { code: 'AU', name: 'Australia' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'FR', name: 'France' },
+    { code: 'BR', name: 'Brazil' },
+];
+
+// --- Components ---
+
+const Toast = ({ message, onUndo, onClose, visible }: { message: string, onUndo?: () => void, onClose: () => void, visible: boolean }) => {
+    if (!visible) return null;
+    
+    return (
+        <div className="fixed bottom-6 right-6 z-[1000] animate-in slide-in-from-bottom-5 duration-300">
+            <div className="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4 min-w-[300px] justify-between">
+                <span className="text-sm font-medium">{message}</span>
+                <div className="flex items-center gap-3">
+                    {onUndo && (
+                        <button onClick={onUndo} className="text-brand-300 hover:text-white text-sm font-semibold flex items-center gap-1 transition-colors">
+                            <Undo2 className="w-3 h-3" /> Undo
+                        </button>
+                    )}
+                    <button onClick={onClose} className="text-gray-400 hover:text-white">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- Pages ---
 
@@ -89,7 +126,7 @@ const Login = () => {
   );
 };
 
-const Dashboard = () => {
+const Dashboard = ({ user }: { user: User }) => {
     const navigate = useNavigate();
     return (
         <div className="space-y-8">
@@ -117,7 +154,7 @@ const Dashboard = () => {
                         </div>
                     </div>
                     <div className="flex items-baseline space-x-2">
-                        <p className="text-3xl font-semibold text-gray-900">150</p>
+                        <p className="text-3xl font-semibold text-gray-900">{user.credits}</p>
                         <span className="text-sm text-gray-500">credits</span>
                     </div>
                     <div className="mt-auto pt-4 flex items-center text-sm">
@@ -195,7 +232,8 @@ const Dashboard = () => {
 const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void }) => {
     const navigate = useNavigate();
     const [query, setQuery] = useState('');
-    const [platform, setPlatform] = useState<'meta' | 'tiktok' | 'both'>('meta');
+    const [platform, setPlatform] = useState<'meta' | 'tiktok' | 'both'>('both');
+    const [country, setCountry] = useState('ALL');
     const [limit, setLimit] = useState(10);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -212,7 +250,7 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
         setError('');
 
         try {
-            const result = await api.runSearch({ query, platform, limit });
+            const result = await api.runSearch({ query, platform, country, limit });
             await refreshUser();
             localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
             navigate(`/results/${result.id}`);
@@ -224,215 +262,548 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
     };
 
     return (
-        <div className="max-w-3xl mx-auto py-12">
+        <div className="w-full">
             
-            <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Ad Intelligence Search</h1>
-                <p className="text-gray-500 mt-2 text-lg">Find winning creatives across Meta and TikTok libraries.</p>
-            </div>
-
-            {/* Clean Input Container */}
-            <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500">
-                <div className="flex items-center px-4">
-                    <Search className="w-6 h-6 text-gray-400 mr-3" />
-                    <input 
-                        type="text" 
-                        className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" 
-                        placeholder="e.g. 'Skincare', 'Nike', or a domain URL..."
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        autoFocus
-                    />
+            {/* Search Input Section - Full width within container */}
+            <div className="w-full">
+                <div className="text-left mb-8">
+                    <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1>
+                    <p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok libraries.</p>
                 </div>
-                
-                {/* Divider */}
-                <div className="h-px bg-gray-100 mx-4"></div>
 
-                {/* Filters Section */}
-                <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-                    <div className="flex gap-2 w-full md:w-auto">
-                        <div className="relative flex-1 md:flex-none">
-                             <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">
-                                {(['meta', 'tiktok', 'both'] as const).map((p) => (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPlatform(p)}
-                                        className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${
-                                            platform === p 
-                                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
-                                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                                        }`}
+                {/* Clean Input Container */}
+                <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
+                    <div className="flex items-center px-4">
+                        <Search className="w-6 h-6 text-gray-400 mr-3" />
+                        <input 
+                            type="text" 
+                            className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" 
+                            placeholder="e.g. 'Skincare', 'Nike', or a domain URL..."
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                    
+                    {/* Divider */}
+                    <div className="h-px bg-gray-100 mx-4"></div>
+
+                    {/* Filters Section */}
+                    <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                            <div className="relative flex-1 md:flex-none">
+                                <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">
+                                    {(['both', 'meta', 'tiktok'] as const).map((p) => (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPlatform(p)}
+                                            className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${
+                                                platform === p 
+                                                ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
+                                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Country Selector - Only shows if Platform is Meta or Both */}
+                            {(platform === 'meta' || platform === 'both') && (
+                                <div className="relative">
+                                    <select 
+                                        value={country} 
+                                        onChange={(e) => setCountry(e.target.value)}
+                                        className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-9 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full"
                                     >
-                                        {p}
-                                    </button>
-                                ))}
-                             </div>
-                        </div>
+                                        {COUNTRIES.map((c) => (
+                                            <option key={c.code} value={c.code}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                    <Globe className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                    <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                </div>
+                            )}
 
-                        <div className="relative">
-                            <select 
-                                value={limit} 
-                                onChange={(e) => setLimit(Number(e.target.value))}
-                                className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full"
+                            <div className="relative">
+                                <select 
+                                    value={limit} 
+                                    onChange={(e) => setLimit(Number(e.target.value))}
+                                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full sm:w-auto"
+                                >
+                                    <option value={10}>10 Results</option>
+                                    <option value={25}>25 Results</option>
+                                    <option value={50}>50 Results</option>
+                                    <option value={100}>100 Results</option>
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        </div>
+                        <div className="text-right flex items-center gap-3 w-full md:w-auto justify-end mt-4 md:mt-0">
+                            <div className="text-sm">
+                                <span className="text-gray-500 mr-1">Cost:</span>
+                                <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span>
+                            </div>
+                            <button 
+                                onClick={handleSearch}
+                                disabled={!query || !canAfford || loading}
+                                className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                             >
-                                <option value={10}>10 Results</option>
-                                <option value={25}>25 Results</option>
-                                <option value={50}>50 Results</option>
-                                <option value={100}>100 Results</option>
-                            </select>
-                            <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <>Run Search <ArrowRight className="w-4 h-4 ml-2" /></>}
+                            </button>
                         </div>
                     </div>
+                </div>
 
-                    <div className="text-right flex items-center gap-3 w-full md:w-auto justify-end">
-                         <div className="text-sm">
-                             <span className="text-gray-500 mr-1">Cost:</span>
-                             <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span>
-                         </div>
-                         <button 
-                            onClick={handleSearch}
-                            disabled={!query || !canAfford || loading}
-                            className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                        >
-                            {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <>Run Search <ArrowRight className="w-4 h-4 ml-2" /></>}
-                        </button>
-                    </div>
+                {/* Status / Error Message */}
+                <div className="mt-4 flex justify-between items-start px-2">
+                    {!canAfford ? (
+                        <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                            <AlertCircle className="w-4 h-4 mr-2" />
+                            Insufficient credits. You have {user.credits} available.
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500 flex items-center">
+                            <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
+                            You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left after this search.
+                        </div>
+                    )}
+                    {error && (
+                        <div className="text-red-600 text-sm">{error}</div>
+                    )}
                 </div>
             </div>
 
-            {/* Status / Error Message */}
-            <div className="mt-4 flex justify-between items-start px-2">
-                 {!canAfford ? (
-                     <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100">
-                        <AlertCircle className="w-4 h-4 mr-2" />
-                        Insufficient credits. You have {user.credits} available.
-                     </div>
-                 ) : (
-                    <div className="text-sm text-gray-500 flex items-center">
-                        <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
-                        You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left after this search.
-                    </div>
-                 )}
-                 {error && (
-                    <div className="text-red-600 text-sm">{error}</div>
-                 )}
-            </div>
-
-            {/* Info Grid */}
+            {/* Info Grid - Full Width */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 text-center">
-                 <div className="p-6 rounded-xl bg-white border border-gray-100 shadow-sm">
+                <div className="p-6 rounded-xl bg-white border border-gray-100 shadow-sm">
                     <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center mx-auto mb-4 text-blue-600">
                         <Facebook className="w-5 h-5" />
                     </div>
                     <h3 className="font-semibold text-gray-900">Meta Ad Library</h3>
                     <p className="text-sm text-gray-500 mt-2 leading-relaxed">Access active ads from Facebook, Instagram, Audience Network and Messenger.</p>
-                 </div>
-                 <div className="p-6 rounded-xl bg-white border border-gray-100 shadow-sm">
+                </div>
+                <div className="p-6 rounded-xl bg-white border border-gray-100 shadow-sm">
                     <div className="w-10 h-10 bg-pink-50 rounded-lg flex items-center justify-center mx-auto mb-4 text-pink-600">
                         <Video className="w-5 h-5" />
                     </div>
                     <h3 className="font-semibold text-gray-900">TikTok Creative Center</h3>
                     <p className="text-sm text-gray-500 mt-2 leading-relaxed">Discover top performing viral TikTok ads with detailed engagement metrics.</p>
-                 </div>
-                 <div className="p-6 rounded-xl bg-white border border-gray-100 shadow-sm">
+                </div>
+                <div className="p-6 rounded-xl bg-white border border-gray-100 shadow-sm">
                     <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center mx-auto mb-4 text-orange-600">
                         <Zap className="w-5 h-5" />
                     </div>
                     <h3 className="font-semibold text-gray-900">Instant Results</h3>
                     <p className="text-sm text-gray-500 mt-2 leading-relaxed">Real-time scraping delivers the freshest data directly to your dashboard.</p>
-                 </div>
+                </div>
             </div>
         </div>
     );
 };
 
-const ResultsPage = () => {
+const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void }) => {
+    const navigate = useNavigate();
     const path = window.location.hash;
     const id = path.split('/').pop();
     const [result, setResult] = useState<SearchResult | null>(null);
     const [activeTab, setActiveTab] = useState<'meta' | 'tiktok'>('meta');
+    
+    // Search Bar State
+    const [query, setQuery] = useState('');
+    const [platform, setPlatform] = useState<'meta' | 'tiktok' | 'both'>('both');
+    const [country, setCountry] = useState('ALL');
+    const [limit, setLimit] = useState(10);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
+    const [sortBy, setSortBy] = useState<'newest' | 'likes' | 'reach_views' | 'spend_shares'>('newest');
+    
+    // View Mode State
+    const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => {
+        return (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details';
+    });
+
+    const handleViewModeChange = (mode: 'condensed' | 'details') => {
+        setViewMode(mode);
+        localStorage.setItem('view_mode', mode);
+    };
 
     useEffect(() => {
         const stored = localStorage.getItem(`search_${id}`);
         if (stored) {
             const parsed = JSON.parse(stored);
             setResult(parsed);
+            
+            // Sync search bar state with result
+            setQuery(parsed.params.query);
+            setPlatform(parsed.params.platform);
+            setLimit(parsed.params.limit);
+            if (parsed.params.country) setCountry(parsed.params.country);
+
             if (parsed.params.platform === 'tiktok') setActiveTab('tiktok');
         }
     }, [id]);
+
+    const cost = limit;
+    const canAfford = user.credits >= cost;
+    const remainingCredits = user.credits - cost;
+
+    const handleSearch = async () => {
+        if (!query) return;
+        if (!canAfford) return;
+        setLoading(true);
+        setError('');
+        try {
+            const result = await api.runSearch({ query, platform, country, limit });
+            await refreshUser();
+            localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
+            navigate(`/results/${result.id}`);
+        } catch (err: any) {
+            setError(err.message || 'Search failed. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (!result) return <div className="flex justify-center pt-24"><Loader2 className="animate-spin w-8 h-8 text-brand-600" /></div>;
 
     const showMeta = result.params.platform !== 'tiktok';
     const showTikTok = result.params.platform !== 'meta';
 
+    // Filtering and Sorting Logic
+    const getFilteredAndSortedAds = () => {
+        if (activeTab === 'meta') {
+            let ads = [...result.metaAds];
+            // Filter
+            if (formatFilter === 'video') {
+                ads = ads.filter(ad => ad.snapshot.videos && ad.snapshot.videos.length > 0);
+            } else if (formatFilter === 'image') {
+                ads = ads.filter(ad => (!ad.snapshot.videos || ad.snapshot.videos.length === 0));
+            }
+
+            // Sort
+            ads.sort((a, b) => {
+                if (sortBy === 'likes') return b.likes - a.likes;
+                if (sortBy === 'reach_views') return b.impressions - a.impressions;
+                if (sortBy === 'spend_shares') return b.spend - a.spend;
+                // Newest (default)
+                return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
+            });
+            return ads;
+        } else {
+            let ads = [...result.tikTokAds];
+            // TikTok is mostly video, but let's keep logic for consistency if we had image ads
+             if (formatFilter === 'image') return []; // Assume no image ads for tiktok MVP
+
+            // Sort
+            ads.sort((a, b) => {
+                if (sortBy === 'likes') return b.diggCount - a.diggCount;
+                if (sortBy === 'reach_views') return b.playCount - a.playCount; // Views
+                if (sortBy === 'spend_shares') return b.shareCount - a.shareCount; // Shares
+                // Newest (default)
+                return new Date(b.createTimeISO).getTime() - new Date(a.createTimeISO).getTime();
+            });
+            return ads;
+        }
+    };
+
+    const displayedAds = getFilteredAndSortedAds();
+
     return (
-        <div className="space-y-8">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div>
-                     <div className="flex items-center space-x-2 text-sm text-gray-500 mb-1">
-                        <span onClick={() => window.history.back()} className="cursor-pointer hover:text-gray-900 hover:underline">Search</span>
-                        <span>/</span>
-                        <span className="text-gray-900 font-medium">Results</span>
-                     </div>
-                     <h1 className="text-2xl font-bold text-gray-900 mt-1">"{result.params.query}"</h1>
-                     <div className="flex items-center mt-2 text-sm text-gray-500 space-x-4">
-                        <span className="flex items-center bg-gray-100 px-2 py-0.5 rounded text-xs font-medium text-gray-600 border border-gray-200">
-                            {result.params.platform === 'both' ? 'All Platforms' : result.params.platform}
-                        </span>
-                        <span className="flex items-center"><Clock className="w-3.5 h-3.5 mr-1.5"/> {new Date(result.timestamp).toLocaleDateString()}</span>
-                     </div>
+        <div className="w-full">
+            <div className="w-full">
+                 <div className="text-left mb-8">
+                    <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1>
+                    <p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok libraries.</p>
                 </div>
                 
-                <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-                    {showMeta && (
-                        <button 
-                            onClick={() => setActiveTab('meta')}
-                            className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                                activeTab === 'meta' 
-                                ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
-                                : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            <Facebook className="w-4 h-4 mr-2 text-[#1877F2]" />
-                            Meta <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.metaAds.length}</span>
-                        </button>
-                    )}
-                    {showTikTok && (
-                        <button 
-                            onClick={() => setActiveTab('tiktok')}
-                            className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                                activeTab === 'tiktok' 
-                                ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
-                                : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            <Video className="w-4 h-4 mr-2 text-[#E4405F]" />
-                            TikTok <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.tikTokAds.length}</span>
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {activeTab === 'meta' && result.metaAds.map(ad => (
-                    <MetaAdCard key={ad.id} ad={ad} />
-                ))}
-                
-                {activeTab === 'tiktok' && result.tikTokAds.map(ad => (
-                    <TikTokAdCard key={ad.id} ad={ad} />
-                ))}
-            </div>
-
-            {((activeTab === 'meta' && result.metaAds.length === 0) || (activeTab === 'tiktok' && result.tikTokAds.length === 0)) && (
-                <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
-                    <div className="mx-auto h-12 w-12 text-gray-400 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                        <Search className="h-6 w-6" />
+                <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
+                    <div className="flex items-center px-4">
+                        <Search className="w-6 h-6 text-gray-400 mr-3" />
+                        <input 
+                            type="text" 
+                            className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" 
+                            placeholder="e.g. 'Skincare', 'Nike', or a domain URL..."
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                        />
                     </div>
-                    <h3 className="text-base font-semibold text-gray-900">No results found</h3>
-                    <p className="text-gray-500 mt-1 text-sm">We couldn't find any ads matching your criteria.</p>
+                    <div className="h-px bg-gray-100 mx-4"></div>
+                    <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                            <div className="relative flex-1 md:flex-none">
+                                <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">
+                                    {(['both', 'meta', 'tiktok'] as const).map((p) => (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPlatform(p)}
+                                            className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${
+                                                platform === p 
+                                                ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
+                                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Country Selector - Only shows if Platform is Meta or Both */}
+                            {(platform === 'meta' || platform === 'both') && (
+                                <div className="relative">
+                                    <select 
+                                        value={country} 
+                                        onChange={(e) => setCountry(e.target.value)}
+                                        className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-9 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full"
+                                    >
+                                        {COUNTRIES.map((c) => (
+                                            <option key={c.code} value={c.code}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                    <Globe className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                    <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                </div>
+                            )}
+
+                            <div className="relative">
+                                <select 
+                                    value={limit} 
+                                    onChange={(e) => setLimit(Number(e.target.value))}
+                                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full sm:w-auto"
+                                >
+                                    <option value={10}>10 Results</option>
+                                    <option value={25}>25 Results</option>
+                                    <option value={50}>50 Results</option>
+                                    <option value={100}>100 Results</option>
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                        </div>
+                        <div className="text-right flex items-center gap-3 w-full md:w-auto justify-end mt-4 md:mt-0">
+                            <div className="text-sm">
+                                <span className="text-gray-500 mr-1">Cost:</span>
+                                <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span>
+                            </div>
+                            <button 
+                                onClick={handleSearch}
+                                disabled={!query || !canAfford || loading}
+                                className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                            >
+                                {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <>Run Search <ArrowRight className="w-4 h-4 ml-2" /></>}
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            )}
+
+                {/* Status / Error Message */}
+                <div className="mt-4 flex justify-between items-start px-2">
+                     {!canAfford ? (
+                         <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                            <AlertCircle className="w-4 h-4 mr-2" />
+                            Insufficient credits. You have {user.credits} available.
+                         </div>
+                     ) : (
+                        <div className="text-sm text-gray-500 flex items-center">
+                            <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
+                            You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left after this search.
+                        </div>
+                     )}
+                     {error && (
+                        <div className="text-red-600 text-sm">{error}</div>
+                     )}
+                </div>
+            </div>
+
+            {/* NEW: Filter and Results Section (Appears below search) */}
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
+                
+                {/* Control Row: Search Term, Tabs, Filters, Sort */}
+                <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
+                    
+                    {/* Left: Query & Tabs */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full xl:w-auto">
+                        <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">
+                            Results for <span className="text-brand-600">"{result.params.query}"</span>
+                        </h2>
+                        <div className="hidden sm:block w-px h-6 bg-gray-300 mx-2"></div>
+                        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-start">
+                            {showMeta && (
+                                <button 
+                                    onClick={() => setActiveTab('meta')}
+                                    className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                        activeTab === 'meta' 
+                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    <Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" />
+                                    Meta <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.metaAds.length}</span>
+                                </button>
+                            )}
+                            {showTikTok && (
+                                <button 
+                                    onClick={() => setActiveTab('tiktok')}
+                                    className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                        activeTab === 'tiktok' 
+                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    <Video className="w-3.5 h-3.5 mr-2 text-[#E4405F]" />
+                                    TikTok <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.tikTokAds.length}</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Right: Filters & Sort */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
+                         {/* Filters */}
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                            <div className="flex items-center text-gray-500 text-sm font-medium whitespace-nowrap">
+                                <ListFilter className="w-4 h-4 mr-2" />
+                                Filters:
+                            </div>
+                            <div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5 shadow-sm">
+                                {(['all', 'video', 'image'] as const).map((f) => (
+                                    <button
+                                        key={f}
+                                        onClick={() => setFormatFilter(f)}
+                                        className={`px-3 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${
+                                            formatFilter === f 
+                                            ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' 
+                                            : 'text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {f === 'all' ? 'All Formats' : f}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Sort */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+                            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Sort:</span>
+                            <div className="relative group w-full sm:w-auto">
+                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <ArrowUpDown className="h-3.5 w-3.5 text-gray-400" />
+                                 </div>
+                                 <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value as any)}
+                                    className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 cursor-pointer hover:bg-gray-50"
+                                 >
+                                    <option value="newest">Newest First</option>
+                                    <option value="likes">Most Likes</option>
+                                    <option value="reach_views">
+                                        {activeTab === 'meta' ? 'Estimated Reach' : 'Most Views'}
+                                    </option>
+                                    <option value="spend_shares">
+                                        {activeTab === 'meta' ? 'Estimated Spend' : 'Most Shares'}
+                                    </option>
+                                 </select>
+                                 <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
+                                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                                 </div>
+                            </div>
+                        </div>
+
+                        {/* View Mode */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+                            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">View:</span>
+                            <div className="relative group w-full sm:w-auto">
+                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <LayoutTemplate className="h-3.5 w-3.5 text-gray-400" />
+                                 </div>
+                                 <select
+                                    value={viewMode}
+                                    onChange={(e) => handleViewModeChange(e.target.value as any)}
+                                    className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 cursor-pointer hover:bg-gray-50"
+                                 >
+                                    <option value="details">More Details</option>
+                                    <option value="condensed">Condensed</option>
+                                 </select>
+                                 <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
+                                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+                {/* Results Grid - Max 3 columns on desktop (lg) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                    {activeTab === 'meta' && displayedAds.map((ad: any) => (
+                        <MetaAdCard key={ad.id} ad={ad} viewMode={viewMode} onClick={(data) => onOpenModal(data, 'meta')} />
+                    ))}
+                    
+                    {activeTab === 'tiktok' && displayedAds.map((ad: any) => (
+                        <TikTokAdCard key={ad.id} ad={ad} viewMode={viewMode} onClick={(data) => onOpenModal(data, 'tiktok')} />
+                    ))}
+                </div>
+
+                {displayedAds.length === 0 && (
+                    <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                        <div className="mx-auto h-12 w-12 text-gray-400 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                            <Filter className="h-6 w-6" />
+                        </div>
+                        <h3 className="text-base font-semibold text-gray-900">No results match your filters</h3>
+                        <p className="text-gray-500 mt-1 text-sm">Try adjusting your filters to see more ads.</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void, onRemove: (id: string) => void }) => {
+    
+    if (user.savedAds.length === 0) {
+        return (
+             <div className="flex flex-col items-center justify-center py-32 text-center">
+                 <div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mb-6">
+                     <Bookmark className="w-8 h-8 text-brand-600" />
+                 </div>
+                 <h2 className="text-2xl font-bold text-gray-900">No saved ads yet</h2>
+                 <p className="text-gray-500 mt-2 max-w-sm">
+                     Save interesting ads from your searches to build your personal swipe file.
+                 </p>
+             </div>
+        );
+    }
+
+    return (
+        <div className="w-full">
+            <div className="mb-8">
+                <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Saved Library</h1>
+                <p className="text-gray-500 mt-1 text-sm">Your personal collection of saved creatives.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                {user.savedAds.map((savedAd) => (
+                    <div key={savedAd.id} className="relative group/saved">
+                         {savedAd.type === 'meta' ? (
+                             <MetaAdCard ad={savedAd.data as MetaAd} onClick={(data) => onOpenModal(data, 'meta')} />
+                         ) : (
+                             <TikTokAdCard ad={savedAd.data as TikTokAd} onClick={(data) => onOpenModal(data, 'tiktok')} />
+                         )}
+                         <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove(savedAd.id);
+                            }}
+                            className="absolute top-2 right-2 z-10 p-2 bg-white/90 backdrop-blur text-red-600 rounded-full shadow-sm opacity-0 group-hover/saved:opacity-100 transition-opacity hover:bg-red-50 border border-gray-200"
+                            title="Remove from saved"
+                         >
+                             <Trash2 className="w-4 h-4" />
+                         </button>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
@@ -510,7 +881,6 @@ const Account = ({ user }: { user: User }) => {
              </div>
              
              <div className="space-y-6">
-                {/* Profile Section */}
                 <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200">
                         <h3 className="text-base font-medium text-gray-900">Personal Information</h3>
@@ -539,7 +909,6 @@ const Account = ({ user }: { user: User }) => {
                     </div>
                 </div>
 
-                {/* Plan Section */}
                 <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200">
                         <h3 className="text-base font-medium text-gray-900">Subscription & Usage</h3>
@@ -574,70 +943,132 @@ const Account = ({ user }: { user: User }) => {
     )
 }
 
-// --- Main App Component ---
-
 const App = () => {
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Modal State
+  const [selectedAd, setSelectedAd] = useState<{data: any, type: 'meta' | 'tiktok'} | null>(null);
 
-    const refreshUser = async () => {
-        try {
-            const u = await api.getUser();
-            setUser(u);
-        } catch (e) {
-            console.error("Failed to fetch user", e);
-        }
+  // Toast State
+  const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
+
+  const refreshUser = async () => {
+    try {
+      const userData = await api.getUser();
+      setUser(userData);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      await refreshUser();
+      setLoading(false);
     };
+    init();
+  }, []);
 
-    useEffect(() => {
-        const init = async () => {
-            await refreshUser();
-            setLoading(false);
-        };
-        init();
-    }, []);
+  const showToast = (message: string, onUndo?: () => void) => {
+      setToast({ message, visible: true, onUndo });
+      setTimeout(() => {
+          setToast(prev => ({ ...prev, visible: false }));
+      }, 5000);
+  };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-brand-600 w-8 h-8" /></div>;
+  const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
+      try {
+          await api.saveAd(ad, type);
+          await refreshUser();
+          setSelectedAd(null);
+          showToast("Ad saved to library");
+      } catch (e) {
+          console.error("Failed to save ad", e);
+      }
+  };
 
+  const handleRemoveAd = async (id: string) => {
+      // Find ad to restore later if needed
+      const adToRemove = user?.savedAds.find(ad => ad.id === id);
+      
+      try {
+          await api.removeSavedAd(id);
+          await refreshUser(); // Optimistic update would be better but this is MVP
+          
+          showToast("Ad removed from library", async () => {
+              // Undo Logic
+              if (adToRemove) {
+                   await api.saveAd(adToRemove.data, adToRemove.type);
+                   await refreshUser();
+              }
+          });
+
+      } catch (e) {
+          console.error("Failed to remove ad", e);
+      }
+  };
+
+  if (loading) {
     return (
-        <Router>
-            <Routes>
-                <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Login />} />
-                
-                <Route path="/dashboard" element={
-                    <Layout user={user}>
-                        <Dashboard />
-                    </Layout>
-                } />
-                
-                <Route path="/search" element={
-                    <Layout user={user}>
-                        {user && <SearchPage user={user} refreshUser={refreshUser} />}
-                    </Layout>
-                } />
-                
-                <Route path="/results/:id" element={
-                    <Layout user={user}>
-                        <ResultsPage />
-                    </Layout>
-                } />
-                
-                <Route path="/billing" element={
-                    <Layout user={user}>
-                        <Billing />
-                    </Layout>
-                } />
-
-                <Route path="/account" element={
-                    <Layout user={user}>
-                        {user && <Account user={user} />}
-                    </Layout>
-                } />
-            </Routes>
-        </Router>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+      </div>
     );
+  }
+
+  return (
+    <Router>
+      <Layout user={user}>
+        {/* Global Toast */}
+        <Toast 
+            message={toast.message} 
+            visible={toast.visible} 
+            onUndo={toast.onUndo} 
+            onClose={() => setToast(prev => ({ ...prev, visible: false }))} 
+        />
+        
+        {/* Global Modal */}
+        <AdDetailModal 
+            isOpen={!!selectedAd} 
+            onClose={() => setSelectedAd(null)} 
+            data={selectedAd?.data} 
+            type={selectedAd?.type}
+            onSave={handleSaveAd}
+        />
+
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route 
+            path="/dashboard" 
+            element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/search" 
+            element={user ? <SearchPage user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/results/:id" 
+            element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAd({data, type})} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/saved" 
+            element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAd({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/billing" 
+            element={user ? <Billing /> : <Navigate to="/login" replace />} 
+          />
+           <Route 
+            path="/account" 
+            element={user ? <Account user={user} /> : <Navigate to="/login" replace />} 
+          />
+          <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </Router>
+  );
 };
 
 export default App;

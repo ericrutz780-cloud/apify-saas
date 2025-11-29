@@ -9,22 +9,19 @@
       tailwind.config = {
         theme: {
           extend: {
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
             colors: {
-              brand: {
-                50: '#EFF8FF',
-                100: '#D1E9FF',
-                600: '#1570EF',
-                700: '#175CD3',
-              }
+              gray: { 25: '#FCFCFD', 50: '#F9FAFB', 100: '#F2F4F7', 200: '#EAECF0', 300: '#D0D5DD', 400: '#98A2B3', 500: '#667085', 600: '#475467', 700: '#344054', 800: '#1D2939', 900: '#101828' },
+              brand: { 25: '#F9F5FF', 50: '#F4EBFF', 100: '#E9D7FE', 200: '#D6BBFB', 300: '#B692F6', 400: '#9E77ED', 500: '#7F56D9', 600: '#6941C6', 700: '#53389E', 800: '#42307D', 900: '#2C1C5F' },
             }
           }
         }
       }
     </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body class="h-full text-gray-900 antialiased bg-gray-50">
     <div id="root" class="h-full"></div>
-    
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>

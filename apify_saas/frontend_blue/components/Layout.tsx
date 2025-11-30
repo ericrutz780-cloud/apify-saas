@@ -17,7 +17,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Search', href: '/search', icon: Search },
     { name: 'Saved', href: '/saved', icon: Bookmark },
-    { name: 'Billing', href: '/billing', icon: CreditCard },
   ];
 
   const isActive = (path: string) => {
@@ -75,7 +74,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
                       {user.credits} <span className="text-gray-400 font-normal">credits</span>
                     </span>
                   </div>
-                  <Link to="/billing" className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors">
+                  <Link to="/account?tab=billing" className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors">
                     Buy more
                   </Link>
                 </div>
@@ -143,7 +142,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
                 </div>
               </div>
               <div className="mt-4 px-6 space-y-2">
-                 <Link to="/billing" className="w-full flex items-center justify-between text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm" onClick={() => setIsMobileMenuOpen(false)}>
+                 <Link to="/account?tab=billing" className="w-full flex items-center justify-between text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm" onClick={() => setIsMobileMenuOpen(false)}>
                     <span>Credits Available</span>
                     <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{user?.credits}</span>
                  </Link>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { MetaAd, TikTokAd } from '../types';
-import { X, Heart, Share2, Eye, DollarSign, Calendar, Hash, Globe, Download, Save, ExternalLink, Play, Trash2 } from 'lucide-react';
+import { X, Heart, Share2, Eye, DollarSign, Calendar, Hash, Globe, Download, Save, ExternalLink, Play } from 'lucide-react';
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -229,9 +229,9 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 {isSaved ? (
                     <button 
                         onClick={handleRemoveClick}
-                        className="flex-1 flex items-center justify-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
+                        className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
                     >
-                        <Trash2 className="w-4 h-4" />
+                        <X className="w-4 h-4" />
                         Remove Creative
                     </button>
                 ) : (

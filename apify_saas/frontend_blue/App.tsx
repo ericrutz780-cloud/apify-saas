@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { HashRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import { api } from './services/api';
 import { User, SearchParams, SearchResult, MetaAd, TikTokAd, SavedAd } from './types';
@@ -128,6 +129,22 @@ const Login = () => {
 
 const Dashboard = ({ user }: { user: User }) => {
     const navigate = useNavigate();
+
+    // Calculate Top Searches
+    const searchCounts = user.searchHistory.reduce((acc, item) => {
+        acc[item.query] = (acc[item.query] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const topSearches = Object.entries(searchCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4) // Top 4
+        .map(([query]) => query);
+
+    const handleBadgeClick = (term: string) => {
+        navigate(`/search?q=${encodeURIComponent(term)}`);
+    };
+
     return (
         <div className="space-y-8">
             <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -158,13 +175,13 @@ const Dashboard = ({ user }: { user: User }) => {
                         <span className="text-sm text-gray-500">credits</span>
                     </div>
                     <div className="mt-auto pt-4 flex items-center text-sm">
-                        <span onClick={() => navigate('/billing')} className="text-brand-600 font-medium hover:text-brand-700 cursor-pointer flex items-center">
+                        <span onClick={() => navigate('/account?tab=billing')} className="text-brand-600 font-medium hover:text-brand-700 cursor-pointer flex items-center">
                             Top up credits <ArrowRight className="w-4 h-4 ml-1" />
                         </span>
                     </div>
                  </div>
 
-                 {/* Stats Card 2 */}
+                 {/* Stats Card 2: Total Searches + Badges */}
                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-sm font-medium text-gray-500">Total Searches</span>
@@ -172,9 +189,21 @@ const Dashboard = ({ user }: { user: User }) => {
                              <BarChart3 className="w-4 h-4 text-gray-600" />
                         </div>
                     </div>
-                    <div className="flex items-baseline space-x-2">
-                        <p className="text-3xl font-semibold text-gray-900">12</p>
-                        <span className="text-sm text-green-600 font-medium flex items-center bg-green-50 px-2 py-0.5 rounded-full">+4 this week</span>
+                    <div className="flex items-baseline space-x-2 mb-3">
+                        <p className="text-3xl font-semibold text-gray-900">{user.searchHistory.length}</p>
+                    </div>
+                    <div className="mt-auto flex flex-wrap gap-2">
+                         {topSearches.length > 0 ? topSearches.map(term => (
+                             <span 
+                                key={term}
+                                onClick={() => handleBadgeClick(term)}
+                                className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-50 text-brand-700 hover:bg-brand-100 cursor-pointer border border-brand-100 transition-colors"
+                             >
+                                {term}
+                             </span>
+                         )) : (
+                             <span className="text-xs text-gray-400 italic">No top searches yet</span>
+                         )}
                     </div>
                  </div>
 
@@ -207,20 +236,50 @@ const Dashboard = ({ user }: { user: User }) => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Results</th>
+                                <th scope="col" className="relative px-6 py-3">
+                                    <span className="sr-only">Actions</span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                             <tr>
-                                 <td colSpan={4} className="px-6 py-12 text-center">
-                                     <div className="mx-auto flex flex-col items-center">
-                                         <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                                             <Search className="h-5 w-5 text-gray-400" />
+                             {user.searchHistory.length > 0 ? (
+                                 user.searchHistory.slice(0, 5).map((search) => (
+                                     <tr key={search.id} className="hover:bg-gray-50 transition-colors">
+                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                             {search.query}
+                                         </td>
+                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                                             {search.platform}
+                                         </td>
+                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                             {new Date(search.timestamp).toLocaleDateString()}
+                                         </td>
+                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                             {search.resultsCount}
+                                         </td>
+                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                             <button 
+                                                onClick={() => navigate(`/search?q=${encodeURIComponent(search.query)}&platform=${search.platform}&limit=${search.limit}`)}
+                                                className="text-brand-600 hover:text-brand-900"
+                                             >
+                                                 Rerun
+                                             </button>
+                                         </td>
+                                     </tr>
+                                 ))
+                             ) : (
+                                 <tr>
+                                     <td colSpan={5} className="px-6 py-12 text-center">
+                                         <div className="mx-auto flex flex-col items-center">
+                                             <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                                                 <Search className="h-5 w-5 text-gray-400" />
+                                             </div>
+                                             <h3 className="text-sm font-medium text-gray-900">No searches yet</h3>
+                                             <p className="mt-1 text-sm text-gray-500">Start your first competitive analysis.</p>
                                          </div>
-                                         <h3 className="text-sm font-medium text-gray-900">No searches yet</h3>
-                                         <p className="mt-1 text-sm text-gray-500">Start your first competitive analysis.</p>
-                                     </div>
-                                 </td>
-                             </tr>
+                                     </td>
+                                 </tr>
+                             )}
                         </tbody>
                     </table>
                 </div>
@@ -231,12 +290,36 @@ const Dashboard = ({ user }: { user: User }) => {
 
 const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void }) => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [query, setQuery] = useState('');
-    const [platform, setPlatform] = useState<'meta' | 'tiktok' | 'both'>('both');
+    const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta');
     const [country, setCountry] = useState('ALL');
     const [limit, setLimit] = useState(10);
+    const [isCustomLimit, setIsCustomLimit] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        const q = searchParams.get('q');
+        const p = searchParams.get('platform');
+        const l = searchParams.get('limit');
+        
+        if (q) {
+            setQuery(q);
+        }
+        if (p && (p === 'meta' || p === 'tiktok')) {
+            setPlatform(p as 'meta' | 'tiktok');
+        }
+        if (l) {
+            const limitVal = parseInt(l, 10);
+            if (!isNaN(limitVal) && limitVal > 0) {
+                setLimit(limitVal);
+                if (![10, 25, 50, 100].includes(limitVal)) {
+                    setIsCustomLimit(true);
+                }
+            }
+        }
+    }, [searchParams]);
 
     const cost = limit;
     const canAfford = user.credits >= cost;
@@ -293,7 +376,7 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
                         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                             <div className="relative flex-1 md:flex-none">
                                 <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">
-                                    {(['both', 'meta', 'tiktok'] as const).map((p) => (
+                                    {(['meta', 'tiktok'] as const).map((p) => (
                                         <button
                                             key={p}
                                             onClick={() => setPlatform(p)}
@@ -309,8 +392,8 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
                                 </div>
                             </div>
 
-                            {/* Country Selector - Only shows if Platform is Meta or Both */}
-                            {(platform === 'meta' || platform === 'both') && (
+                            {/* Country Selector - Only shows if Platform is Meta */}
+                            {(platform === 'meta') && (
                                 <div className="relative">
                                     <select 
                                         value={country} 
@@ -326,28 +409,62 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
                                 </div>
                             )}
 
-                            <div className="relative">
-                                <select 
-                                    value={limit} 
-                                    onChange={(e) => setLimit(Number(e.target.value))}
-                                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full sm:w-auto"
-                                >
-                                    <option value={10}>10 Results</option>
-                                    <option value={25}>25 Results</option>
-                                    <option value={50}>50 Results</option>
-                                    <option value={100}>100 Results</option>
-                                </select>
-                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <div className="relative w-full sm:w-auto min-w-[130px]">
+                                {!isCustomLimit ? (
+                                    <>
+                                        <select 
+                                            value={[10, 25, 50, 100].includes(limit) ? limit : 'custom'} 
+                                            onChange={(e) => {
+                                                if (e.target.value === 'custom') {
+                                                    setIsCustomLimit(true);
+                                                } else {
+                                                    setLimit(Number(e.target.value));
+                                                }
+                                            }}
+                                            className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full cursor-pointer"
+                                        >
+                                            <option value={10}>10 Results</option>
+                                            <option value={25}>25 Results</option>
+                                            <option value={50}>50 Results</option>
+                                            <option value={100}>100 Results</option>
+                                            <option value="custom">Custom...</option>
+                                        </select>
+                                        <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <input 
+                                            type="number"
+                                            value={limit}
+                                            onChange={(e) => setLimit(Number(e.target.value))}
+                                            min={1}
+                                            className="appearance-none bg-white border border-brand-500 text-gray-900 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-sm font-medium h-full w-full"
+                                            placeholder="Custom"
+                                            autoFocus
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                setIsCustomLimit(false);
+                                                if (![10, 25, 50, 100].includes(limit)) {
+                                                    setLimit(10);
+                                                }
+                                            }}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="text-right flex items-center gap-3 w-full md:w-auto justify-end mt-4 md:mt-0">
                             <div className="text-sm">
                                 <span className="text-gray-500 mr-1">Cost:</span>
-                                <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span>
+                                <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost || 0} credits</span>
                             </div>
                             <button 
                                 onClick={handleSearch}
-                                disabled={!query || !canAfford || loading}
+                                disabled={!query || !canAfford || loading || limit <= 0}
                                 className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                             >
                                 {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <>Run Search <ArrowRight className="w-4 h-4 ml-2" /></>}
@@ -408,13 +525,14 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
     const path = window.location.hash;
     const id = path.split('/').pop();
     const [result, setResult] = useState<SearchResult | null>(null);
-    const [activeTab, setActiveTab] = useState<'meta' | 'tiktok'>('meta');
+    const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
     
     // Search Bar State
     const [query, setQuery] = useState('');
-    const [platform, setPlatform] = useState<'meta' | 'tiktok' | 'both'>('both');
+    const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta');
     const [country, setCountry] = useState('ALL');
     const [limit, setLimit] = useState(10);
+    const [isCustomLimit, setIsCustomLimit] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -439,11 +557,22 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
             
             // Sync search bar state with result
             setQuery(parsed.params.query);
-            setPlatform(parsed.params.platform);
+            if (parsed.params.platform !== 'both') {
+                 setPlatform(parsed.params.platform);
+            }
             setLimit(parsed.params.limit);
+            if (![10, 25, 50, 100].includes(parsed.params.limit)) {
+                setIsCustomLimit(true);
+            }
+
             if (parsed.params.country) setCountry(parsed.params.country);
 
-            if (parsed.params.platform === 'tiktok') setActiveTab('tiktok');
+            // Set Initial Active Tab
+            if (parsed.params.platform === 'tiktok') {
+                setActiveTab('tiktok');
+            } else {
+                setActiveTab('facebook');
+            }
         }
     }, [id]);
 
@@ -473,10 +602,27 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
     const showMeta = result.params.platform !== 'tiktok';
     const showTikTok = result.params.platform !== 'meta';
 
+    // Split Meta Results
+    const facebookAds = result.metaAds.filter(ad => ad.publisher_platform.includes('facebook'));
+    const instagramAds = result.metaAds.filter(ad => ad.publisher_platform.includes('instagram'));
+
     // Filtering and Sorting Logic
     const getFilteredAndSortedAds = () => {
-        if (activeTab === 'meta') {
-            let ads = [...result.metaAds];
+        let ads: any[] = [];
+        let isMetaTab = false;
+
+        if (activeTab === 'facebook') {
+            ads = [...facebookAds];
+            isMetaTab = true;
+        } else if (activeTab === 'instagram') {
+            ads = [...instagramAds];
+            isMetaTab = true;
+        } else {
+            ads = [...result.tikTokAds];
+            isMetaTab = false;
+        }
+
+        if (isMetaTab) {
             // Filter
             if (formatFilter === 'video') {
                 ads = ads.filter(ad => ad.snapshot.videos && ad.snapshot.videos.length > 0);
@@ -494,16 +640,13 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
             });
             return ads;
         } else {
-            let ads = [...result.tikTokAds];
-            // TikTok is mostly video, but let's keep logic for consistency if we had image ads
-             if (formatFilter === 'image') return []; // Assume no image ads for tiktok MVP
+            // TikTok Sort
+            if (formatFilter === 'image') return [];
 
-            // Sort
             ads.sort((a, b) => {
                 if (sortBy === 'likes') return b.diggCount - a.diggCount;
-                if (sortBy === 'reach_views') return b.playCount - a.playCount; // Views
-                if (sortBy === 'spend_shares') return b.shareCount - a.shareCount; // Shares
-                // Newest (default)
+                if (sortBy === 'reach_views') return b.playCount - a.playCount; 
+                if (sortBy === 'spend_shares') return b.shareCount - a.shareCount;
                 return new Date(b.createTimeISO).getTime() - new Date(a.createTimeISO).getTime();
             });
             return ads;
@@ -511,6 +654,7 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
     };
 
     const displayedAds = getFilteredAndSortedAds();
+    const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
 
     return (
         <div className="w-full">
@@ -536,7 +680,7 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
                         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                             <div className="relative flex-1 md:flex-none">
                                 <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">
-                                    {(['both', 'meta', 'tiktok'] as const).map((p) => (
+                                    {(['meta', 'tiktok'] as const).map((p) => (
                                         <button
                                             key={p}
                                             onClick={() => setPlatform(p)}
@@ -552,8 +696,8 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
                                 </div>
                             </div>
 
-                            {/* Country Selector - Only shows if Platform is Meta or Both */}
-                            {(platform === 'meta' || platform === 'both') && (
+                            {/* Country Selector - Only shows if Platform is Meta */}
+                            {(platform === 'meta') && (
                                 <div className="relative">
                                     <select 
                                         value={country} 
@@ -569,28 +713,62 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
                                 </div>
                             )}
 
-                            <div className="relative">
-                                <select 
-                                    value={limit} 
-                                    onChange={(e) => setLimit(Number(e.target.value))}
-                                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full sm:w-auto"
-                                >
-                                    <option value={10}>10 Results</option>
-                                    <option value={25}>25 Results</option>
-                                    <option value={50}>50 Results</option>
-                                    <option value={100}>100 Results</option>
-                                </select>
-                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                             <div className="relative w-full sm:w-auto min-w-[130px]">
+                                {!isCustomLimit ? (
+                                    <>
+                                        <select 
+                                            value={[10, 25, 50, 100].includes(limit) ? limit : 'custom'} 
+                                            onChange={(e) => {
+                                                if (e.target.value === 'custom') {
+                                                    setIsCustomLimit(true);
+                                                } else {
+                                                    setLimit(Number(e.target.value));
+                                                }
+                                            }}
+                                            className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm font-medium h-full w-full cursor-pointer"
+                                        >
+                                            <option value={10}>10 Results</option>
+                                            <option value={25}>25 Results</option>
+                                            <option value={50}>50 Results</option>
+                                            <option value={100}>100 Results</option>
+                                            <option value="custom">Custom...</option>
+                                        </select>
+                                        <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <input 
+                                            type="number"
+                                            value={limit}
+                                            onChange={(e) => setLimit(Number(e.target.value))}
+                                            min={1}
+                                            className="appearance-none bg-white border border-brand-500 text-gray-900 py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-sm font-medium h-full w-full"
+                                            placeholder="Custom"
+                                            autoFocus
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                setIsCustomLimit(false);
+                                                if (![10, 25, 50, 100].includes(limit)) {
+                                                    setLimit(10);
+                                                }
+                                            }}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="text-right flex items-center gap-3 w-full md:w-auto justify-end mt-4 md:mt-0">
                             <div className="text-sm">
                                 <span className="text-gray-500 mr-1">Cost:</span>
-                                <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span>
+                                <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost || 0} credits</span>
                             </div>
                             <button 
                                 onClick={handleSearch}
-                                disabled={!query || !canAfford || loading}
+                                disabled={!query || !canAfford || loading || limit <= 0}
                                 className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                             >
                                 {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <>Run Search <ArrowRight className="w-4 h-4 ml-2" /></>}
@@ -632,17 +810,30 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
                         <div className="hidden sm:block w-px h-6 bg-gray-300 mx-2"></div>
                         <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-start">
                             {showMeta && (
-                                <button 
-                                    onClick={() => setActiveTab('meta')}
-                                    className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                                        activeTab === 'meta' 
-                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
-                                        : 'text-gray-500 hover:text-gray-700'
-                                    }`}
-                                >
-                                    <Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" />
-                                    Meta <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.metaAds.length}</span>
-                                </button>
+                                <>
+                                    <button 
+                                        onClick={() => setActiveTab('facebook')}
+                                        className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                            activeTab === 'facebook' 
+                                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
+                                            : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        <Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" />
+                                        Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{facebookAds.length}</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setActiveTab('instagram')}
+                                        className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                            activeTab === 'instagram' 
+                                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
+                                            : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        <Instagram className="w-3.5 h-3.5 mr-2 text-[#E4405F]" />
+                                        Instagram <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{instagramAds.length}</span>
+                                    </button>
+                                </>
                             )}
                             {showTikTok && (
                                 <button 
@@ -700,10 +891,10 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
                                     <option value="newest">Newest First</option>
                                     <option value="likes">Most Likes</option>
                                     <option value="reach_views">
-                                        {activeTab === 'meta' ? 'Estimated Reach' : 'Most Views'}
+                                        {isMetaActive ? 'Estimated Reach' : 'Most Views'}
                                     </option>
                                     <option value="spend_shares">
-                                        {activeTab === 'meta' ? 'Estimated Spend' : 'Most Shares'}
+                                        {isMetaActive ? 'Estimated Spend' : 'Most Shares'}
                                     </option>
                                  </select>
                                  <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
@@ -737,8 +928,14 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
             
                 {/* Results Grid - Max 3 columns on desktop (lg) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                    {activeTab === 'meta' && displayedAds.map((ad: any) => (
-                        <MetaAdCard key={ad.id} ad={ad} viewMode={viewMode} onClick={(data) => onOpenModal(data, 'meta')} />
+                    {isMetaActive && displayedAds.map((ad: any) => (
+                        <MetaAdCard 
+                            key={ad.id} 
+                            ad={ad} 
+                            viewMode={viewMode} 
+                            onClick={(data) => onOpenModal(data, 'meta')} 
+                            platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined}
+                        />
                     ))}
                     
                     {activeTab === 'tiktok' && displayedAds.map((ad: any) => (
@@ -799,7 +996,7 @@ const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, r
                             className="absolute top-2 right-2 z-10 p-2 bg-white/90 backdrop-blur text-red-600 rounded-full shadow-sm opacity-0 group-hover/saved:opacity-100 transition-opacity hover:bg-red-50 border border-gray-200"
                             title="Remove from saved"
                          >
-                             <Trash2 className="w-4 h-4" />
+                             <X className="w-4 h-4" />
                          </button>
                     </div>
                 ))}
@@ -808,137 +1005,150 @@ const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, r
     );
 };
 
-const Billing = () => {
-    return (
-        <div className="space-y-12 pb-12">
-            <div className="text-center max-w-2xl mx-auto pt-8">
-                <h2 className="text-base font-semibold text-brand-600 tracking-wide uppercase">Pricing</h2>
-                <h1 className="mt-2 text-3xl font-bold text-gray-900 tracking-tight sm:text-4xl">
-                    Simple, transparent pricing
-                </h1>
-                <p className="mt-4 text-xl text-gray-500">
-                    Choose the plan that best fits your ad intelligence needs.
-                </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-                {[
-                    { name: 'Starter', credits: 1500, price: '$19', description: 'Essential tools for small teams.' },
-                    { name: 'Pro', credits: 5000, price: '$49', popular: true, description: 'Advanced features for growing brands.' },
-                    { name: 'Agency', credits: 10000, price: '$149', description: 'Maximum power for large scale.' },
-                ].map((plan) => (
-                    <div key={plan.name} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${plan.popular ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'}`}>
-                        <div className="p-8 flex-1">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
-                                    <p className="text-sm text-gray-500 mt-1">{plan.description}</p>
-                                </div>
-                                {plan.popular && (
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-50 text-brand-700 border border-brand-100">
-                                        Popular
-                                    </span>
-                                )}
-                            </div>
-                            <div className="mt-6 flex items-baseline">
-                                <span className="text-4xl font-bold text-gray-900 tracking-tight">{plan.price}</span>
-                                <span className="ml-1 text-sm text-gray-500 font-medium">/month</span>
-                            </div>
-                            
-                            <div className="mt-6 border-t border-gray-100 pt-6">
-                                <div className="flex items-center mb-4">
-                                     <span className="text-2xl font-bold text-gray-900 mr-2">{plan.credits}</span>
-                                     <span className="text-sm text-gray-600">Credits / mo</span>
-                                </div>
-                                <ul className="space-y-4">
-                                    {['Access to all platforms', 'HD Video Downloads', 'Real-time Search', 'Priority Support'].map(feature => (
-                                        <li key={feature} className="flex items-start text-sm text-gray-600">
-                                            <CheckCircle2 className="w-5 h-5 text-brand-600 mr-3 flex-shrink-0" />
-                                            {feature}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        </div>
-                        <div className="p-8 pt-0 mt-auto">
-                            <button className={`w-full py-2.5 px-4 rounded-lg font-semibold text-sm transition-all shadow-sm ${plan.popular ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}>
-                                Choose {plan.name}
-                            </button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    )
-}
-
 const Account = ({ user }: { user: User }) => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activeTab = searchParams.get('tab') || 'profile';
+
     return (
         <div className="max-w-4xl mx-auto">
              <div className="mb-8">
-                <h1 className="text-2xl font-semibold text-gray-900">Account Settings</h1>
-                <p className="text-gray-500 mt-1">Manage your profile and subscription details.</p>
+                <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
+                <p className="text-gray-500 mt-1">Manage your account and subscription.</p>
+             </div>
+
+             <div className="flex border-b border-gray-200 mb-6">
+                <button
+                    onClick={() => setSearchParams({ tab: 'profile' })}
+                    className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'profile' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    My Profile
+                </button>
+                <button
+                    onClick={() => setSearchParams({ tab: 'billing' })}
+                    className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'billing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    Billing & Plans
+                </button>
              </div>
              
-             <div className="space-y-6">
-                <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-200">
-                        <h3 className="text-base font-medium text-gray-900">Personal Information</h3>
-                    </div>
-                    <div className="p-6">
-                         <div className="flex items-start space-x-6">
-                            <div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">
-                                {user.name.charAt(0)}
-                            </div>
-                            <div className="flex-1 space-y-4 max-w-lg">
-                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                                    <input type="text" disabled value={user.name} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 bg-gray-50 text-gray-500 sm:text-sm" />
-                                 </div>
-                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                                    <input type="text" disabled value={user.email} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 bg-gray-50 text-gray-500 sm:text-sm" />
-                                 </div>
-                            </div>
-                         </div>
-                    </div>
-                    <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">
-                        <button className="text-sm font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-300 px-3 py-1.5 rounded-md shadow-sm">
-                            Edit Profile
-                        </button>
-                    </div>
-                </div>
-
-                <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-200">
-                        <h3 className="text-base font-medium text-gray-900">Subscription & Usage</h3>
-                    </div>
-                    <div className="p-6">
-                        <div className="flex items-center justify-between p-4 bg-brand-50/50 rounded-lg border border-brand-100">
-                             <div className="flex items-center">
-                                <div className="p-2 bg-brand-100 rounded-md text-brand-600 mr-4">
-                                    <Zap className="w-5 h-5" />
+             {activeTab === 'profile' && (
+                 <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-base font-medium text-gray-900">Personal Information</h3>
+                        </div>
+                        <div className="p-6">
+                             <div className="flex items-start space-x-6">
+                                <div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">
+                                    {user.name.charAt(0)}
                                 </div>
-                                <div>
-                                    <div className="text-sm font-semibold text-gray-900">Starter Plan</div>
-                                    <div className="text-sm text-gray-500">Active until Nov 1, 2023</div>
+                                <div className="flex-1 space-y-4 max-w-lg">
+                                     <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                        <input type="text" disabled value={user.name} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 bg-gray-50 text-gray-500 sm:text-sm" />
+                                     </div>
+                                     <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                        <input type="text" disabled value={user.email} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 bg-gray-50 text-gray-500 sm:text-sm" />
+                                     </div>
                                 </div>
                              </div>
-                             <button className="text-sm font-medium text-brand-600 hover:text-brand-700">Upgrade Plan</button>
                         </div>
-                        
-                        <div className="mt-6">
-                            <div className="flex justify-between text-sm mb-1">
-                                <span className="font-medium text-gray-700">Credit Usage</span>
-                                <span className="text-gray-500">{user.credits} remaining</span>
+                        <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">
+                            <button className="text-sm font-medium text-gray-600 hover:text-gray-900 bg-white border border-gray-300 px-3 py-1.5 rounded-md shadow-sm">
+                                Edit Profile
+                            </button>
+                        </div>
+                    </div>
+                 </div>
+             )}
+
+             {activeTab === 'billing' && (
+                 <div className="space-y-8 animate-in fade-in duration-300">
+                    {/* Current Plan */}
+                    <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-base font-medium text-gray-900">Subscription & Usage</h3>
+                        </div>
+                        <div className="p-6">
+                            <div className="flex items-center justify-between p-4 bg-brand-50/50 rounded-lg border border-brand-100">
+                                 <div className="flex items-center">
+                                    <div className="p-2 bg-brand-100 rounded-md text-brand-600 mr-4">
+                                        <Zap className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-semibold text-gray-900">Starter Plan</div>
+                                        <div className="text-sm text-gray-500">Active until Nov 1, 2023</div>
+                                    </div>
+                                 </div>
+                                 <button className="text-sm font-medium text-brand-600 hover:text-brand-700">Manage Subscription</button>
                             </div>
-                            <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div className="bg-brand-600 h-2 rounded-full" style={{ width: '45%' }}></div>
+                            
+                            <div className="mt-6">
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="font-medium text-gray-700">Credit Usage</span>
+                                    <span className="text-gray-500">{user.credits} remaining</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-2">
+                                    <div className="bg-brand-600 h-2 rounded-full" style={{ width: '45%' }}></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-             </div>
+
+                    {/* Pricing Plans */}
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Plans</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {[
+                                { name: 'Starter', credits: 1500, price: '$19', description: 'Essential tools for small teams.' },
+                                { name: 'Pro', credits: 5000, price: '$49', popular: true, description: 'Advanced features for growing brands.' },
+                                { name: 'Agency', credits: 10000, price: '$149', description: 'Maximum power for large scale.' },
+                            ].map((plan) => (
+                                <div key={plan.name} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${plan.popular ? 'border-brand-600 ring-2 ring-brand-500/10' : 'border-gray-200'}`}>
+                                    <div className="p-6 flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-base font-semibold text-gray-900">{plan.name}</h3>
+                                                <p className="text-xs text-gray-500 mt-1">{plan.description}</p>
+                                            </div>
+                                            {plan.popular && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-50 text-brand-700 border border-brand-100">
+                                                    Popular
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="mt-4 flex items-baseline">
+                                            <span className="text-3xl font-bold text-gray-900 tracking-tight">{plan.price}</span>
+                                            <span className="ml-1 text-xs text-gray-500 font-medium">/mo</span>
+                                        </div>
+                                        
+                                        <div className="mt-4 border-t border-gray-100 pt-4">
+                                            <div className="flex items-center mb-3">
+                                                 <span className="text-xl font-bold text-gray-900 mr-2">{plan.credits}</span>
+                                                 <span className="text-xs text-gray-600">Credits / mo</span>
+                                            </div>
+                                            <ul className="space-y-2">
+                                                {['All platforms', 'HD Downloads', 'Real-time Search', 'Priority Support'].map(feature => (
+                                                    <li key={feature} className="flex items-start text-xs text-gray-600">
+                                                        <CheckCircle2 className="w-4 h-4 text-brand-600 mr-2 flex-shrink-0" />
+                                                        {feature}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div className="p-6 pt-0 mt-auto">
+                                        <button className={`w-full py-2 px-4 rounded-lg font-semibold text-sm transition-all shadow-sm ${plan.popular ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}>
+                                            Upgrade
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                 </div>
+             )}
         </div>
     )
 }
@@ -1017,6 +1227,12 @@ const App = () => {
     );
   }
 
+  // Determine if selected ad is saved
+  const savedAdEntry = selectedAd && user?.savedAds.find(ad => 
+      ad.data.id === selectedAd.data.id && ad.type === selectedAd.type
+  );
+  const isSaved = !!savedAdEntry;
+
   return (
     <Router>
       <Layout user={user}>
@@ -1035,6 +1251,8 @@ const App = () => {
             data={selectedAd?.data} 
             type={selectedAd?.type}
             onSave={handleSaveAd}
+            isSaved={isSaved}
+            onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)}
         />
 
         <Routes>
@@ -1055,10 +1273,7 @@ const App = () => {
             path="/saved" 
             element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAd({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} 
           />
-          <Route 
-            path="/billing" 
-            element={user ? <Billing /> : <Navigate to="/login" replace />} 
-          />
+          {/* Billing Route removed, now part of Account */}
            <Route 
             path="/account" 
             element={user ? <Account user={user} /> : <Navigate to="/login" replace />} 

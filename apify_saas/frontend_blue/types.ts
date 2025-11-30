@@ -1,8 +1,18 @@
+
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
   data: MetaAd | TikTokAd;
   savedAt: string;
+}
+
+export interface SearchHistoryItem {
+  id: string;
+  query: string;
+  platform: Platform;
+  timestamp: string;
+  resultsCount: number;
+  limit: number;
 }
 
 export interface User {
@@ -11,6 +21,7 @@ export interface User {
   name: string;
   credits: number;
   savedAds: SavedAd[];
+  searchHistory: SearchHistoryItem[];
 }
 
 export type Platform = 'meta' | 'tiktok' | 'both';

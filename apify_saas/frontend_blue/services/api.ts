@@ -1,5 +1,6 @@
+
 import { MOCK_META_ADS, MOCK_TIKTOK_ADS, MOCK_USER } from './mockData';
-import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
+import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd, SearchHistoryItem } from '../types';
 
 // Simulate network delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -49,9 +50,6 @@ class ApiService {
     
     const totalMatches = filteredMeta.length + filteredTikTok.length;
     
-    // If no matches found, we might want to return fuzzy matches or just empty. 
-    // For this mock, we'll just return what we found, up to the limit.
-    
     // Simple distribution for 'both': take half from each if possible, or fill up.
     if (params.platform === 'both') {
         const metaLimit = Math.ceil(params.limit / 2);
@@ -75,6 +73,19 @@ class ApiService {
       tikTokAds: filteredTikTok,
       cost
     };
+    
+    // Add to history
+    const historyItem: SearchHistoryItem = {
+        id: result.id,
+        query: params.query,
+        platform: params.platform,
+        timestamp: new Date().toISOString(),
+        resultsCount: result.metaAds.length + result.tikTokAds.length,
+        limit: params.limit
+    };
+    
+    // Add to beginning of array
+    this.user.searchHistory.unshift(historyItem);
 
     return result;
   }

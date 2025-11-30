@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MetaAd } from '../types';
 import { ExternalLink, Facebook, Instagram, Info, Globe, Heart, Eye, DollarSign, Clock } from 'lucide-react';
@@ -6,6 +7,7 @@ interface MetaAdCardProps {
   ad: MetaAd;
   viewMode?: 'condensed' | 'details';
   onClick: (ad: MetaAd) => void;
+  platformContext?: 'facebook' | 'instagram';
 }
 
 const formatNumber = (num: number) => {
@@ -16,7 +18,7 @@ const formatCurrency = (num: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
 };
 
-const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, viewMode = 'details', onClick }) => {
+const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, viewMode = 'details', onClick, platformContext }) => {
   const { snapshot } = ad;
 
   const hasVideo = snapshot.videos && snapshot.videos.length > 0;
@@ -49,6 +51,12 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, viewMode = 'details', onCli
   const hashtags = hashtagsMatch ? hashtagsMatch.join(' ') : "";
   // Remove hashtags from body text for cleaner separation
   const bodyText = fullText.replace(/#[a-z0-9_]+/gi, '').trim();
+
+  // Determine which icon to show
+  // If platformContext is provided, show that icon. 
+  // Otherwise, fallback to: if has instagram -> instagram, else facebook.
+  const showInstagram = platformContext === 'instagram' || (!platformContext && ad.publisher_platform.includes('instagram'));
+  const showFacebook = platformContext === 'facebook' || (!platformContext && !showInstagram);
 
   return (
     <div 
@@ -87,7 +95,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, viewMode = 'details', onCli
         
         <div className="absolute top-3 right-3">
              <div className="w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm">
-                 {ad.publisher_platform.includes('instagram') ? (
+                 {showInstagram ? (
                      <Instagram className="w-4 h-4 text-[#E4405F]" />
                  ) : (
                      <Facebook className="w-4 h-4 text-[#1877F2]" />

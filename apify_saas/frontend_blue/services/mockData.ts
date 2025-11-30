@@ -1,3 +1,4 @@
+
 import { MetaAd, TikTokAd, User } from '../types';
 
 export const MOCK_USER: User = {
@@ -5,7 +6,15 @@ export const MOCK_USER: User = {
   email: 'demo@adspy.com',
   name: 'Alex Marketer',
   credits: 1500,
-  savedAds: []
+  savedAds: [],
+  searchHistory: [
+      { id: 'h_1', query: 'Skincare', platform: 'both', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), resultsCount: 45, limit: 50 },
+      { id: 'h_2', query: 'Nike', platform: 'meta', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), resultsCount: 120, limit: 100 },
+      { id: 'h_3', query: 'SaaS', platform: 'meta', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), resultsCount: 12, limit: 25 },
+      { id: 'h_4', query: 'Coffee', platform: 'tiktok', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), resultsCount: 89, limit: 100 },
+      { id: 'h_5', query: 'Skincare', platform: 'meta', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString(), resultsCount: 34, limit: 50 },
+      { id: 'h_6', query: 'Fitness', platform: 'both', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 120).toISOString(), resultsCount: 200, limit: 200 },
+  ]
 };
 
 // --- Base Templates for Realistic Data ---
@@ -116,7 +125,7 @@ const BASE_META_ADS: MetaAd[] = [
       videos: []
     }
   },
-  // 6. Nike / Sportswear (High relevance for 'Nike' search)
+  // 6. Nike / Sportswear (Both)
   {
     id: 'meta_base_6',
     publisher_platform: ['instagram', 'facebook', 'messenger'],
@@ -136,10 +145,53 @@ const BASE_META_ADS: MetaAd[] = [
       images: [{ resized_image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80' }],
       videos: []
     }
+  },
+  // 7. Nike (Facebook Only)
+  {
+    id: 'meta_base_7',
+    publisher_platform: ['facebook'],
+    start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+    page_name: 'Nike Running',
+    page_profile_uri: 'https://facebook.com/nikerunning',
+    ad_library_url: 'https://facebook.com/ads/library',
+    likes: 24000,
+    impressions: 890000,
+    spend: 12000,
+    snapshot: {
+      cta_text: 'Shop Now',
+      link_url: 'https://nike.com/running',
+      body: {
+        text: 'Crush your PB with the new ZoomX Vaporfly. 🏃‍♂️💨 Built for speed. Engineered for victory. #NikeRunning #ZoomX'
+      },
+      images: [{ resized_image_url: 'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?auto=format&fit=crop&w=800&q=80' }],
+      videos: []
+    }
+  },
+  // 8. Nike (Instagram Only)
+  {
+    id: 'meta_base_8',
+    publisher_platform: ['instagram'],
+    start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
+    page_name: 'Nike Sportswear',
+    page_profile_uri: 'https://instagram.com/nikesportswear',
+    ad_library_url: 'https://facebook.com/ads/library',
+    likes: 89000,
+    impressions: 1200000,
+    spend: 25000,
+    snapshot: {
+      cta_text: 'Watch More',
+      link_url: 'https://nike.com/sportswear',
+      body: {
+        text: 'Style meets comfort. The new Tech Fleece collection is here. 🥶 #TechFleece #NikeStyle'
+      },
+      images: [{ resized_image_url: 'https://images.unsplash.com/photo-1579338908476-3a3a1d71a706?auto=format&fit=crop&w=800&q=80' }],
+      videos: []
+    }
   }
 ];
 
 const BASE_TIKTOK_ADS: TikTokAd[] = [
+  // ... (Keep existing TikTok mock data as is, just pasting for context but not changing)
   // 1. Tech
   {
     id: 'tiktok_base_1',

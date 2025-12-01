@@ -1,20 +1,20 @@
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
 import { MOCK_USER } from './mockData';
 
-// Backend URL (Lokal)
+// Backend URL
 const API_URL = 'http://127.0.0.1:8000/api/v1'; 
 
 class ApiService {
   private user: User | null = null;
   private token: string | null = null;
 
-  // 1. Login
+  // 1. Login (Speichert jetzt im Browser)
   async login(email: string): Promise<User> {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: 'password' }) // Hardcoded für Test
+            body: JSON.stringify({ email, password: 'password' }) 
         });
 
         if (!response.ok) throw new Error('Login failed');
@@ -22,39 +22,67 @@ class ApiService {
         const data = await response.json();
         this.token = data.access_token;
         
-        // Initiales User-Objekt setzen
+        // WICHTIG: Wir merken uns die ID im Browser!
+        localStorage.setItem('adspy_user_id', data.user.id);
+
         this.user = {
-            ...MOCK_USER,
+            ...MOCK_USER, // Layout-Basis
             id: data.user.id,
             email: data.user.email,
         };
         
-        // Profil sofort nachladen
         await this.getUser(); 
-        
         return this.user!;
     } catch (e) {
-        console.error("Login Error (nutze Mock):", e);
-        this.user = { ...MOCK_USER, email };
-        return this.user;
+        console.error("Login Error:", e);
+        throw e; // Fehler weiterwerfen, damit UI eine Meldung zeigen kann
     }
   }
 
-  // 2. Profil laden
-  async getUser(): Promise<User> {
-    if (!this.user?.id) return MOCK_USER;
+  // 2. Profil laden (Kein Mock-Fallback mehr!)
+  async getUser(): Promise<User | null> {
+    // A) Wenn schon im RAM, direkt zurückgeben
+    if (this.user) return this.user;
 
+    // B) Prüfen, ob wir eine gespeicherte Session im Browser haben
+    const storedUserId = localStorage.getItem('adspy_user_id');
+    
+    // WENN NICHT: Geben wir null zurück -> App zeigt Login-Screen!
+    if (!storedUserId) {
+        return null;
+    }
+
+    // C) Wenn ID da ist, versuchen wir das echte Profil zu laden
     try {
-        const response = await fetch(`${API_URL}/user/me?user_id=${this.user.id}`);
+        const response = await fetch(`${API_URL}/user/me?user_id=${storedUserId}`);
+        
         if (response.ok) {
             const profileData = await response.json();
-            this.user = { ...this.user, ...profileData };
+            
+            // Wir mischen echte Daten mit Mock-Struktur (für UI-Sicherheit)
+            this.user = {
+                ...MOCK_USER,
+                ...profileData,
+                id: storedUserId // Sicherstellen, dass ID stimmt
+            };
+            return this.user;
+        } else {
+            // Falls Server Fehler (z.B. User gelöscht), ausloggen
+            this.logout();
+            return null;
         }
     } catch (e) {
-        console.error("Failed to fetch profile", e);
+        console.error("Server nicht erreichbar", e);
+        return null; // Kein Mock-Fallback mehr -> Login Screen
     }
-    
-    return this.user as User;
+  }
+
+  // Helper zum Ausloggen
+  logout() {
+      this.user = null;
+      this.token = null;
+      localStorage.removeItem('adspy_user_id');
+      window.location.href = '/login'; // Harter Redirect zum Login
   }
 
   // 3. Suche ausführen
@@ -80,7 +108,6 @@ class ApiService {
 
     const data = await response.json();
     
-    // Credits lokal abziehen
     if (this.user) {
         this.user.credits -= params.limit;
     }
@@ -116,8 +143,10 @@ class ApiService {
       data: ad,
       savedAt: new Date().toISOString()
     };
-    this.user.savedAds.unshift(savedAd);
-    this.getUser(); // Sync
+    
+    if (this.user) {
+        this.user.savedAds.unshift(savedAd);
+    }
     
     return savedAd;
   }
@@ -134,7 +163,6 @@ class ApiService {
   }
 
   async purchaseCredits(amount: number): Promise<void> {
-    // Bleibt Mock, bis Payment Integration da ist
     if (this.user) this.user.credits += amount;
   }
 }

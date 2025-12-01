@@ -1,14 +1,13 @@
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
 import { MOCK_USER } from './mockData';
 
-// Backend URL
 const API_URL = 'http://127.0.0.1:8000/api/v1'; 
 
 class ApiService {
   private user: User | null = null;
   private token: string | null = null;
 
-  // 1. Login (Speichert jetzt im Browser)
+  // 1. LOGIN mit LocalStorage
   async login(email: string): Promise<User> {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
@@ -22,70 +21,55 @@ class ApiService {
         const data = await response.json();
         this.token = data.access_token;
         
-        // WICHTIG: Wir merken uns die ID im Browser!
+        // ID merken!
         localStorage.setItem('adspy_user_id', data.user.id);
 
         this.user = {
-            ...MOCK_USER, // Layout-Basis
+            ...MOCK_USER,
             id: data.user.id,
             email: data.user.email,
         };
         
+        // Profil nachladen um Credits zu haben
         await this.getUser(); 
+        
         return this.user!;
     } catch (e) {
         console.error("Login Error:", e);
-        throw e; // Fehler weiterwerfen, damit UI eine Meldung zeigen kann
+        throw e;
     }
   }
 
-  // 2. Profil laden (Kein Mock-Fallback mehr!)
+  // 2. GET USER mit Auto-Login
   async getUser(): Promise<User | null> {
-    // A) Wenn schon im RAM, direkt zurückgeben
     if (this.user) return this.user;
 
-    // B) Prüfen, ob wir eine gespeicherte Session im Browser haben
-    const storedUserId = localStorage.getItem('adspy_user_id');
-    
-    // WENN NICHT: Geben wir null zurück -> App zeigt Login-Screen!
-    if (!storedUserId) {
-        return null;
-    }
+    // Prüfen ob ID gespeichert ist
+    const storedId = localStorage.getItem('adspy_user_id');
+    if (!storedId) return null; // Kein User -> Login Screen
 
-    // C) Wenn ID da ist, versuchen wir das echte Profil zu laden
     try {
-        const response = await fetch(`${API_URL}/user/me?user_id=${storedUserId}`);
-        
+        const response = await fetch(`${API_URL}/user/me?user_id=${storedId}`);
         if (response.ok) {
             const profileData = await response.json();
-            
-            // Wir mischen echte Daten mit Mock-Struktur (für UI-Sicherheit)
-            this.user = {
-                ...MOCK_USER,
-                ...profileData,
-                id: storedUserId // Sicherstellen, dass ID stimmt
+            this.user = { 
+                ...MOCK_USER, 
+                ...profileData, 
+                id: storedId 
             };
             return this.user;
         } else {
-            // Falls Server Fehler (z.B. User gelöscht), ausloggen
-            this.logout();
+            // Falls ID ungültig, Speicher löschen
+            localStorage.removeItem('adspy_user_id');
             return null;
         }
     } catch (e) {
-        console.error("Server nicht erreichbar", e);
-        return null; // Kein Mock-Fallback mehr -> Login Screen
+        console.error("Backend Error", e);
+        return null;
     }
   }
 
-  // Helper zum Ausloggen
-  logout() {
-      this.user = null;
-      this.token = null;
-      localStorage.removeItem('adspy_user_id');
-      window.location.href = '/login'; // Harter Redirect zum Login
-  }
-
-  // 3. Suche ausführen
+  // 3. SUCHE
   async runSearch(params: SearchParams): Promise<SearchResult> {
     if (!this.user) throw new Error("Unauthorized");
 
@@ -108,6 +92,7 @@ class ApiService {
 
     const data = await response.json();
     
+    // Credits sofort abziehen (UI)
     if (this.user) {
         this.user.credits -= params.limit;
     }
@@ -123,42 +108,28 @@ class ApiService {
     };
   }
 
-  // 4. Ad speichern
+  // 4. SAVE AD
   async saveAd(ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok'): Promise<SavedAd> {
     if (!this.user) throw new Error("Login required");
 
     await fetch(`${API_URL}/user/saved-ads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            user_id: this.user.id,
-            type,
-            data: ad
-        })
+        body: JSON.stringify({ user_id: this.user.id, type, data: ad })
     });
 
     const savedAd: SavedAd = {
       id: Math.random().toString(36).substring(7),
-      type,
-      data: ad,
-      savedAt: new Date().toISOString()
+      type, data: ad, savedAt: new Date().toISOString()
     };
-    
-    if (this.user) {
-        this.user.savedAds.unshift(savedAd);
-    }
-    
+    this.user.savedAds.unshift(savedAd);
     return savedAd;
   }
 
-  // 5. Ad entfernen
+  // 5. REMOVE AD
   async removeSavedAd(id: string): Promise<void> {
       if (!this.user) return;
-      
-      await fetch(`${API_URL}/user/saved-ads/${id}?user_id=${this.user.id}`, {
-          method: 'DELETE'
-      });
-
+      await fetch(`${API_URL}/user/saved-ads/${id}?user_id=${this.user.id}`, { method: 'DELETE' });
       this.user.savedAds = this.user.savedAds.filter(ad => ad.id !== id);
   }
 

@@ -2,48 +2,45 @@ import datetime
 from supabase import create_client, Client
 from app.core.config import settings
 
-# 1. Verbindung zur Datenbank herstellen
 def get_supabase() -> Client:
     url = settings.SUPABASE_URL
     key = settings.SUPABASE_KEY
     return create_client(url, key)
 
-# --- USER & CREDITS LOGIC ---
+# --- USER & CREDITS ---
 
 def check_user_credits(user_id: str, required_credits: int) -> bool:
-    """Prüft, ob der Nutzer genug Credits hat."""
     supabase = get_supabase()
-    response = supabase.table("profiles").select("credits").eq("id", user_id).execute()
+    # "maybe_single" verhindert Absturz, wenn User nicht gefunden wird
+    response = supabase.table("profiles").select("credits").eq("id", user_id).maybe_single().execute()
     if response.data:
-        return response.data[0]['credits'] >= required_credits
-    return False
+        return response.data.get('credits', 0) >= required_credits
+    return False # User nicht gefunden oder keine Credits
 
 def deduct_credits(user_id: str, amount: int):
-    """Zieht Credits ab und schreibt einen Log-Eintrag."""
     supabase = get_supabase()
-    
-    # Aktuellen Stand holen
-    response = supabase.table("profiles").select("credits").eq("id", user_id).execute()
+    response = supabase.table("profiles").select("credits").eq("id", user_id).maybe_single().execute()
     
     if response.data:
-        current_credits = response.data[0]['credits']
-        new_balance = max(0, current_credits - amount)
-        
-        # Neuen Stand speichern
+        current = response.data.get('credits', 0)
+        new_balance = max(0, current - amount)
         supabase.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
         
-        # Log-Eintrag für Transparenz
-        supabase.table("credit_ledger").insert({
-            "user_id": user_id,
-            "amount": -amount,
-            "description": "Search API Usage"
-        }).execute()
+        # Log schreiben (Fehler hier ignorieren wir, damit der Flow nicht bricht)
+        try:
+            supabase.table("credit_ledger").insert({
+                "user_id": user_id, 
+                "amount": -amount, 
+                "description": "Search API Usage"
+            }).execute()
+        except:
+            pass
 
-# --- CACHING & SEARCH LOGIC ---
+# --- SEARCH CACHE ---
 
 def get_cached_results(platform: str, keyword: str):
     supabase = get_supabase()
-    
+    # Prüfen auf Cache jünger als 24h
     response = supabase.table("search_cache")\
         .select("id, last_updated")\
         .eq("platform", platform)\
@@ -52,124 +49,93 @@ def get_cached_results(platform: str, keyword: str):
         .limit(1)\
         .execute()
 
-    if not response.data:
-        return None 
+    if not response.data: return None
         
     cache_entry = response.data[0]
-    cache_id = cache_entry['id']
-    
+    # Datums-Check (simpel)
     last_updated_str = cache_entry['last_updated'].replace('Z', '+00:00')
     last_updated = datetime.datetime.fromisoformat(last_updated_str)
-    
-    now = datetime.datetime.now(datetime.timezone.utc)
-    if (now - last_updated).days >= 1:
+    if (datetime.datetime.now(datetime.timezone.utc) - last_updated).days >= 1:
         return None
 
-    print(f"Cache HIT für '{keyword}'! Lade aus DB...")
-
-    ads_response = supabase.table("ad_results")\
-        .select("data")\
-        .eq("search_ref", cache_id)\
-        .execute()
-        
-    return [row['data'] for row in ads_response.data]
+    # Daten laden
+    ads_res = supabase.table("ad_results").select("data").eq("search_ref", cache_entry['id']).execute()
+    return [row['data'] for row in ads_res.data]
 
 def save_search_results(platform: str, keyword: str, results: list):
-    if not results:
-        return
-        
+    if not results: return
     supabase = get_supabase()
-    print(f"Speichere {len(results)} Ergebnisse für '{keyword}' in DB...")
     
+    # Cache Eintrag
     search_entry = {
-        "platform": platform,
-        "query": keyword,
-        "parameters": {},
+        "platform": platform, 
+        "query": keyword, 
+        "parameters": {}, 
         "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
+    res = supabase.table("search_cache").insert(search_entry).execute()
+    if not res.data: return
     
-    search_response = supabase.table("search_cache").insert(search_entry).execute()
-    if not search_response.data:
-        return
-        
-    search_id = search_response.data[0]['id']
+    search_id = res.data[0]['id']
     
+    # Ads speichern
     ad_rows = []
     for ad in results:
         raw_id = ad.get('id') or ad.get('ad_archive_id') or ad.get('item_id')
-        platform_id = str(raw_id) if raw_id else f"gen_{datetime.datetime.now().timestamp()}"
-        
-        row = {
+        pid = str(raw_id) if raw_id else f"gen_{datetime.datetime.now().timestamp()}"
+        ad_rows.append({
             "platform": platform,
-            "platform_id": platform_id,
+            "platform_id": pid,
             "search_ref": search_id,
             "data": ad
-        }
-        ad_rows.append(row)
-        
+        })
+    
     if ad_rows:
         supabase.table("ad_results").upsert(ad_rows, on_conflict="platform, platform_id").execute()
 
-# --- USER PROFILE & SAVED ADS (NEU) ---
+# --- PROFIL & SAVED ADS (WICHTIG FÜR LOGIN) ---
 
 def get_user_profile_data(user_id: str):
-    """Lädt Credits, Gespeicherte Ads und die Suchhistorie."""
     supabase = get_supabase()
     
-    # 1. Profil laden (Credits)
-    profile_res = supabase.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
-    profile = profile_res.data if profile_res.data else {"credits": 0}
+    # 1. Profil laden (Fehlertolerant)
+    p_res = supabase.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
+    profile = p_res.data if p_res.data else {}
     
-    # 2. Saved Ads laden
-    saved_res = supabase.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    # 2. Saved Ads
+    s_res = supabase.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
     saved_ads = []
-    if saved_res.data:
-        for item in saved_res.data:
+    if s_res.data:
+        for item in s_res.data:
             saved_ads.append({
-                "id": item['id'],
-                "type": item['type'],
-                "data": item['data'],
-                "savedAt": item['created_at']
+                "id": item['id'], "type": item['type'], "data": item['data'], "savedAt": item['created_at']
             })
 
-    # 3. Suchhistorie aus dem Ledger rekonstruieren
-    history_res = supabase.table("credit_ledger")\
-        .select("*")\
-        .eq("user_id", user_id)\
-        .eq("description", "Search API Usage")\
-        .order("created_at", desc=True)\
-        .limit(10)\
-        .execute()
-        
+    # 3. History (Mock aus Ledger)
     history = []
-    if history_res.data:
-        for h in history_res.data:
-            history.append({
-                "id": str(h['id']),
-                "query": "Search", 
-                "platform": "both",
-                "timestamp": h['created_at'],
-                "resultsCount": abs(h['amount']),
-                "limit": abs(h['amount'])
-            })
+    try:
+        h_res = supabase.table("credit_ledger").select("*").eq("user_id", user_id).eq("description", "Search API Usage").order("created_at", desc=True).limit(10).execute()
+        if h_res.data:
+            for h in h_res.data:
+                history.append({
+                    "id": str(h['id']), "query": "Search", "platform": "both", 
+                    "timestamp": h['created_at'], "resultsCount": abs(h['amount']), "limit": abs(h['amount'])
+                })
+    except:
+        pass # Falls Ledger leer oder Fehler
 
     return {
         "id": user_id,
-        "email": profile.get("email", ""), 
+        "email": profile.get("email", ""),
         "name": profile.get("first_name", "User"),
-        "credits": profile.get("credits", 0),
+        "credits": profile.get("credits", 0), # Wichtig: Default 0 falls leer
         "savedAds": saved_ads,
         "searchHistory": history
     }
 
 def add_saved_ad(user_id: str, ad_data: dict, ad_type: str):
     supabase = get_supabase()
-    row = {
-        "user_id": user_id,
-        "type": ad_type,
-        "data": ad_data
-    }
-    return supabase.table("saved_ads").insert(row).execute()
+    return supabase.table("saved_ads").insert({"user_id": user_id, "type": ad_type, "data": ad_data}).execute()
 
 def delete_saved_ad(user_id: str, ad_id: str):
     supabase = get_supabase()

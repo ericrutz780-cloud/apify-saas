@@ -39,16 +39,11 @@ def deduct_credits(user_id: str, amount: int):
             "description": "Search API Usage"
         }).execute()
 
-# --- CACHING & SEARCH LOGIC (NEU!) ---
+# --- CACHING & SEARCH LOGIC ---
 
 def get_cached_results(platform: str, keyword: str):
-    """
-    Sucht in der DB nach Ergebnissen für dieses Keyword, die jünger als 24h sind.
-    Gibt Liste von Ads zurück ODER None (wenn nichts/zu alt).
-    """
     supabase = get_supabase()
     
-    # 1. Suche den neuesten Eintrag im Cache für diesen Begriff
     response = supabase.table("search_cache")\
         .select("id, last_updated")\
         .eq("platform", platform)\
@@ -58,65 +53,49 @@ def get_cached_results(platform: str, keyword: str):
         .execute()
 
     if not response.data:
-        return None # Gar kein Cache vorhanden
+        return None 
         
     cache_entry = response.data[0]
     cache_id = cache_entry['id']
     
-    # Datum parsen (ISO Format von Supabase)
     last_updated_str = cache_entry['last_updated'].replace('Z', '+00:00')
     last_updated = datetime.datetime.fromisoformat(last_updated_str)
     
-    # 2. Prüfen: Ist der Cache älter als 24 Stunden?
     now = datetime.datetime.now(datetime.timezone.utc)
     if (now - last_updated).days >= 1:
-        print(f"Cache für '{keyword}' ist zu alt (Expired).")
         return None
 
     print(f"Cache HIT für '{keyword}'! Lade aus DB...")
 
-    # 3. Wenn Cache gültig: Die echten Ad-Daten laden
-    # Wir joinen nicht, wir laden direkt basierend auf der search_ref
     ads_response = supabase.table("ad_results")\
         .select("data")\
         .eq("search_ref", cache_id)\
         .execute()
         
-    # Wir packen die rohen JSON-Daten wieder aus
     return [row['data'] for row in ads_response.data]
 
 def save_search_results(platform: str, keyword: str, results: list):
-    """
-    Speichert eine neue Suche und ihre Ergebnisse in der Datenbank (Tier 1).
-    """
     if not results:
-        return # Nichts zu speichern
+        return
         
     supabase = get_supabase()
     print(f"Speichere {len(results)} Ergebnisse für '{keyword}' in DB...")
     
-    # 1. Cache-Log Eintrag erstellen
     search_entry = {
         "platform": platform,
         "query": keyword,
-        "parameters": {}, # Platzhalter für Filter
+        "parameters": {},
         "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     
     search_response = supabase.table("search_cache").insert(search_entry).execute()
     if not search_response.data:
-        print("Fehler beim Speichern des Search-Cache")
         return
         
     search_id = search_response.data[0]['id']
     
-    # 2. Ergebnisse vorbereiten und speichern
     ad_rows = []
     for ad in results:
-        # Wir versuchen eine eindeutige ID zu finden (Meta vs TikTok)
-        # Meta: 'id' oder 'ad_archive_id'
-        # TikTok: 'id' oder 'item_id'
-        # Fallback: 'unknown' (sollte nicht passieren bei echten Daten)
         raw_id = ad.get('id') or ad.get('ad_archive_id') or ad.get('item_id')
         platform_id = str(raw_id) if raw_id else f"gen_{datetime.datetime.now().timestamp()}"
         
@@ -124,13 +103,74 @@ def save_search_results(platform: str, keyword: str, results: list):
             "platform": platform,
             "platform_id": platform_id,
             "search_ref": search_id,
-            "data": ad # Das ganze JSON-Objekt
+            "data": ad
         }
         ad_rows.append(row)
         
     if ad_rows:
-        # Upsert: Falls die Ad schon existiert, aktualisieren wir sie (und verlinken zur neuen Suche)
-        # Wichtig: Dafür muss in Supabase der Unique-Constraint auf (platform, platform_id) existieren!
         supabase.table("ad_results").upsert(ad_rows, on_conflict="platform, platform_id").execute()
+
+# --- USER PROFILE & SAVED ADS (NEU) ---
+
+def get_user_profile_data(user_id: str):
+    """Lädt Credits, Gespeicherte Ads und die Suchhistorie."""
+    supabase = get_supabase()
     
-    print("✅ Speichern erfolgreich.")
+    # 1. Profil laden (Credits)
+    profile_res = supabase.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
+    profile = profile_res.data if profile_res.data else {"credits": 0}
+    
+    # 2. Saved Ads laden
+    saved_res = supabase.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    saved_ads = []
+    if saved_res.data:
+        for item in saved_res.data:
+            saved_ads.append({
+                "id": item['id'],
+                "type": item['type'],
+                "data": item['data'],
+                "savedAt": item['created_at']
+            })
+
+    # 3. Suchhistorie aus dem Ledger rekonstruieren
+    history_res = supabase.table("credit_ledger")\
+        .select("*")\
+        .eq("user_id", user_id)\
+        .eq("description", "Search API Usage")\
+        .order("created_at", desc=True)\
+        .limit(10)\
+        .execute()
+        
+    history = []
+    if history_res.data:
+        for h in history_res.data:
+            history.append({
+                "id": str(h['id']),
+                "query": "Search", 
+                "platform": "both",
+                "timestamp": h['created_at'],
+                "resultsCount": abs(h['amount']),
+                "limit": abs(h['amount'])
+            })
+
+    return {
+        "id": user_id,
+        "email": profile.get("email", ""), 
+        "name": profile.get("first_name", "User"),
+        "credits": profile.get("credits", 0),
+        "savedAds": saved_ads,
+        "searchHistory": history
+    }
+
+def add_saved_ad(user_id: str, ad_data: dict, ad_type: str):
+    supabase = get_supabase()
+    row = {
+        "user_id": user_id,
+        "type": ad_type,
+        "data": ad_data
+    }
+    return supabase.table("saved_ads").insert(row).execute()
+
+def delete_saved_ad(user_id: str, ad_id: str):
+    supabase = get_supabase()
+    return supabase.table("saved_ads").delete().eq("id", ad_id).eq("user_id", user_id).execute()

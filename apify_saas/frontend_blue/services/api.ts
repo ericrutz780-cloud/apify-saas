@@ -1,122 +1,141 @@
+import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
+import { MOCK_USER } from './mockData';
 
-import { MOCK_META_ADS, MOCK_TIKTOK_ADS, MOCK_USER } from './mockData';
-import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd, SearchHistoryItem } from '../types';
-
-// Simulate network delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Backend URL (Lokal)
+const API_URL = 'http://127.0.0.1:8000/api/v1'; 
 
 class ApiService {
-  private user: User = { ...MOCK_USER };
+  private user: User | null = null;
+  private token: string | null = null;
 
-  async getUser(): Promise<User> {
-    await delay(500);
-    return { ...this.user };
+  // 1. Login
+  async login(email: string): Promise<User> {
+    try {
+        const response = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: 'password' }) // Hardcoded für Test
+        });
+
+        if (!response.ok) throw new Error('Login failed');
+        
+        const data = await response.json();
+        this.token = data.access_token;
+        
+        // Initiales User-Objekt setzen
+        this.user = {
+            ...MOCK_USER,
+            id: data.user.id,
+            email: data.user.email,
+        };
+        
+        // Profil sofort nachladen
+        await this.getUser(); 
+        
+        return this.user!;
+    } catch (e) {
+        console.error("Login Error (nutze Mock):", e);
+        this.user = { ...MOCK_USER, email };
+        return this.user;
+    }
   }
 
+  // 2. Profil laden
+  async getUser(): Promise<User> {
+    if (!this.user?.id) return MOCK_USER;
+
+    try {
+        const response = await fetch(`${API_URL}/user/me?user_id=${this.user.id}`);
+        if (response.ok) {
+            const profileData = await response.json();
+            this.user = { ...this.user, ...profileData };
+        }
+    } catch (e) {
+        console.error("Failed to fetch profile", e);
+    }
+    
+    return this.user as User;
+  }
+
+  // 3. Suche ausführen
   async runSearch(params: SearchParams): Promise<SearchResult> {
-    await delay(800); // Simulate Apify scrapping time
-    
-    const cost = params.limit; // 1 credit per result requested
-    
-    if (this.user.credits < cost) {
-      throw new Error("Insufficient credits");
+    if (!this.user) throw new Error("Unauthorized");
+
+    const response = await fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            keyword: params.query,
+            platform: params.platform === 'both' ? 'meta' : params.platform,
+            limit: params.limit,
+            country: params.country || 'US',
+            sort_by: 'relevancy'
+        })
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Search failed");
     }
 
-    // Deduct credits
-    this.user.credits -= cost;
-
-    // Filter Logic to simulate real search
-    const query = params.query.toLowerCase();
+    const data = await response.json();
     
-    let filteredMeta: MetaAd[] = [];
-    if (params.platform !== 'tiktok') {
-        filteredMeta = MOCK_META_ADS.filter(ad => 
-            ad.page_name.toLowerCase().includes(query) || 
-            ad.snapshot.body.text.toLowerCase().includes(query)
-        );
+    // Credits lokal abziehen
+    if (this.user) {
+        this.user.credits -= params.limit;
     }
 
-    let filteredTikTok: TikTokAd[] = [];
-    if (params.platform !== 'meta') {
-        filteredTikTok = MOCK_TIKTOK_ADS.filter(ad => 
-            ad.authorMeta.nickName.toLowerCase().includes(query) || 
-            ad.text.toLowerCase().includes(query)
-        );
-    }
-
-    // Apply Limit (distribute limit between platforms if 'both' is selected)
-    // If exact matches are fewer than limit, return all matches.
-    // If matches exceed limit, slice them.
-    
-    const totalMatches = filteredMeta.length + filteredTikTok.length;
-    
-    // Simple distribution for 'both': take half from each if possible, or fill up.
-    if (params.platform === 'both') {
-        const metaLimit = Math.ceil(params.limit / 2);
-        // If meta matches are less than half, give more quota to tiktok
-        const metaTake = Math.min(filteredMeta.length, metaLimit);
-        const tiktokTake = Math.min(filteredTikTok.length, params.limit - metaTake);
-        
-        filteredMeta = filteredMeta.slice(0, metaTake);
-        filteredTikTok = filteredTikTok.slice(0, tiktokTake);
-    } else {
-        filteredMeta = filteredMeta.slice(0, params.limit);
-        filteredTikTok = filteredTikTok.slice(0, params.limit);
-    }
-
-    const result: SearchResult = {
+    return {
       id: Math.random().toString(36).substring(7),
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',
-      metaAds: filteredMeta,
-      tikTokAds: filteredTikTok,
-      cost
+      metaAds: params.platform !== 'tiktok' ? data.data : [],
+      tikTokAds: params.platform !== 'meta' ? data.data : [],
+      cost: params.limit
     };
-    
-    // Add to history
-    const historyItem: SearchHistoryItem = {
-        id: result.id,
-        query: params.query,
-        platform: params.platform,
-        timestamp: new Date().toISOString(),
-        resultsCount: result.metaAds.length + result.tikTokAds.length,
-        limit: params.limit
-    };
-    
-    // Add to beginning of array
-    this.user.searchHistory.unshift(historyItem);
-
-    return result;
   }
 
-  async purchaseCredits(amount: number): Promise<void> {
-    await delay(1000);
-    this.user.credits += amount;
-  }
-
+  // 4. Ad speichern
   async saveAd(ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok'): Promise<SavedAd> {
-    await delay(300);
+    if (!this.user) throw new Error("Login required");
+
+    await fetch(`${API_URL}/user/saved-ads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            user_id: this.user.id,
+            type,
+            data: ad
+        })
+    });
+
     const savedAd: SavedAd = {
       id: Math.random().toString(36).substring(7),
       type,
       data: ad,
       savedAt: new Date().toISOString()
     };
-    // Check if already saved
-    const exists = this.user.savedAds.find(s => 
-      s.data.id === ad.id && s.type === type
-    );
+    this.user.savedAds.unshift(savedAd);
+    this.getUser(); // Sync
     
-    if (!exists) {
-        this.user.savedAds.unshift(savedAd);
-    }
     return savedAd;
   }
 
+  // 5. Ad entfernen
   async removeSavedAd(id: string): Promise<void> {
-      await delay(300);
+      if (!this.user) return;
+      
+      await fetch(`${API_URL}/user/saved-ads/${id}?user_id=${this.user.id}`, {
+          method: 'DELETE'
+      });
+
       this.user.savedAds = this.user.savedAds.filter(ad => ad.id !== id);
+  }
+
+  async purchaseCredits(amount: number): Promise<void> {
+    // Bleibt Mock, bis Payment Integration da ist
+    if (this.user) this.user.credits += amount;
   }
 }
 

@@ -1,13 +1,10 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth
-
-# Import aus "app.routers"
-from app.routers import search
+from app.routers import auth, search, user
 from app.core.config import settings
 
-app = FastAPI(title="Ad Spy API")
+app = FastAPI(title="AdSpy API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,14 +14,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Hier binden wir den Router ein
+# Router einbinden
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"]) # <--- NEU: Einbinden
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(user.router, prefix="/api/v1/user", tags=["User"])
 
 @app.get("/")
 def root():
     return {"message": "API is running"}
 
 if __name__ == "__main__":
-    # Da main.py jetzt im Root liegt, starten wir einfach "main:app"
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

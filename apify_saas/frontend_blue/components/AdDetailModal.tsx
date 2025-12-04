@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-import { X, Heart, Share2, Eye, DollarSign, Calendar, Hash, Globe, Download, Save, ExternalLink, Play } from 'lucide-react';
+import { X, Save, ExternalLink, Play, ChevronLeft, ChevronRight, Layers, Download } from 'lucide-react';
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -12,235 +12,159 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(num);
-};
-
-const formatCurrency = (num: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
-};
-
-const MetricBox = ({ label, value }: { label: string; value: string | React.ReactNode }) => (
-    <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-        <div className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">{label}</div>
-        <div className="text-lg font-bold text-gray-900">{value}</div>
-    </div>
-);
-
 const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, onRemove, isSaved, data, type }) => {
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+
+  useEffect(() => {
+      if (isOpen) setCurrentCardIndex(0);
+  }, [isOpen, data]);
+
   if (!isOpen || !data || !type) return null;
 
-  // Stop propagation when clicking modal content
-  const handleContentClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
-
-  const handleSaveClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (onSave && data && type) {
-          onSave(data, type);
-      }
-  };
-
-  const handleRemoveClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (onRemove) {
-          onRemove();
-          onClose(); 
-      }
-  };
-
-  // Extract Data based on type
   const isMeta = type === 'meta';
   const metaAd = data as MetaAd;
   const tikTokAd = data as TikTokAd;
 
-  // Meta Data Mappings
-  const metaMediaUrl = isMeta ? (metaAd.snapshot.videos.length > 0 ? metaAd.snapshot.videos[0].video_hd_url : metaAd.snapshot.images[0]?.resized_image_url) : null;
-  const isMetaVideo = isMeta && metaAd.snapshot.videos.length > 0;
+  // --- Meta Carousel Logic ---
+  const cards = isMeta ? (metaAd.snapshot.cards || []) : [];
+  const isCarousel = cards.length > 0;
   
-  // TikTok Data Mappings
-  const tikTokMediaUrl = !isMeta ? tikTokAd.videoMeta.coverUrl : null; // Fallback to cover for now as webVideoUrl might not be direct mp4
-  
-  // Common Fields
-  const id = isMeta ? metaAd.id : tikTokAd.id;
-  const date = new Date(isMeta ? metaAd.start_date : tikTokAd.createTimeISO).toLocaleDateString();
-  const avatar = isMeta 
-    ? (
-        <div className="w-12 h-12 rounded-full bg-brand-600 flex items-center justify-center text-white text-xl font-bold">
-            {metaAd.page_name.charAt(0)}
-        </div>
-      )
-    : <img src={tikTokAd.authorMeta.avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover border border-gray-200" />;
-  
-  const name = isMeta ? metaAd.page_name : tikTokAd.authorMeta.nickName;
-  const handle = isMeta ? `@${metaAd.page_name.replace(/\s+/g, '').toLowerCase()}` : `@${tikTokAd.authorMeta.nickName}`;
-  
-  const headline = isMeta ? (metaAd.snapshot.body.text ? "Ad Copy" : "No Text") : "Ad Copy";
-  const bodyText = isMeta ? metaAd.snapshot.body.text : tikTokAd.text;
-  
-  const ctaText = isMeta ? metaAd.snapshot.cta_text : "View on TikTok";
-  const ctaLink = isMeta ? metaAd.snapshot.link_url : tikTokAd.webVideoUrl;
+  let currentMediaUrl = null;
+  let currentVideoUrl = null;
+  let currentBody = "";
+  let currentLink = "";
+  let currentCta = "";
+
+  if (isMeta) {
+      if (isCarousel) {
+          const card = cards[currentCardIndex];
+          currentMediaUrl = card.resized_image_url || card.original_image_url || card.video_preview_image_url;
+          currentVideoUrl = card.video_hd_url || card.video_sd_url;
+          currentBody = card.body || metaAd.snapshot.body?.text || "";
+          currentLink = card.link_url || metaAd.snapshot.link_url;
+          currentCta = card.cta_text || metaAd.snapshot.cta_text;
+      } else {
+          const videos = metaAd.snapshot.videos || [];
+          const images = metaAd.snapshot.images || [];
+          if (videos.length > 0) {
+              currentVideoUrl = videos[0].video_hd_url;
+              currentMediaUrl = videos[0].video_preview_image_url; 
+          } else if (images.length > 0) {
+              currentMediaUrl = images[0].resized_image_url;
+          }
+          currentBody = metaAd.snapshot.body?.text || "";
+          currentLink = metaAd.snapshot.link_url;
+          currentCta = metaAd.snapshot.cta_text;
+      }
+  } else {
+      currentMediaUrl = tikTokAd.videoMeta.coverUrl;
+      currentLink = tikTokAd.webVideoUrl;
+      currentBody = tikTokAd.text;
+      currentCta = "View on TikTok";
+  }
+
+  const handleNextCard = () => {
+      if (currentCardIndex < cards.length - 1) setCurrentCardIndex(curr => curr + 1);
+  };
+
+  const handlePrevCard = () => {
+      if (currentCardIndex > 0) setCurrentCardIndex(curr => curr - 1);
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
       
-      <div 
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200 ring-1 ring-black/5"
-        onClick={handleContentClick}
-      >
-        <button 
-            onClick={onClose}
-            className="absolute top-4 right-4 z-10 p-2 bg-white/80 backdrop-blur-md rounded-full text-gray-500 hover:text-gray-900 hover:bg-white transition-all shadow-sm border border-gray-200"
-        >
-            <X className="w-5 h-5" />
-        </button>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 bg-white/80 backdrop-blur rounded-full hover:bg-white text-gray-500 hover:text-gray-900 transition-all border border-gray-200 shadow-sm"><X className="w-5 h-5" /></button>
 
-        {/* Left Side: Media */}
-        <div className="w-full md:w-5/12 bg-black flex items-center justify-center relative overflow-hidden">
-            {isMeta ? (
-                isMetaVideo ? (
-                    <video src={metaMediaUrl} controls className="w-full h-full object-contain max-h-[50vh] md:max-h-full" />
-                ) : (
-                    <img src={metaMediaUrl} alt="Ad Creative" className="w-full h-full object-contain" />
-                )
+        {/* --- LEFT: MEDIA --- */}
+        <div className="w-full md:w-1/2 bg-black flex items-center justify-center relative overflow-hidden group">
+            {currentVideoUrl ? (
+                <video src={currentVideoUrl} controls className="w-full h-full object-contain max-h-[50vh] md:max-h-full" poster={currentMediaUrl || undefined} />
             ) : (
-                 // TikTok Video Representation
-                 <div className="relative w-full h-full">
-                     <img src={tikTokMediaUrl} alt="Cover" className="w-full h-full object-cover blur-sm opacity-50 absolute" />
-                     <img src={tikTokMediaUrl} alt="Cover" className="w-full h-full object-contain relative z-10" />
-                     <a href={ctaLink} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center z-20 group">
-                        <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/40 shadow-xl group-hover:scale-110 transition-transform">
-                            <Play className="w-8 h-8 text-white fill-white ml-1" />
-                        </div>
-                     </a>
-                 </div>
+                <img src={currentMediaUrl || 'https://placehold.co/600x400?text=No+Media'} alt="Creative" className="w-full h-full object-contain" />
+            )}
+
+            {isCarousel && (
+                <>
+                    <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-10">
+                        {cards.map((_, idx) => (
+                            <div key={idx} className={`w-2 h-2 rounded-full transition-all ${idx === currentCardIndex ? 'bg-white scale-125' : 'bg-white/40'}`} />
+                        ))}
+                    </div>
+                    {currentCardIndex > 0 && (
+                        <button onClick={(e) => { e.stopPropagation(); handlePrevCard(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all backdrop-blur-sm"><ChevronLeft className="w-6 h-6" /></button>
+                    )}
+                    {currentCardIndex < cards.length - 1 && (
+                        <button onClick={(e) => { e.stopPropagation(); handleNextCard(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all backdrop-blur-sm"><ChevronRight className="w-6 h-6" /></button>
+                    )}
+                    <div className="absolute top-4 left-4 bg-black/60 text-white px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-md flex items-center gap-2">
+                        <Layers className="w-3 h-3" /> Card {currentCardIndex + 1} / {cards.length}
+                    </div>
+                </>
             )}
         </div>
 
-        {/* Right Side: Details */}
-        <div className="w-full md:w-7/12 flex flex-col h-full bg-white overflow-hidden">
-            {/* Header */}
+        {/* --- RIGHT: DETAILS --- */}
+        <div className="w-full md:w-1/2 flex flex-col h-full bg-white border-l border-gray-100">
             <div className="p-6 border-b border-gray-100 flex items-center gap-4">
-                {avatar}
+                {isMeta ? (
+                    <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-bold text-lg border border-brand-100">
+                        {metaAd.page_name?.charAt(0)}
+                    </div>
+                ) : (
+                    <img src={tikTokAd.authorMeta.avatarUrl} className="w-12 h-12 rounded-full border border-gray-200" />
+                )}
                 <div>
-                    <h3 className="text-xl font-bold text-gray-900">{name}</h3>
-                    <p className="text-sm text-gray-500">{handle}</p>
+                    <h3 className="text-lg font-bold text-gray-900">{isMeta ? metaAd.page_name : tikTokAd.authorMeta.nickName}</h3>
+                    <p className="text-sm text-gray-500">
+                        {isMeta ? (isCarousel ? 'Carousel Ad' : 'Single Ad') : 'TikTok Ad'} • {new Date(isMeta ? metaAd.start_date : tikTokAd.createTimeISO).toLocaleDateString()}
+                    </p>
                 </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                {/* Metrics Grid */}
-                <div className={`grid gap-3 ${isMeta ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
-                    
-                    {/* Conditional Metrics */}
-                    {isMeta ? (
-                        <>
-                            <MetricBox 
-                                label="Likes" 
-                                value={formatNumber(metaAd.likes)} 
-                            />
-                            <MetricBox 
-                                label="Spend" 
-                                value={formatCurrency(metaAd.spend)} 
-                            />
-                            <MetricBox 
-                                label="Impr." 
-                                value={formatNumber(metaAd.impressions)} 
-                            />
-                        </>
-                    ) : (
-                        <>
-                            <MetricBox 
-                                label="Views" 
-                                value={formatNumber(tikTokAd.playCount)} 
-                            />
-                            <MetricBox 
-                                label="Likes" 
-                                value={formatNumber(tikTokAd.diggCount)} 
-                            />
-                            <MetricBox 
-                                label="Shares" 
-                                value={formatNumber(tikTokAd.shareCount)} 
-                            />
-                            <MetricBox 
-                                label="Saves" 
-                                value={formatNumber(tikTokAd.collectCount)} 
-                            />
-                        </>
-                    )}
-                </div>
-
-                {/* Ad Copy */}
-                <div>
-                    <div className="flex items-center gap-2 mb-3">
-                        <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-1 rounded">
-                           {isMeta ? "Headline" : "Caption"}
-                        </span>
-                        <h4 className="font-semibold text-gray-900 text-sm">
-                            {headline === "Ad Copy" ? "Primary Text" : headline}
-                        </h4>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                        <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Likes</div>
+                        <div className="text-lg font-bold text-gray-900">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(isMeta ? metaAd.likes : tikTokAd.diggCount)}</div>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-xl text-gray-700 text-sm leading-relaxed border border-gray-100">
-                        {bodyText || <span className="text-gray-400 italic">No text provided.</span>}
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                        <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">{isMeta ? 'Impressions' : 'Views'}</div>
+                        <div className="text-lg font-bold text-gray-900">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(isMeta ? metaAd.impressions : tikTokAd.playCount)}</div>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                        <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">{isMeta ? 'Spend' : 'Shares'}</div>
+                        <div className="text-lg font-bold text-gray-900">{isMeta ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(metaAd.spend) : new Intl.NumberFormat('en-US', { notation: "compact" }).format(tikTokAd.shareCount)}</div>
                     </div>
                 </div>
 
-                {/* Call To Action */}
                 <div>
-                    <h4 className="font-bold text-gray-900 mb-3 text-sm">Call To Action</h4>
-                    <a 
-                        href={ctaLink} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="block w-full bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 text-center font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-                    >
-                        {ctaText || "Learn More"}
-                        <ExternalLink className="w-4 h-4" />
+                    <h4 className="text-sm font-bold text-gray-900 mb-2">Primary Text</h4>
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                        {currentBody || <span className="italic text-gray-400">No text provided for this card.</span>}
+                    </div>
+                </div>
+
+                <div>
+                    <a href={currentLink} target="_blank" rel="noreferrer" className="flex items-center justify-center w-full py-3 bg-blue-50 text-blue-600 font-semibold rounded-xl border border-blue-100 hover:bg-blue-100 transition-colors">
+                        {currentCta || 'Learn More'} <ExternalLink className="w-4 h-4 ml-2" />
                     </a>
                 </div>
-
-                {/* Metadata */}
-                <div className="space-y-3 text-sm text-gray-500 pt-4 border-t border-gray-100">
-                    <div className="flex items-center gap-3">
-                        <Calendar className="w-4 h-4 text-gray-400" /> 
-                        <span>First seen: <span className="text-gray-900 font-medium">{date}</span></span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Hash className="w-4 h-4 text-gray-400" /> 
-                        <span className="truncate">ID: <span className="text-gray-900 font-medium">{id}</span></span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Globe className="w-4 h-4 text-gray-400" /> 
-                        <span>Region: <span className="text-gray-900 font-medium">Global</span></span>
-                    </div>
-                </div>
             </div>
 
-            {/* Footer Actions */}
-            <div className="p-6 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row gap-3">
-                <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm">
-                    <Download className="w-4 h-4" />
-                    Download Media
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
+                <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-all shadow-sm">
+                    <Download className="w-4 h-4" /> Download Media
                 </button>
-                
                 {isSaved ? (
-                    <button 
-                        onClick={handleRemoveClick}
-                        className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
-                    >
-                        <X className="w-4 h-4" />
-                        Remove Creative
+                    <button onClick={onRemove} className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white font-semibold py-2.5 rounded-lg hover:bg-red-700 transition-all shadow-sm shadow-red-200">
+                        <X className="w-4 h-4" /> Remove
                     </button>
                 ) : (
-                    <button 
-                        onClick={handleSaveClick}
-                        className="flex-1 flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
-                    >
-                        <Save className="w-4 h-4" />
-                        Save Creative
+                    <button onClick={() => onSave && data && type && onSave(data, type)} className="flex-1 flex items-center justify-center gap-2 bg-brand-600 text-white font-semibold py-2.5 rounded-lg hover:bg-brand-700 transition-all shadow-sm shadow-brand-200">
+                        <Save className="w-4 h-4" /> Save Ad
                     </button>
                 )}
             </div>

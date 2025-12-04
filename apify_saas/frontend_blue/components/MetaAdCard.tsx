@@ -1,189 +1,175 @@
+import React, { useState } from 'react';
+import { Play, Image, FileWarning, ExternalLink, AlertCircle, ThumbsUp, Eye, DollarSign } from 'lucide-react';
 
-import React from 'react';
-import { MetaAd } from '../types';
-import { ExternalLink, Facebook, Instagram, Info, Globe, Heart, Eye, DollarSign, Clock } from 'lucide-react';
-
-interface MetaAdCardProps {
-  ad: MetaAd;
+interface AdProps {
+  ad: any;
   viewMode?: 'condensed' | 'details';
-  onClick: (ad: MetaAd) => void;
-  platformContext?: 'facebook' | 'instagram';
+  platformContext?: string;
+  onClick?: (data: any) => void;
 }
 
 const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(num);
+  if (!num || num < 0) return '-';
+  return new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(num);
 };
 
-const formatCurrency = (num: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
-};
+const MetaAdCard: React.FC<AdProps> = ({ ad, onClick }) => {
+  const [imgError, setImgError] = useState(false);
 
-const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, viewMode = 'details', onClick, platformContext }) => {
-  const { snapshot } = ad;
+  if (!ad) return null;
 
-  const hasVideo = snapshot.videos && snapshot.videos.length > 0;
-  const mediaUrl = hasVideo ? snapshot.videos[0].video_hd_url : (snapshot.images.length > 0 ? snapshot.images[0].resized_image_url : null);
-  const daysActive = Math.floor((new Date().getTime() - new Date(ad.start_date).getTime()) / (1000 * 3600 * 24));
+  // Daten aus dem Adapter
+  const { 
+    pageName, 
+    avatar, 
+    status, 
+    id, 
+    body, 
+    media, 
+    ctaText,
+    linkUrl,
+    likes,       // Hier sind die Likes!
+    spend,       // Hier ist der Spend (oft 0)
+    impressions  // Hier sind die Impressions (oft 0)
+  } = ad;
 
-  // Helper to safely extract hostname without crashing on invalid URLs
-  const getDisplayDomain = (url: string) => {
-    try {
-        if (!url || url === '#' || url.trim() === '') return 'example.com';
-        const urlToParse = url.startsWith('http') ? url : `https://${url}`;
-        return new URL(urlToParse).hostname.replace('www.', '');
-    } catch (e) {
-        return 'example.com';
-    }
+  // Body-Text sicher abrufen
+  const bodyText = (ad.snapshot?.body && ad.snapshot.body.text) ? ad.snapshot.body.text : null;
+  const displayFormat = ad.snapshot?.display_format || "N/A";
+
+  const handleProfileError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    e.currentTarget.style.display = 'none';
+    e.currentTarget.nextElementSibling?.classList.remove('hidden');
   };
-
-  const handleCardClick = (e: React.MouseEvent) => {
-      // Prevent click if clicking on CTA button or other interactive elements
-      if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
-          return;
-      }
-      onClick(ad);
-  };
-
-  // Split text into body and hashtags
-  const fullText = snapshot.body.text || "";
-  // Regex to find hashtags
-  const hashtagsMatch = fullText.match(/#[a-z0-9_]+/gi);
-  const hashtags = hashtagsMatch ? hashtagsMatch.join(' ') : "";
-  // Remove hashtags from body text for cleaner separation
-  const bodyText = fullText.replace(/#[a-z0-9_]+/gi, '').trim();
-
-  // Determine which icon to show
-  // If platformContext is provided, show that icon. 
-  // Otherwise, fallback to: if has instagram -> instagram, else facebook.
-  const showInstagram = platformContext === 'instagram' || (!platformContext && ad.publisher_platform.includes('instagram'));
-  const showFacebook = platformContext === 'facebook' || (!platformContext && !showInstagram);
 
   return (
     <div 
-        onClick={handleCardClick}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md transition-all duration-300 cursor-pointer group"
+      onClick={() => onClick && onClick(ad)}
+      className="flex flex-col h-full bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer group"
     >
       
-      {/* 1. Media Content - Always visible */}
-      <div className="bg-gray-100 aspect-video relative overflow-hidden border-b border-gray-100">
-        {mediaUrl ? (
-          hasVideo ? (
-             <video 
-                src={mediaUrl} 
-                controls 
-                onClick={(e) => e.stopPropagation()} // Allow controls to work without opening modal
-                className="w-full h-full object-contain bg-black"
-                poster={snapshot.images[0]?.resized_image_url} 
-             />
-          ) : (
-            <img src={mediaUrl} alt="Ad Creative" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-          )
+      {/* HEADER */}
+      <div className="flex items-center p-3 gap-3 border-b border-gray-50 bg-white">
+        <div className="relative w-10 h-10 flex-shrink-0">
+          {avatar ? (
+            <img 
+              src={avatar} 
+              alt={pageName} 
+              className="w-full h-full rounded-full object-cover border border-gray-100"
+              onError={handleProfileError}
+            />
+          ) : null}
+          <div className={`w-full h-full rounded-full bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-200 ${avatar ? 'hidden' : ''}`}>
+             <span className="font-bold text-sm uppercase">{(pageName || "?").charAt(0)}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-sm truncate text-gray-900" title={pageName}>
+            {pageName}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${status === 'Active' ? 'bg-green-500' : 'bg-red-400'}`}></span>
+            <span className="text-[10px] text-gray-400 font-mono">ID: {id}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* MEDIA AREA */}
+      <div className="relative w-full aspect-[16/9] bg-gray-50 flex items-center justify-center overflow-hidden border-b border-gray-100">
+        {media?.url && !imgError ? (
+          <>
+            {media.type === 'video' ? (
+               <div className="relative w-full h-full">
+                 <img 
+                    src={media.poster || media.url} 
+                    alt="Video Preview"
+                    className="w-full h-full object-cover"
+                    onError={() => setImgError(true)}
+                 />
+                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                    <div className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm">
+                      <Play className="w-5 h-5 text-gray-900 fill-gray-900 ml-0.5" />
+                    </div>
+                 </div>
+               </div>
+            ) : (
+                <img 
+                  src={media.url} 
+                  alt="Creative" 
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  onError={() => setImgError(true)}
+                  loading="lazy"
+                />
+            )}
+          </>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-              <Info className="w-8 h-8 mb-2 opacity-50" />
-              <span className="text-sm font-medium">No Preview</span>
+          <div className="flex flex-col items-center justify-center text-gray-400 p-4 text-center h-full w-full bg-gray-100">
+            <div className="p-2 bg-white rounded-full mb-2 border border-gray-200">
+                {imgError ? <AlertCircle className="w-5 h-5 text-red-300" /> : <Image className="w-5 h-5 text-gray-300" />}
+            </div>
+            <span className="text-xs text-gray-500 font-medium">
+              {imgError ? "Image Expired" : "No Media Found"}
+            </span>
           </div>
         )}
-
-        {/* Overlays */}
-        <div className="absolute top-3 left-3 flex items-center gap-2">
-             <div className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-semibold text-gray-700 shadow-sm flex items-center">
-                <Clock className="w-3 h-3 mr-1 text-gray-500" />
-                {daysActive > 0 ? `${daysActive}d` : 'New'}
-             </div>
-        </div>
-        
-        <div className="absolute top-3 right-3">
-             <div className="w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm">
-                 {showInstagram ? (
-                     <Instagram className="w-4 h-4 text-[#E4405F]" />
-                 ) : (
-                     <Facebook className="w-4 h-4 text-[#1877F2]" />
-                 )}
-             </div>
-        </div>
       </div>
 
-      {/* 2. Metrics Row - Always visible */}
-      <div className="grid grid-cols-3 border-b border-gray-100 divide-x divide-gray-100 bg-gray-50/50">
-          <div className="p-3 text-center">
-              <div className="flex items-center justify-center text-gray-900 font-semibold text-sm gap-1">
-                  <Heart className="w-3.5 h-3.5 text-gray-400" />
-                  {formatNumber(ad.likes)}
+      {/* NEU: METRICS BAR (Hier werden die Daten angezeigt!) */}
+      <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 bg-gray-50/50">
+          <div className="py-2 px-1 text-center flex flex-col items-center justify-center">
+              <div className="flex items-center text-gray-900 font-semibold text-xs">
+                  <ThumbsUp className="w-3 h-3 mr-1 text-gray-400" /> 
+                  {formatNumber(likes)}
               </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">Likes</div>
+              <span className="text-[9px] text-gray-400 uppercase tracking-wide mt-0.5">Likes</span>
           </div>
-          <div className="p-3 text-center">
-              <div className="flex items-center justify-center text-gray-900 font-semibold text-sm gap-1">
-                  <Eye className="w-3.5 h-3.5 text-gray-400" />
-                  {formatNumber(ad.impressions)}
+          <div className="py-2 px-1 text-center flex flex-col items-center justify-center">
+              <div className="flex items-center text-gray-900 font-semibold text-xs">
+                  <Eye className="w-3 h-3 mr-1 text-gray-400" /> 
+                  {formatNumber(impressions)}
               </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">Impr.</div>
+              <span className="text-[9px] text-gray-400 uppercase tracking-wide mt-0.5">Views</span>
           </div>
-          <div className="p-3 text-center">
-              <div className="flex items-center justify-center text-gray-900 font-semibold text-sm gap-1">
-                  <DollarSign className="w-3.5 h-3.5 text-gray-400" />
-                  {formatCurrency(ad.spend)}
+          <div className="py-2 px-1 text-center flex flex-col items-center justify-center">
+              <div className="flex items-center text-gray-900 font-semibold text-xs">
+                  <DollarSign className="w-3 h-3 mr-0.5 text-gray-400" /> 
+                  {formatNumber(spend)}
               </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">Spend</div>
+              <span className="text-[9px] text-gray-400 uppercase tracking-wide mt-0.5">Spend</span>
           </div>
       </div>
 
-      {/* DETAILS VIEW ONLY - Header & Ad Copy */}
-      {viewMode === 'details' && (
-        <div className="flex-1 flex flex-col">
-            {/* Identity Header */}
-            <div className="px-5 pt-4 pb-2 flex items-center gap-3">
-                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center font-bold text-brand-600 text-sm">
-                    {ad.page_name.charAt(0)}
-                </div>
-                <h3 className="text-sm font-semibold text-gray-900 truncate leading-tight group-hover:text-brand-600 transition-colors" title={ad.page_name}>
-                    {ad.page_name}
-                </h3>
-            </div>
-
-            {/* Ad Copy - Fixed Height Layout */}
-            <div className="px-5 pb-4 flex flex-col gap-1">
-                {/* Body Text: Fixed height for 2 lines */}
-                <div className="text-sm text-gray-600 leading-snug font-normal line-clamp-2 h-10">
-                    {bodyText || <span className="text-gray-300 italic">No description</span>}
-                </div>
-                
-                {/* Hashtags: Fixed height for 1 line */}
-                <div className="text-sm text-brand-600 leading-snug font-medium line-clamp-1 h-5">
-                    {hashtags}
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* 4. Footer / CTA area */}
-      <div className={`bg-white mt-auto border-t border-gray-100 ${viewMode === 'condensed' ? 'p-3' : 'p-5'}`}>
-        {viewMode === 'details' && (
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
-                    <Globe className="w-3 h-3 mr-1.5 text-gray-400" />
-                    <span className="truncate max-w-[150px]">
-                        {getDisplayDomain(snapshot.link_url)}
-                    </span>
-                </div>
-                <a href={ad.ad_library_url} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" className="text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors">
-                    Ad ID: {ad.id.split('_')[1]}
-                </a>
-            </div>
+      {/* CONTENT AREA */}
+      <div className="p-4 flex-grow flex flex-col">
+        {bodyText ? (
+          <p className="text-sm text-gray-600 whitespace-pre-wrap line-clamp-3 leading-relaxed">
+            {bodyText}
+          </p>
+        ) : (
+          <div className="flex items-start gap-2 p-3 bg-orange-50 rounded-lg border border-orange-100 text-orange-600/80 italic text-xs mt-1">
+            <FileWarning className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>No text content available</span>
+          </div>
         )}
+      </div>
 
+      {/* FOOTER */}
+      <div className="p-3 bg-white border-t border-gray-100 mt-auto flex justify-between items-center">
+        <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider px-2 py-1 bg-gray-50 border border-gray-200 rounded">
+          {displayFormat}
+        </span>
         <a 
-            href={snapshot.link_url} 
-            onClick={(e) => e.stopPropagation()}
-            target="_blank" 
-            rel="noreferrer"
-            className={`group/btn flex items-center justify-center w-full bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-900 font-semibold rounded-lg transition-all text-sm shadow-xs ${viewMode === 'condensed' ? 'py-2 text-xs' : 'py-2.5'}`}
+          href={linkUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1.5 bg-white hover:bg-gray-50 text-brand-600 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow hover:border-brand-200"
         >
-            {snapshot.cta_text || 'Learn More'}
-            <ExternalLink className={`ml-2 text-gray-400 group-hover/btn:text-gray-600 transition-colors ${viewMode === 'condensed' ? 'w-3 h-3' : 'w-4 h-4'}`} />
+          {ctaText} <ExternalLink className="w-3 h-3" />
         </a>
       </div>
+
     </div>
   );
 };

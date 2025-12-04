@@ -1,13 +1,16 @@
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
 import { MOCK_USER } from './mockData';
+// IMPORTIEREN DES ADAPTERS
+import { cleanAndTransformData } from '../adAdapter';
 
+// Backend URL
 const API_URL = 'http://127.0.0.1:8000/api/v1'; 
 
 class ApiService {
   private user: User | null = null;
   private token: string | null = null;
 
-  // 1. LOGIN mit LocalStorage
+  // 1. LOGIN
   async login(email: string): Promise<User> {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
@@ -16,12 +19,13 @@ class ApiService {
             body: JSON.stringify({ email, password: 'password' }) 
         });
 
-        if (!response.ok) throw new Error('Login failed');
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Login failed');
+        }
         
         const data = await response.json();
         this.token = data.access_token;
-        
-        // ID merken!
         localStorage.setItem('adspy_user_id', data.user.id);
 
         this.user = {
@@ -30,48 +34,41 @@ class ApiService {
             email: data.user.email,
         };
         
-        // Profil nachladen um Credits zu haben
         await this.getUser(); 
-        
         return this.user!;
-    } catch (e) {
+    } catch (e: any) {
         console.error("Login Error:", e);
-        throw e;
+        throw new Error(e.message || "Login failed");
     }
   }
 
-  // 2. GET USER mit Auto-Login
+  // 2. GET USER
   async getUser(): Promise<User | null> {
     if (this.user) return this.user;
 
-    // Prüfen ob ID gespeichert ist
     const storedId = localStorage.getItem('adspy_user_id');
-    if (!storedId) return null; // Kein User -> Login Screen
+    if (!storedId) return null; 
 
     try {
         const response = await fetch(`${API_URL}/user/me?user_id=${storedId}`);
         if (response.ok) {
             const profileData = await response.json();
-            this.user = { 
-                ...MOCK_USER, 
-                ...profileData, 
-                id: storedId 
-            };
+            this.user = { ...MOCK_USER, ...profileData, id: storedId };
             return this.user;
         } else {
-            // Falls ID ungültig, Speicher löschen
             localStorage.removeItem('adspy_user_id');
             return null;
         }
     } catch (e) {
-        console.error("Backend Error", e);
         return null;
     }
   }
 
-  // 3. SUCHE
+  // 3. SUCHE (MIT ADAPTER INTEGRATION)
   async runSearch(params: SearchParams): Promise<SearchResult> {
     if (!this.user) throw new Error("Unauthorized");
+
+    const cleanCountry = (!params.country || params.country === 'ALL') ? 'US' : params.country;
 
     const response = await fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
         method: 'POST',
@@ -80,19 +77,39 @@ class ApiService {
             keyword: params.query,
             platform: params.platform === 'both' ? 'meta' : params.platform,
             limit: params.limit,
-            country: params.country || 'US',
-            sort_by: 'relevancy'
+            country: cleanCountry,
+            sort_by: 'newest' 
         })
     });
 
     if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || "Search failed");
+        let errorMsg = "Search failed";
+        if (typeof err.detail === 'string') {
+            errorMsg = err.detail;
+        } else if (Array.isArray(err.detail)) {
+            errorMsg = err.detail.map((e: any) => `${e.loc[1]}: ${e.msg}`).join(', ');
+        }
+        throw new Error(errorMsg);
     }
 
-    const data = await response.json();
+    const responseBody = await response.json();
+    let rawAdList = responseBody.data || []; 
+
+    // HIER WIRD TRANSFORMIERT:
+    // Wir nutzen den Adapter, um die rohen Daten in das Format zu bringen, 
+    // das MetaAdCard erwartet.
+    let cleanedMetaAds: any[] = [];
     
-    // Credits sofort abziehen (UI)
+    if (params.platform !== 'tiktok') {
+        // cleanAndTransformData erwartet DB Rows (Objekte mit .data Property), 
+        // aber die API gibt direkt die Objekte zurück. Wir müssen sie wrappen 
+        // oder den Adapter anpassen. 
+        // Da wir den Adapter nicht ändern wollen, simulieren wir die Struktur:
+        const rowsToTransform = rawAdList.map((item: any) => ({ data: item }));
+        cleanedMetaAds = cleanAndTransformData(rowsToTransform);
+    }
+
     if (this.user) {
         this.user.credits -= params.limit;
     }
@@ -102,8 +119,8 @@ class ApiService {
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',
-      metaAds: params.platform !== 'tiktok' ? data.data : [],
-      tikTokAds: params.platform !== 'meta' ? data.data : [],
+      metaAds: cleanedMetaAds, // JETZT BEREINIGT
+      tikTokAds: params.platform !== 'meta' ? rawAdList : [], // TikTok Logik bleibt vorerst
       cost: params.limit
     };
   }

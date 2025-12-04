@@ -1,4 +1,3 @@
-
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -34,14 +33,27 @@ export interface SearchParams {
 }
 
 // Meta Ad Models
+export interface MetaAdCardItem {
+    title?: string;
+    body?: string;
+    link_url?: string;
+    cta_text?: string;
+    original_image_url?: string;
+    resized_image_url?: string;
+    video_hd_url?: string;
+    video_sd_url?: string;
+    video_preview_image_url?: string;
+}
+
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
   body: {
     text: string;
   };
-  images: Array<{ resized_image_url: string }>;
-  videos: Array<{ video_hd_url: string }>;
+  images: Array<{ resized_image_url: string; original_image_url?: string }>;
+  videos: Array<{ video_hd_url: string; video_sd_url?: string; video_preview_image_url?: string }>;
+  cards?: MetaAdCardItem[]; // NEU: Carousel Support
 }
 
 export interface MetaAd {
@@ -52,7 +64,6 @@ export interface MetaAd {
   page_profile_uri: string;
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
-  // New metrics
   likes: number;
   impressions: number;
   spend: number;
@@ -77,7 +88,7 @@ export interface TikTokAd {
   webVideoUrl: string;
   text: string;
   createTimeISO: string;
-  diggCount: number; // Likes
+  diggCount: number; 
   shareCount: number;
   playCount: number;
   commentCount: number;

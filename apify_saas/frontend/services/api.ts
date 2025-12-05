@@ -1,10 +1,22 @@
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
 import { MOCK_USER } from './mockData';
 // IMPORTIEREN DES ADAPTERS
+// @ts-ignore
 import { cleanAndTransformData } from '../adAdapter';
 
-// Backend URL
-const API_URL = 'http://127.0.0.1:8000/api/v1'; 
+// --- WICHTIGE ÄNDERUNG HIER ---
+// Wir nutzen die Environment Variable von Vercel.
+// Wenn VITE_API_URL gesetzt ist (Produktion), nehmen wir die.
+// Sonst (lokal) nehmen wir localhost.
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+// Wir entfernen ein eventuelles Slash am Ende der URL, um Fehler zu vermeiden
+const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
+
+// Das Backend erwartet /api/v1 als Prefix
+const API_URL = `${CLEAN_BASE_URL}/api/v1`; 
+
+console.log("API Configured to:", API_URL); // Zum Debuggen in der Konsole
 
 class ApiService {
   private user: User | null = null;
@@ -97,15 +109,9 @@ class ApiService {
     let rawAdList = responseBody.data || []; 
 
     // HIER WIRD TRANSFORMIERT:
-    // Wir nutzen den Adapter, um die rohen Daten in das Format zu bringen, 
-    // das MetaAdCard erwartet.
     let cleanedMetaAds: any[] = [];
     
     if (params.platform !== 'tiktok') {
-        // cleanAndTransformData erwartet DB Rows (Objekte mit .data Property), 
-        // aber die API gibt direkt die Objekte zurück. Wir müssen sie wrappen 
-        // oder den Adapter anpassen. 
-        // Da wir den Adapter nicht ändern wollen, simulieren wir die Struktur:
         const rowsToTransform = rawAdList.map((item: any) => ({ data: item }));
         cleanedMetaAds = cleanAndTransformData(rowsToTransform);
     }
@@ -119,8 +125,8 @@ class ApiService {
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',
-      metaAds: cleanedMetaAds, // JETZT BEREINIGT
-      tikTokAds: params.platform !== 'meta' ? rawAdList : [], // TikTok Logik bleibt vorerst
+      metaAds: cleanedMetaAds, 
+      tikTokAds: params.platform !== 'meta' ? rawAdList : [], 
       cost: params.limit
     };
   }

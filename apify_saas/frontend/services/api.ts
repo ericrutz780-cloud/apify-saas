@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
 import { MOCK_USER } from './mockData';
 // IMPORTIEREN DES ADAPTERS

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { HashRouter as Router, Routes, Route, useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import { api } from './services/api';
-import { User, SearchParams, SearchResult, MetaAd, TikTokAd, SavedAd } from './types';
+import { User, SearchParams, SearchResult, MetaAd, TikTokAd, SavedAd, SearchHistoryItem } from './types';
 import MetaAdCard from './components/MetaAdCard';
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
@@ -73,7 +73,6 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
     setError('');
 
     try {
-        // --- KORREKTUR: Passwort wird jetzt mit übergeben ---
         await api.login(email, password); 
         onLoginSuccess();       
         navigate('/dashboard'); 
@@ -151,6 +150,7 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
 const Dashboard = ({ user }: { user: User }) => {
     const navigate = useNavigate();
 
+    // Stats Logic
     const searchCounts = user.searchHistory.reduce((acc, item) => {
         acc[item.query] = (acc[item.query] || 0) + 1;
         return acc;
@@ -165,6 +165,67 @@ const Dashboard = ({ user }: { user: User }) => {
         navigate(`/search?q=${encodeURIComponent(term)}`);
     };
 
+    // --- NEUE RERUN LOGIK (SMART CACHE) ---
+    const handleRerun = (item: SearchHistoryItem) => {
+        // 1. Suche im localStorage nach einem existierenden Ergebnis für diese Query/Plattform
+        let cachedResultId = null;
+        
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('search_')) {
+                    const resultStr = localStorage.getItem(key);
+                    if (resultStr) {
+                        const result = JSON.parse(resultStr);
+                        // Prüfen ob Query und Plattform übereinstimmen
+                        // Wir prüfen auch, ob das Ergebnis "neu genug" ist (z.B. < 24h), wenn nötig. 
+                        // Hier erstmal strikter Match auf Parameter.
+                        if (
+                            result.params && 
+                            result.params.query === item.query && 
+                            (result.params.platform === item.platform || item.platform === 'both')
+                        ) {
+                            cachedResultId = result.id;
+                            break; // Gefunden!
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Cache Check Error:", e);
+        }
+
+        if (cachedResultId) {
+            // Szenario A: Daten sind da -> Lade sofort ohne API Call und ohne Credits
+            console.log(`Cache Hit for ${item.query}! Loading result ${cachedResultId}`);
+            navigate(`/results/${cachedResultId}`);
+        } else {
+            // Szenario B: Keine Daten -> Navigiere zur Suche, damit User neu suchen kann (verbraucht Credits)
+            // Wir füllen die Suche vor.
+            console.log(`Cache Miss for ${item.query}. Redirecting to search.`);
+            navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}`);
+        }
+    };
+
+    // Helper für Datumsformatierung (z.B. "5.12.2025")
+    const formatDate = (isoString: string) => {
+        try {
+            const date = new Date(isoString);
+            return new Intl.DateTimeFormat('de-DE', {
+                day: 'numeric',
+                month: 'numeric',
+                year: 'numeric'
+            }).format(date);
+        } catch (e) {
+            return isoString;
+        }
+    };
+
+    const formatPlatform = (p: string) => {
+        if (p === 'both') return 'Both';
+        return p.charAt(0).toUpperCase() + p.slice(1);
+    };
+
     return (
         <div className="space-y-8">
             <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -173,7 +234,6 @@ const Dashboard = ({ user }: { user: User }) => {
                     <p className="text-gray-500 mt-1 text-sm">Overview of your activity and available credits.</p>
                 </div>
                 <div className="flex gap-2">
-                    {/* Live Feed Button */}
                     <button 
                         onClick={() => navigate('/feed')} 
                         className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 transition-all"
@@ -193,6 +253,7 @@ const Dashboard = ({ user }: { user: User }) => {
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 {/* Card 1: Credits */}
                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-sm font-medium text-gray-500">Credits Available</span>
@@ -211,6 +272,7 @@ const Dashboard = ({ user }: { user: User }) => {
                     </div>
                  </div>
 
+                 {/* Card 2: Total Searches */}
                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-sm font-medium text-gray-500">Total Searches</span>
@@ -236,6 +298,7 @@ const Dashboard = ({ user }: { user: User }) => {
                     </div>
                  </div>
 
+                 {/* Card 3: Active Plan */}
                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
                     <div className="flex items-center justify-between mb-4">
                         <span className="text-sm font-medium text-gray-500">Active Plan</span>
@@ -252,43 +315,44 @@ const Dashboard = ({ user }: { user: User }) => {
                  </div>
             </div>
 
+            {/* Card 4: Recent Searches Table - DESIGN UPDATE */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-base font-semibold text-gray-900">Recent Searches</h3>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-white border-b border-gray-100">
                             <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Query</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Results</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">QUERY</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">PLATFORM</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">DATE</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">RESULTS</th>
                                 <th scope="col" className="relative px-6 py-3">
                                     <span className="sr-only">Actions</span>
                                 </th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-50">
                              {user.searchHistory.length > 0 ? (
-                                 user.searchHistory.slice(0, 5).map((search) => (
-                                     <tr key={search.id} className="hover:bg-gray-50 transition-colors">
-                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                 user.searchHistory.slice(0, 10).map((search) => (
+                                     <tr key={search.id} className="hover:bg-gray-50 transition-colors group">
+                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                              {search.query}
                                          </td>
-                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                                             {search.platform}
-                                         </td>
                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                             {new Date(search.timestamp).toLocaleDateString()}
+                                             {formatPlatform(search.platform)}
                                          </td>
-                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 tabular-nums">
+                                             {formatDate(search.timestamp)}
+                                         </td>
+                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 tabular-nums">
                                              {search.resultsCount}
                                          </td>
                                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                              <button 
-                                                onClick={() => navigate(`/search?q=${encodeURIComponent(search.query)}&platform=${search.platform}&limit=${search.limit}`)}
-                                                className="text-brand-600 hover:text-brand-900"
+                                                onClick={() => handleRerun(search)}
+                                                className="text-brand-600 hover:text-brand-800 font-medium hover:underline transition-all cursor-pointer"
                                              >
                                                  Rerun
                                              </button>
@@ -580,31 +644,24 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
         }
     };
 
-    // ---------- HIER IST DIE WICHTIGSTE ÄNDERUNG ----------
-    // Wir transformieren die Daten IMMER, bevor sie in die Filter gehen.
     const transformedMetaAds = useMemo(() => {
         if (!result || !result.metaAds) return [];
         const ads = result.metaAds;
-        // Wenn das erste Element schon "clean" aussieht (hat 'pageName'), nehmen wir es direkt
         // @ts-ignore
         if (ads.length > 0 && ads[0].pageName) return ads;
         
-        // Sonst: Wir simulieren die DB-Struktur ({data: ad}) für den Adapter
         const adsToTransform = ads.map(ad => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
-    // ------------------------------------------------------
 
     if (!result) return <div className="flex justify-center pt-24"><Loader2 className="animate-spin w-8 h-8 text-brand-600" /></div>;
 
     const showMeta = result.params.platform !== 'tiktok';
     const showTikTok = result.params.platform !== 'meta';
     
-    // Wir nutzen jetzt NUR die transformierten Daten für Meta
     const metaAds = transformedMetaAds;
     const tikTokAds = result.tikTokAds || [];
     
-    // Filterung auf Basis der neuen Struktur (platform ist String "facebook, instagram" oder "facebook")
     const facebookAds = metaAds.filter((ad: any) => ad.platform && ad.platform.includes('facebook'));
     const instagramAds = metaAds.filter((ad: any) => ad.platform && ad.platform.includes('instagram'));
 
@@ -617,16 +674,14 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
         else { ads = [...tikTokAds]; isMetaTab = false; }
 
         if (isMetaTab) {
-            // Filterung auf Basis von ad.media.type (vom Adapter)
             if (formatFilter === 'video') ads = ads.filter((ad: any) => ad.media?.type === 'video');
             else if (formatFilter === 'image') ads = ads.filter((ad: any) => ad.media?.type === 'image' || ad.media?.type === 'carousel');
 
             ads.sort((a, b) => {
+                // Nur noch Newest und Reach für Meta (da Likes/Spend oft fehlen)
                 if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
                 if (sortBy === 'reach_views') return (b.impressions || 0) - (a.impressions || 0);
                 if (sortBy === 'spend_shares') return (b.spend || 0) - (a.spend || 0);
-                // Datum ist ein String im Format "DD.MM.YYYY" oder "Datum unbekannt", das sortiert sich schlecht.
-                // Besser: wir nutzen das originale start_date, das der Adapter durchreicht (hoffentlich als ISO)
                 return new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime();
             });
             return ads;

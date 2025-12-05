@@ -73,7 +73,8 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
     setError('');
 
     try {
-        await api.login(email); 
+        // --- KORREKTUR: Passwort wird jetzt mit übergeben ---
+        await api.login(email, password); 
         onLoginSuccess();       
         navigate('/dashboard'); 
     } catch (err: any) {

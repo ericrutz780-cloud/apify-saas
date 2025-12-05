@@ -1,42 +1,41 @@
 /// <reference types="vite/client" />
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd } from '../types';
 import { MOCK_USER } from './mockData';
-// IMPORTIEREN DES ADAPTERS
 // @ts-ignore
 import { cleanAndTransformData } from '../adAdapter';
 
-// --- WICHTIGE ÄNDERUNG HIER ---
-// Wir nutzen die Environment Variable von Vercel.
-// Wenn VITE_API_URL gesetzt ist (Produktion), nehmen wir die.
-// Sonst (lokal) nehmen wir localhost.
+// --- KONFIGURATION ---
+// Wir nutzen die Environment Variable von Vercel (Render Backend).
+// Wenn VITE_API_URL nicht gesetzt ist (lokal), nehmen wir localhost.
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 // Wir entfernen ein eventuelles Slash am Ende der URL, um Fehler zu vermeiden
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 
 // Das Backend erwartet /api/v1 als Prefix
-const API_URL = `${CLEAN_BASE_URL}/api/v1`; 
+const API_URL = `${CLEAN_BASE_URL}/api/v1`;
 
-console.log("API Configured to:", API_URL); // Zum Debuggen in der Konsole
+console.log("API Configured to:", API_URL); // Debug-Info in der Konsole
 
 class ApiService {
   private user: User | null = null;
   private token: string | null = null;
 
-  // 1. LOGIN
-  async login(email: string): Promise<User> {
+  // 1. LOGIN (Korrigiert: Nimmt jetzt email UND password)
+  async login(email: string, password: string): Promise<User> {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: 'password' }) 
+            // WICHTIG: Hier wird jetzt das echte Passwort gesendet!
+            body: JSON.stringify({ email, password: password })
         });
 
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.detail || 'Login failed');
         }
-        
+
         const data = await response.json();
         this.token = data.access_token;
         localStorage.setItem('adspy_user_id', data.user.id);
@@ -46,8 +45,8 @@ class ApiService {
             id: data.user.id,
             email: data.user.email,
         };
-        
-        await this.getUser(); 
+
+        await this.getUser();
         return this.user!;
     } catch (e: any) {
         console.error("Login Error:", e);
@@ -60,7 +59,7 @@ class ApiService {
     if (this.user) return this.user;
 
     const storedId = localStorage.getItem('adspy_user_id');
-    if (!storedId) return null; 
+    if (!storedId) return null;
 
     try {
         const response = await fetch(`${API_URL}/user/me?user_id=${storedId}`);
@@ -91,7 +90,7 @@ class ApiService {
             platform: params.platform === 'both' ? 'meta' : params.platform,
             limit: params.limit,
             country: cleanCountry,
-            sort_by: 'newest' 
+            sort_by: 'newest'
         })
     });
 
@@ -107,11 +106,11 @@ class ApiService {
     }
 
     const responseBody = await response.json();
-    let rawAdList = responseBody.data || []; 
+    let rawAdList = responseBody.data || [];
 
     // HIER WIRD TRANSFORMIERT:
     let cleanedMetaAds: any[] = [];
-    
+
     if (params.platform !== 'tiktok') {
         const rowsToTransform = rawAdList.map((item: any) => ({ data: item }));
         cleanedMetaAds = cleanAndTransformData(rowsToTransform);
@@ -126,8 +125,8 @@ class ApiService {
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',
-      metaAds: cleanedMetaAds, 
-      tikTokAds: params.platform !== 'meta' ? rawAdList : [], 
+      metaAds: cleanedMetaAds,
+      tikTokAds: params.platform !== 'meta' ? rawAdList : [],
       cost: params.limit
     };
   }

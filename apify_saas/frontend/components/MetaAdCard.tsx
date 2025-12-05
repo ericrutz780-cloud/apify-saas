@@ -1,177 +1,199 @@
 import React, { useState } from 'react';
-import { Play, Image, FileWarning, ExternalLink, AlertCircle, ThumbsUp, Eye, DollarSign } from 'lucide-react';
+import { Play, ExternalLink, ThumbsUp, Eye, DollarSign } from 'lucide-react';
+// Wir importieren den Typ zwar, aber nutzen intern eine "sichere" Version, 
+// um Konflikte mit veralteten definitions in types.ts zu vermeiden.
+import { MetaAd } from '../types';
 
-interface AdProps {
-  ad: any;
-  viewMode?: 'condensed' | 'details';
-  platformContext?: string;
-  onClick?: (data: any) => void;
+// Definieren der Struktur, wie sie WIRKLICH aus dem Adapter kommt
+interface SafeMetaAd {
+    id: string;
+    pageName?: string;
+    avatar?: string | null;
+    status?: string;
+    date?: string;
+    body?: string | null;
+    media?: {
+        type: 'video' | 'image' | 'carousel';
+        url?: string | null;
+        poster?: string | null;
+    };
+    ctaText?: string;
+    linkUrl?: string;
+    likes?: number | null;
+    impressions?: number | null;
+    spend?: number | null;
+    [key: string]: any; // Erlaubt zusätzliche Felder ohne Fehler
 }
 
-const formatNumber = (num: number) => {
-  if (!num || num < 0) return '-';
-  return new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(num);
-};
+interface MetaAdCardProps {
+    ad: MetaAd; // Wir akzeptieren das Original...
+    viewMode: 'condensed' | 'details';
+    onClick: (ad: MetaAd) => void;
+    platformContext?: 'facebook' | 'instagram';
+}
 
-const MetaAdCard: React.FC<AdProps> = ({ ad, onClick }) => {
-  const [imgError, setImgError] = useState(false);
+const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, viewMode, onClick }) => {
+    const [imageError, setImageError] = useState(false);
 
-  if (!ad) return null;
+    // WICHTIG: Wir "casten" das ad Objekt auf unseren sicheren Typ.
+    // Das bringt die roten Linien zum Schweigen, weil TS jetzt weiß, 
+    // dass 'media', 'likes' etc. existieren dürfen.
+    const safeAd = ad as unknown as SafeMetaAd;
 
-  // Daten aus dem Adapter
-  const { 
-    pageName, 
-    avatar, 
-    status, 
-    id, 
-    body, 
-    media, 
-    ctaText,
-    linkUrl,
-    likes,       // Hier sind die Likes!
-    spend,       // Hier ist der Spend (oft 0)
-    impressions  // Hier sind die Impressions (oft 0)
-  } = ad;
+    // Robuste Formatierung: Fängt null, undefined, -1 und falsche Typen ab
+    const formatMetric = (val: any, prefix = '') => {
+        // Strikte Prüfung auf null/undefined
+        if (val === null || val === undefined || val === '') return 'N/A';
+        
+        const num = Number(val);
 
-  // Body-Text sicher abrufen
-  const bodyText = (ad.snapshot?.body && ad.snapshot.body.text) ? ad.snapshot.body.text : null;
-  const displayFormat = ad.snapshot?.display_format || "N/A";
+        // Prüfen auf ungültige Zahlen oder Fehlercodes (-1)
+        if (isNaN(num) || num === -1 || num < 0) return 'N/A';
 
-  const handleProfileError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    e.currentTarget.style.display = 'none';
-    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-  };
+        try {
+            return prefix + new Intl.NumberFormat('en-US', { 
+                notation: "compact", 
+                compactDisplay: "short",
+                maximumFractionDigits: 1 
+            }).format(num);
+        } catch (e) {
+            return 'N/A';
+        }
+    };
 
-  return (
-    <div 
-      onClick={() => onClick && onClick(ad)}
-      className="flex flex-col h-full bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer group"
-    >
-      
-      {/* HEADER */}
-      <div className="flex items-center p-3 gap-3 border-b border-gray-50 bg-white">
-        <div className="relative w-10 h-10 flex-shrink-0">
-          {avatar ? (
-            <img 
-              src={avatar} 
-              alt={pageName} 
-              className="w-full h-full rounded-full object-cover border border-gray-100"
-              onError={handleProfileError}
-            />
-          ) : null}
-          <div className={`w-full h-full rounded-full bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-200 ${avatar ? 'hidden' : ''}`}>
-             <span className="font-bold text-sm uppercase">{(pageName || "?").charAt(0)}</span>
-          </div>
-        </div>
+    const handleImageError = () => {
+        setImageError(true);
+    };
 
-        <div className="flex flex-col min-w-0">
-          <span className="font-semibold text-sm truncate text-gray-900" title={pageName}>
-            {pageName}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${status === 'Active' ? 'bg-green-500' : 'bg-red-400'}`}></span>
-            <span className="text-[10px] text-gray-400 font-mono">ID: {id}</span>
-          </div>
-        </div>
-      </div>
+    // Sicherheits-Check
+    if (!safeAd) return null;
 
-      {/* MEDIA AREA */}
-      <div className="relative w-full aspect-[16/9] bg-gray-50 flex items-center justify-center overflow-hidden border-b border-gray-100">
-        {media?.url && !imgError ? (
-          <>
-            {media.type === 'video' ? (
-               <div className="relative w-full h-full">
-                 <img 
-                    src={media.poster || media.url} 
-                    alt="Video Preview"
-                    className="w-full h-full object-cover"
-                    onError={() => setImgError(true)}
-                 />
-                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
-                    <div className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md backdrop-blur-sm">
-                      <Play className="w-5 h-5 text-gray-900 fill-gray-900 ml-0.5" />
-                    </div>
-                 </div>
-               </div>
-            ) : (
-                <img 
-                  src={media.url} 
-                  alt="Creative" 
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  onError={() => setImgError(true)}
-                  loading="lazy"
-                />
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center text-gray-400 p-4 text-center h-full w-full bg-gray-100">
-            <div className="p-2 bg-white rounded-full mb-2 border border-gray-200">
-                {imgError ? <AlertCircle className="w-5 h-5 text-red-300" /> : <Image className="w-5 h-5 text-gray-300" />}
-            </div>
-            <span className="text-xs text-gray-500 font-medium">
-              {imgError ? "Image Expired" : "No Media Found"}
-            </span>
-          </div>
-        )}
-      </div>
+    // Sichere Prüfung auf den Medientyp mit dem neuen safeAd Objekt
+    const mediaType = safeAd.media?.type;
+    const isVideo = mediaType === 'video';
+    const mediaUrl = safeAd.media?.url;
+    const mediaPoster = safeAd.media?.poster;
 
-      {/* NEU: METRICS BAR (Hier werden die Daten angezeigt!) */}
-      <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 bg-gray-50/50">
-          <div className="py-2 px-1 text-center flex flex-col items-center justify-center">
-              <div className="flex items-center text-gray-900 font-semibold text-xs">
-                  <ThumbsUp className="w-3 h-3 mr-1 text-gray-400" /> 
-                  {formatNumber(likes)}
-              </div>
-              <span className="text-[9px] text-gray-400 uppercase tracking-wide mt-0.5">Likes</span>
-          </div>
-          <div className="py-2 px-1 text-center flex flex-col items-center justify-center">
-              <div className="flex items-center text-gray-900 font-semibold text-xs">
-                  <Eye className="w-3 h-3 mr-1 text-gray-400" /> 
-                  {formatNumber(impressions)}
-              </div>
-              <span className="text-[9px] text-gray-400 uppercase tracking-wide mt-0.5">Views</span>
-          </div>
-          <div className="py-2 px-1 text-center flex flex-col items-center justify-center">
-              <div className="flex items-center text-gray-900 font-semibold text-xs">
-                  <DollarSign className="w-3 h-3 mr-0.5 text-gray-400" /> 
-                  {formatNumber(spend)}
-              </div>
-              <span className="text-[9px] text-gray-400 uppercase tracking-wide mt-0.5">Spend</span>
-          </div>
-      </div>
+    // Fallback-Bild
+    const displayImage = imageError || !mediaUrl 
+        ? 'https://placehold.co/400x400?text=No+Preview' 
+        : mediaUrl;
 
-      {/* CONTENT AREA */}
-      <div className="p-4 flex-grow flex flex-col">
-        {bodyText ? (
-          <p className="text-sm text-gray-600 whitespace-pre-wrap line-clamp-3 leading-relaxed">
-            {bodyText}
-          </p>
-        ) : (
-          <div className="flex items-start gap-2 p-3 bg-orange-50 rounded-lg border border-orange-100 text-orange-600/80 italic text-xs mt-1">
-            <FileWarning className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>No text content available</span>
-          </div>
-        )}
-      </div>
-
-      {/* FOOTER */}
-      <div className="p-3 bg-white border-t border-gray-100 mt-auto flex justify-between items-center">
-        <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider px-2 py-1 bg-gray-50 border border-gray-200 rounded">
-          {displayFormat}
-        </span>
-        <a 
-          href={linkUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1.5 bg-white hover:bg-gray-50 text-brand-600 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm transition-all hover:shadow hover:border-brand-200"
+    return (
+        <div 
+            onClick={() => onClick(ad)}
+            className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-all cursor-pointer flex flex-col h-full"
         >
-          {ctaText} <ExternalLink className="w-3 h-3" />
-        </a>
-      </div>
+            {/* Header: Avatar & Name */}
+            <div className="p-3 flex items-center gap-3 border-b border-gray-100">
+                <div className="h-8 w-8 rounded-full bg-gray-100 flex-shrink-0 overflow-hidden border border-gray-200">
+                    {safeAd.avatar ? (
+                        <img 
+                            src={safeAd.avatar} 
+                            alt="" 
+                            className="h-full w-full object-cover" 
+                            onError={(e) => e.currentTarget.style.display = 'none'} 
+                        />
+                    ) : (
+                        <div className="h-full w-full flex items-center justify-center text-gray-400 text-xs font-bold">
+                            {(safeAd.pageName || '?').charAt(0)}
+                        </div>
+                    )}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-gray-900 truncate" title={safeAd.pageName}>
+                        {safeAd.pageName || 'Unknown Advertiser'}
+                    </h3>
+                    <div className="flex items-center text-xs text-gray-500 gap-2">
+                        <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-medium border ${safeAd.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                            {safeAd.status || 'Inactive'}
+                        </span>
+                        <span>• {safeAd.date || 'N/A'}</span>
+                    </div>
+                </div>
+            </div>
 
-    </div>
-  );
+            {/* Media Bereich */}
+            <div className="relative aspect-square bg-gray-50 overflow-hidden">
+                {isVideo ? (
+                    <div className="relative w-full h-full group-hover:scale-105 transition-transform duration-500">
+                        <img 
+                            src={mediaPoster || displayImage} 
+                            alt="Video Thumbnail" 
+                            className="w-full h-full object-cover opacity-90"
+                            onError={handleImageError}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+                            <div className="h-10 w-10 rounded-full bg-white/90 backdrop-blur flex items-center justify-center shadow-lg">
+                                <Play className="w-4 h-4 text-brand-600 fill-brand-600 ml-0.5" />
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <img 
+                        src={displayImage} 
+                        alt="Ad Creative" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={handleImageError}
+                    />
+                )}
+            </div>
+
+            {/* Content & Metriken */}
+            <div className="p-3 flex flex-col flex-1 gap-3">
+                <div className="grid grid-cols-3 gap-2 py-2 border-b border-gray-100">
+                    <div className="text-center" title="Likes (Estimated)">
+                        <div className="flex items-center justify-center text-gray-400 mb-0.5">
+                            <ThumbsUp className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="text-xs font-semibold text-gray-700">
+                            {formatMetric(safeAd.likes)}
+                        </span>
+                    </div>
+                    <div className="text-center border-l border-gray-100" title={isVideo ? "Video Views" : "Impressions"}>
+                        <div className="flex items-center justify-center text-gray-400 mb-0.5">
+                            <Eye className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="text-xs font-semibold text-gray-700">
+                            {formatMetric(safeAd.impressions)}
+                        </span>
+                    </div>
+                    <div className="text-center border-l border-gray-100" title="Ad Spend">
+                        <div className="flex items-center justify-center text-gray-400 mb-0.5">
+                            <DollarSign className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="text-xs font-semibold text-gray-700">
+                            {formatMetric(safeAd.spend, '$')}
+                        </span>
+                    </div>
+                </div>
+
+                {safeAd.body && (
+                    <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                        {safeAd.body}
+                    </p>
+                )}
+
+                <div className="mt-auto flex items-center justify-between pt-1">
+                    <span className="text-xs font-medium text-brand-600 bg-brand-50 px-2 py-1 rounded">
+                        {safeAd.ctaText || 'Learn More'}
+                    </span>
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (safeAd.linkUrl && safeAd.linkUrl !== '#') {
+                                window.open(safeAd.linkUrl, '_blank');
+                            }
+                        }}
+                        className="text-gray-400 hover:text-gray-900 transition-colors p-1"
+                        title="Open Landing Page"
+                    >
+                        <ExternalLink className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default MetaAdCard;

@@ -1,6 +1,5 @@
 from apify_client import ApifyClient
 from core.config import settings
-import uuid
 import datetime
 
 # Client initialisieren (einmalig)
@@ -23,7 +22,11 @@ def normalize_meta_ad(item):
 
     # ID sicherstellen
     raw_id = item.get("ad_archive_id") or item.get("ad_id")
-    safe_id = str(raw_id) if raw_id and str(raw_id) != "nan" else f"gen_{uuid.uuid4()}"
+    # safe_id generieren wir nicht neu, sondern nehmen die echte ID oder überspringen
+    if not raw_id or str(raw_id) == "nan":
+         return None # Ohne ID ist es wertlos
+    
+    safe_id = str(raw_id)
 
     # Medien suchen (Video > Card > Image)
     images = raw_snapshot.get("images") or []
@@ -58,6 +61,23 @@ def normalize_meta_ad(item):
     elif item.get("reach_estimate"):
          impressions = item.get("reach_estimate")
 
+    # Targeting und EU Daten extrahieren (falls vorhanden)
+    targeting = {
+        "ages": item.get("target_ages", []),
+        "genders": [item.get("gender")] if item.get("gender") else [],
+        "locations": item.get("targeted_or_reached_countries", []),
+        "reach_estimate": item.get("reach_estimate"),
+        # Versuche Breakdown Daten zu finden (EU Transparenz)
+        "breakdown": item.get("demographic_distribution") or item.get("eu_data") or []
+    }
+
+    # Advertiser Info extrahieren
+    advertiser_info = {
+        "category": (raw_snapshot.get("page_categories") or [None])[0],
+        # Weitere Felder wenn verfügbar
+    }
+
+
     return {
         "id": safe_id,
         "publisher_platform": item.get("publisher_platform", ["facebook"]),
@@ -68,6 +88,13 @@ def normalize_meta_ad(item):
         "likes": likes,
         "impressions": impressions,
         "spend": item.get("spend", 0),
+        
+        # Die neuen komplexen Objekte für das Detail-Modal
+        "targeting": targeting,
+        "advertiser_info": advertiser_info,
+        "transparency_regions": item.get("eu_data") or [], # Manche Scraper nennen es eu_data
+        "disclaimer": item.get("disclaimer_label") or item.get("byline"),
+
         "snapshot": {
             "cta_text": raw_snapshot.get("cta_text", "Learn More"),
             "link_url": raw_snapshot.get("link_url") or item.get("ad_library_url", "#"),
@@ -84,6 +111,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
     Nutzt 'fetch_meta_ads_live' Logik aber als async Service Funktion.
     """
     # Country Mapping / Fallback
+    # WICHTIG: Apify erwartet oft ISO 2-Letter Codes in Uppercase (z.B. "DE", "US")
     target_country = country.upper() if country and country != "ALL" else "US"
     
     # Datumsgrenze (letzte 90 Tage)
@@ -93,6 +121,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
     sort_mode = "relevancy_monthly_grouped" # Standard für beste Ergebnisse
 
     # URL Konstruktion
+    # Wir bauen die URL manuell, um sicherzugehen, dass der 'country' Parameter stimmt.
     search_url = (
         f"https://www.facebook.com/ads/library/"
         f"?active_status=active&ad_type=all&country={target_country}&q={query}"
@@ -104,14 +133,14 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
     # Actor Input Konfiguration
     # WICHTIG: 'count' ist oft der entscheidende Parameter bei diesem Actor
     run_input = {
-        "startUrls": [{"url": search_url}], # Manche Actors nutzen 'startUrls', manche 'urls'
-        "urls": [{"url": search_url}],      # Wir senden beides zur Sicherheit
+        "startUrls": [{"url": search_url}], 
         
         "count": limit, 
         "maxItems": limit, 
         "adsCount": limit, # Und noch eine Variante, die manche Actors nutzen
 
         "pageTimeoutSecs": 60,
+        # Proxy ist essenziell für Facebook Scraping
         "proxy": {
             "useApifyProxy": True,
             "apifyProxyGroups": ["RESIDENTIAL"]
@@ -125,9 +154,8 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
     print(f"DEBUG: Search URL: {search_url}")
 
     try:
-        # Den richtigen Actor aufrufen (curious_coder/facebook-ads-library-scraper oder ähnlich)
-        # Ich nutze hier den String, den du in deinem Snippet hattest ("XtaWFhbtfxyzqrFmd" scheint eine ID zu sein, 
-        # aber 'curious_coder/facebook-ads-library-scraper' ist lesbarer. Ich nehme den Namen.)
+        # Den richtigen Actor aufrufen. 
+        # ID aus deinem Log: "curious_coder/facebook-ads-library-scraper"
         run = client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
             memory_mbytes=1024, # Etwas mehr RAM geben

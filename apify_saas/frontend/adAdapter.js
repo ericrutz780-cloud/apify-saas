@@ -12,12 +12,12 @@ export const cleanAndTransformData = (dbRows) => {
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
 
-    // 2. Media Extraction
+    // 2. Media Extraction (Video > Carousel > Image)
     let mediaType = 'image';
     let mediaUrl = null;
     let poster = null;
 
-    // Prüfe CamelCase und SnakeCase Pfade für Medien
+    // Prüfe CamelCase und SnakeCase Pfade
     const videos = snap.videos || item.videos || [];
     const images = snap.images || item.images || [];
     const cards = snap.cards || item.cards || [];
@@ -57,9 +57,12 @@ export const cleanAndTransformData = (dbRows) => {
     // WICHTIG: Wir prüfen zuerst reachEstimate (Doku), dann reach_estimate (JSON)
     let reach = item.reachEstimate || item.reach_estimate || null;
     
-    // Fallback: Manchmal steckt es in eu_data
+    // Fallback: Manchmal steckt es in eu_data oder euAudience
     if (!reach && item.eu_data && item.eu_data.reach_estimate) {
         reach = item.eu_data.reach_estimate;
+    }
+    if (!reach && item.euAudience && item.euAudience.reachEstimate) {
+        reach = item.euAudience.reachEstimate;
     }
 
     // Fallback: Impressions
@@ -83,7 +86,7 @@ export const cleanAndTransformData = (dbRows) => {
         ages,
         genders,
         locations, 
-        reach_estimate: reach, // Hier landet der Wert, egal woher er kam
+        reach_estimate: reach,
         breakdown
     };
 
@@ -106,7 +109,9 @@ export const cleanAndTransformData = (dbRows) => {
       spend,
 
       targeting,
+      // Mapping für EU Daten falls vorhanden
       transparency_regions: item.eu_data || item.euData || [], 
+      
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
       advertiser_info,

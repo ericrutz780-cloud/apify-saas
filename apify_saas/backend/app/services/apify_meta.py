@@ -9,8 +9,9 @@ client = ApifyClient(settings.APIFY_API_TOKEN)
 
 def normalize_meta_ad(item):
     """
-    Normalisiert Daten aus Apify für das Frontend (Backend-Seitig).
+    Normalisiert Daten aus Apify für das Frontend.
     Strikte Validierung: Wenn kein Bild/Video da ist -> None.
+    Hält sich an den Code aus deinem Prompt, ergänzt um CamelCase Checks.
     """
     if not item: return None
     
@@ -26,18 +27,16 @@ def normalize_meta_ad(item):
     raw_id = item.get("ad_archive_id") or item.get("ad_id")
     # safe_id generieren wir nicht neu, sondern nehmen die echte ID oder überspringen
     if not raw_id or str(raw_id) == "nan":
-         # Nur wenn wirklich gar nichts da ist, generieren wir eine ID (sehr selten)
-         safe_id = f"gen_{uuid.uuid4()}"
-    else:
-         safe_id = str(raw_id)
+         return None 
+    
+    safe_id = str(raw_id)
 
     # Medien suchen (Video > Card > Image)
     images = raw_snapshot.get("images") or []
     videos = raw_snapshot.get("videos") or []
     cards = raw_snapshot.get("cards") or []
     
-    # Karussell-Fix: Wenn keine direkten Bilder/Videos da sind, aber Cards,
-    # versuchen wir, das Bild aus der ersten Karte zu holen.
+    # Karussell-Fix
     if not images and not videos and cards:
         first_card = cards[0]
         img_url = first_card.get("resized_image_url") or \
@@ -70,17 +69,15 @@ def normalize_meta_ad(item):
         "page_name": item.get("page_name", "Unknown Page"),
         "page_profile_uri": item.get("page_profile_uri", "#"),
         "ad_library_url": item.get("ad_library_url", "#"),
-        
         "likes": likes,
-        # Wir normalisieren hier auf 'reach_estimate', damit das Frontend es einheitlich hat,
-        # geben aber den Wert weiter, den wir oben gefunden haben (auch wenn er aus reachEstimate kam)
+        # Wir geben reachEstimate hier weiter!
         "reach_estimate": reach, 
         "impressions": reach,
         "spend": item.get("spend", 0),
         
-        # Leite EU-Daten weiter
+        # Leite EU-Daten weiter (prüfe auch CamelCase euAudienceData)
         "targeted_or_reached_countries": item.get("targeted_or_reached_countries", []),
-        "eu_data": item.get("eu_data"), 
+        "eu_data": item.get("eu_data") or item.get("euAudienceData"), 
         
         "snapshot": {
             "cta_text": raw_snapshot.get("cta_text", "Learn More"),
@@ -165,7 +162,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
             return normalized_results
             
     except Exception as e:
-        print(f"❌ Apify Error: {str(e)}")
+        print(f"❌ Apify Error in search_meta_ads: {str(e)}")
         return []
     
     return []

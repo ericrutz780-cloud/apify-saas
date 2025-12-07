@@ -88,7 +88,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                          </div>
                          <div>
                              <h4 className="font-semibold text-gray-900 text-sm">{ad.page_name}</h4>
-                             <p className="text-xs text-gray-500">Gesponsert • ID: {ad.id.split('_')[1] || ad.id}</p>
+                             <p className="text-xs text-gray-500">Sponsored • ID: {ad.id.split('_')[1] || ad.id}</p>
                          </div>
                     </div>
 
@@ -107,7 +107,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                     <div className="bg-gray-50 p-3 flex justify-between items-center border-t border-gray-100">
                          <span className="text-xs text-gray-500 uppercase font-medium ml-2">{new URL(snapshot.link_url || 'https://example.com').hostname}</span>
                          <a href={snapshot.link_url} target="_blank" rel="noreferrer" className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold px-4 py-2 rounded transition-colors">
-                             {snapshot.cta_text || 'Mehr dazu'}
+                             {snapshot.cta_text || 'Learn more'}
                          </a>
                     </div>
                 </div>
@@ -115,7 +115,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 
             {/* Right Side: Data */}
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">Details zur Werbeanzeige</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Ad Details</h2>
                 
                 <div className="mb-6 space-y-4">
                     <div className="flex items-start gap-4">
@@ -126,9 +126,9 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              <h3 className="font-medium text-gray-900">Status</h3>
                              <p className="text-sm text-gray-600 mt-1 flex items-center gap-2">
                                  <span className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                                 {ad.isActive ? 'Aktiv' : 'Inaktiv'}
+                                 {ad.isActive ? 'Active' : 'Inactive'}
                              </p>
-                             <p className="text-xs text-gray-500 mt-1">Start: {new Date(ad.start_date).toLocaleDateString()}</p>
+                             <p className="text-xs text-gray-500 mt-1">Started: {new Date(ad.start_date).toLocaleDateString()}</p>
                          </div>
                     </div>
                     
@@ -137,7 +137,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              <Monitor className="w-5 h-5" />
                          </div>
                          <div>
-                             <h3 className="font-medium text-gray-900">Plattformen</h3>
+                             <h3 className="font-medium text-gray-900">Platforms</h3>
                              <div className="flex flex-wrap gap-2 mt-2">
                                  {platforms.map((p: string) => (
                                      <span key={p} className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-xs font-medium text-gray-700 capitalize border border-gray-200">
@@ -151,19 +151,19 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 
                 {/* --- EU TRANSPARENCY SECTION --- */}
                 {hasTargetingData && (
-                    <CollapsibleSection title="EU-Transparenz & Zielgruppe" icon={Globe} defaultOpen={true}>
+                    <CollapsibleSection title="EU Transparency & Audience" icon={Globe} defaultOpen={true}>
                          <div className="space-y-6">
                              <div className="p-4 border border-gray-200 rounded-lg bg-slate-50 mb-4">
-                                 <div className="text-sm font-bold text-gray-900">Geschätzte Reichweite</div>
+                                 <div className="text-sm font-bold text-gray-900">Estimated Reach</div>
                                  <div className="text-3xl font-bold text-gray-900">{formatMetric(activeTargeting?.reach_estimate)}</div>
-                                 <div className="text-xs text-gray-500 mt-1">Nutzer in der EU, die diese Anzeige gesehen haben.</div>
+                                 <div className="text-xs text-gray-500 mt-1">Users in the EU who saw this ad.</div>
                              </div>
 
                              {activeTargeting?.breakdown && activeTargeting.breakdown.length > 0 && (
                                  <div className="border border-gray-200 rounded-lg overflow-hidden">
                                      <table className="w-full text-sm text-left mt-4">
                                          <thead className="bg-gray-50 text-gray-500">
-                                             <tr><th>Land</th><th>Alter</th><th>Geschlecht</th><th>Reichweite</th></tr>
+                                             <tr><th>Location</th><th>Age</th><th>Gender</th><th>Reach</th></tr>
                                          </thead>
                                          <tbody>
                                              {activeTargeting.breakdown.map((r:any, i:number) => (
@@ -184,37 +184,39 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 
                 {!hasTargetingData && (
                     <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm mb-4">
-                        Keine Targeting-Daten verfügbar. (Möglicherweise keine EU-Anzeige oder eingeschränkte Daten)
+                        No targeting data available. (Possibly not an EU ad or restricted data)
                     </div>
                 )}
 
-                <CollapsibleSection title="Infos zum Werbetreibenden" icon={ShieldCheck} defaultOpen={!hasTargetingData}>
-                    <div className="flex items-center gap-4 mb-4">
-                         <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center font-bold text-lg border border-gray-200 overflow-hidden">
+                <CollapsibleSection title="About the advertiser" icon={ShieldCheck} defaultOpen={!hasTargetingData}>
+                    <div className="flex items-center gap-4 mb-5">
+                         <div className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-xl border border-gray-100 flex-shrink-0 overflow-hidden">
                             {/* @ts-ignore */}
                             {ad.avatar ? <img src={ad.avatar} className="w-full h-full object-cover"/> : ad.page_name.charAt(0)}
                          </div>
-                         <div className="font-bold text-gray-900 text-base">{ad.page_name}</div>
+                         <div className="font-bold text-gray-900 text-lg">{ad.page_name}</div>
                     </div>
                     
-                    <div className="space-y-2 text-sm">
+                    <div className="space-y-4 mb-5">
                        {ad.disclaimer && (
-                           <div className="text-gray-600">
-                               <span className="font-semibold text-gray-900">Disclaimer:</span> {ad.disclaimer}
+                           <div className="text-sm text-gray-600">
+                               <span className="font-bold">Disclaimer:</span> {ad.disclaimer}
                            </div>
                        )}
                        {ad.page_categories && ad.page_categories.length > 0 && (
-                           <div className="text-gray-600">
-                               <span className="font-semibold text-gray-900">Kategorie:</span> {ad.page_categories.join(', ')}
+                           <div className="text-sm text-gray-600">
+                               <span className="font-bold">Category:</span> {ad.page_categories.join(', ')}
                            </div>
                        )}
-                       <div className="text-gray-500 text-xs mt-2">ID: {ad.id}</div>
                     </div>
                 </CollapsibleSection>
 
                 <div className="pt-6 mt-6 border-t border-gray-100">
-                    <button onClick={() => onSave(ad)} className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl shadow-sm transition-all">
-                        <Save className="w-4 h-4" /> Speichern
+                    <button 
+                        onClick={() => onSave(ad)} 
+                        className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl shadow-sm transition-all"
+                    >
+                        <Save className="w-4 h-4" /> Save to Library
                     </button>
                 </div>
             </div>
@@ -285,10 +287,10 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                              </div>
                              <div>
                                 <h2 className="text-lg font-bold text-gray-900">
-                                    {group.length > 1 ? `${group.length} Ad Versionen` : 'Anzeigendetails'}
+                                    {group.length > 1 ? `${group.length} Ad Versions` : 'Ad Details'}
                                 </h2>
                                 <p className="text-xs text-gray-500">
-                                    {group.length > 1 ? 'Gleicher Text • Unterschiedliches Targeting/Datum' : 'Detaillierte Analyse'}
+                                    {group.length > 1 ? 'Shared text • Different targeting/dates' : 'Detailed Analysis'}
                                 </p>
                              </div>
                         </div>
@@ -313,7 +315,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                             style={{ marginBottom: -1 }}
                                         >
                                             <LayoutGrid className="w-4 h-4" />
-                                            Übersicht
+                                            Overview
                                         </button>
                                     );
                                 }
@@ -344,6 +346,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
 
                 {/* Content */}
                 <div className="flex-1 overflow-hidden bg-white relative">
+                    {/* Overview Grid */}
                     <div className={activeTabId === 'overview' ? "h-full overflow-y-auto p-6 bg-gray-50/50" : "hidden h-full"}>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
                             {group.map((ad: MetaAd) => {
@@ -358,7 +361,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                         <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <span className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                                                <span className="text-xs font-semibold text-gray-700">{ad.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                                                <span className="text-xs font-semibold text-gray-700">{ad.isActive ? 'Active' : 'Inactive'}</span>
                                             </div>
                                             <span className="text-xs text-gray-500">{new Date(ad.start_date).toLocaleDateString()}</span>
                                         </div>
@@ -383,7 +386,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                                     )}
                                                 </div>
                                                 <div className="flex-1 flex flex-col justify-center gap-1">
-                                                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Reichweite</div>
+                                                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Reach</div>
                                                         <div className="text-xl font-bold text-gray-900 flex items-center gap-1">
                                                             {estReach ? formatMetric(estReach) : 'N/A'}
                                                             <Users className="w-3 h-3 text-gray-400" />
@@ -394,7 +397,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
 
                                         <div className="p-4 border-t border-gray-100">
                                             <button className="w-full py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 group-hover:bg-brand-50 group-hover:text-brand-700 group-hover:border-brand-200 transition-colors flex items-center justify-center gap-2">
-                                                Details ansehen <ExternalLink className="w-3 h-3" />
+                                                View Details <ExternalLink className="w-3 h-3" />
                                             </button>
                                         </div>
                                     </div>
@@ -403,24 +406,25 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                         </div>
                     </div>
 
-                    {openTabs.filter(id => id !== 'overview').map((tabId) => {
-                         const ad = group.find(g => g.id === tabId);
-                         if (!ad) return null;
-                         return (
-                            <MetaAdDetailView
-                                key={ad.id}
-                                ad={ad}
+                    {/* Detail Views */}
+                    {openTabs.filter(id => id !== 'overview').map(tabId => {
+                        const ad = group.find(g => g.id === tabId);
+                        if (!ad) return null;
+                        return (
+                            <MetaAdDetailView 
+                                key={ad.id} 
+                                ad={ad} 
                                 group={group}
                                 isActiveView={activeTabId === ad.id}
                                 openTabs={openTabs}
                                 activeTabId={activeTabId}
                                 onOpenAd={handleOpenAd}
-                                // FIX: Hier übergeben wir die korrekte Funktion
+                                // FIX: Hier übergeben wir die korrekte Funktion (nur 1 Parameter)
                                 onSave={(item) => onSave && onSave(item, 'meta')}
                                 onRemove={() => onRemove && onRemove()}
                                 isSaved={!!isSaved}
                             />
-                         );
+                        );
                     })}
                 </div>
             </div>
@@ -447,7 +451,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
             <div className="w-full md:w-7/12 bg-white p-6 overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">{tikTokAd.authorMeta.nickName}</h2>
                 <p className="text-sm text-gray-600 mb-4">{tikTokAd.text}</p>
-                <a href={tikTokAd.webVideoUrl} target="_blank" rel="noreferrer" className="block w-full bg-black text-white text-center py-3 rounded-lg font-bold">Auf TikTok ansehen</a>
+                <a href={tikTokAd.webVideoUrl} target="_blank" rel="noreferrer" className="block w-full bg-black text-white text-center py-3 rounded-lg font-bold">View on TikTok</a>
             </div>
         </div>
     </div>

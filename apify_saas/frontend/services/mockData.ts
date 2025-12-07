@@ -1,4 +1,3 @@
-
 import { MetaAd, TikTokAd, User } from '../types';
 
 export const MOCK_USER: User = {
@@ -22,7 +21,8 @@ export const MOCK_USER: User = {
 const BASE_META_ADS: MetaAd[] = [
   // 1. Skincare (High relevance for 'Skincare' search)
   {
-    id: 'meta_base_1',
+    id: 'meta_438927489231',
+    isActive: true, // FIX: Added isActive
     publisher_platform: ['instagram'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12).toISOString(),
     page_name: 'Lumina Skincare',
@@ -31,6 +31,14 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 4520,
     impressions: 125000,
     spend: 1200,
+    page_categories: ['Beauty, Cosmetic & Personal Care'],
+    disclaimer: 'Paid for by Lumina Skincare Ltd.',
+    targeting: {
+        ages: ['18-45'],
+        genders: ['Female'],
+        locations: ['United States', 'Canada', 'United Kingdom'],
+        reach_estimate: 500000
+    },
     snapshot: {
       cta_text: 'Shop Now',
       link_url: 'https://luminaskin.com/products/glow-serum',
@@ -43,7 +51,8 @@ const BASE_META_ADS: MetaAd[] = [
   },
   // 2. Travel
   {
-    id: 'meta_base_2',
+    id: 'meta_78329102384',
+    isActive: true, // FIX: Added isActive
     publisher_platform: ['facebook', 'instagram'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 45).toISOString(),
     page_name: 'Nomad Carry',
@@ -52,6 +61,13 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 8900,
     impressions: 850000,
     spend: 5400,
+    page_categories: ['Luggage & Bags'],
+    targeting: {
+        ages: ['25-54'],
+        genders: ['All'],
+        locations: ['European Union', 'United States'],
+        reach_estimate: 1200000
+    },
     snapshot: {
       cta_text: 'Shop Travel',
       link_url: 'https://nomadcarry.com/collections/backpacks',
@@ -64,7 +80,8 @@ const BASE_META_ADS: MetaAd[] = [
   },
   // 3. SaaS
   {
-    id: 'meta_base_3',
+    id: 'meta_9283748234',
+    isActive: false, // FIX: Added isActive
     publisher_platform: ['facebook'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
     page_name: 'TaskMaster App',
@@ -73,6 +90,13 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 210,
     impressions: 15000,
     spend: 350,
+    page_categories: ['Software Company'],
+    targeting: {
+        ages: ['24-60'],
+        genders: ['All'],
+        locations: ['United States'],
+        reach_estimate: 50000
+    },
     snapshot: {
       cta_text: 'Start Free Trial',
       link_url: 'https://taskmaster.io/signup',
@@ -85,7 +109,8 @@ const BASE_META_ADS: MetaAd[] = [
   },
   // 4. Coffee
   {
-    id: 'meta_base_4',
+    id: 'meta_1928304958',
+    isActive: true, // FIX: Added isActive
     publisher_platform: ['instagram', 'facebook'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 120).toISOString(),
     page_name: 'Freshly Brewed',
@@ -94,6 +119,13 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 56000,
     impressions: 2100000,
     spend: 18500,
+    page_categories: ['Coffee Shop', 'Subscription Service'],
+    targeting: {
+        ages: ['18-65+'],
+        genders: ['All'],
+        locations: ['United Kingdom', 'Ireland'],
+        reach_estimate: 250000
+    },
     snapshot: {
       cta_text: 'Get 20% Off',
       link_url: 'https://freshlybrewed.com/subscription',
@@ -106,7 +138,8 @@ const BASE_META_ADS: MetaAd[] = [
   },
   // 5. Fitness
   {
-    id: 'meta_base_5',
+    id: 'meta_5647382910',
+    isActive: true, // FIX: Added isActive
     publisher_platform: ['facebook'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 8).toISOString(),
     page_name: 'FitTrack',
@@ -115,6 +148,13 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 3400,
     impressions: 98000,
     spend: 800,
+    page_categories: ['Health & Wellness'],
+    targeting: {
+        ages: ['18-40'],
+        genders: ['All'],
+        locations: ['Germany', 'Austria', 'Switzerland'],
+        reach_estimate: 150000
+    },
     snapshot: {
       cta_text: 'Download App',
       link_url: 'https://fittrack.com/app',
@@ -125,9 +165,10 @@ const BASE_META_ADS: MetaAd[] = [
       videos: []
     }
   },
-  // 6. Nike / Sportswear (Both)
+  // 6a. Nike / Sportswear - Version 1 (EU Focus)
   {
-    id: 'meta_base_6',
+    id: 'meta_5458580464366042',
+    isActive: true, // FIX: Added isActive
     publisher_platform: ['instagram', 'facebook', 'messenger'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
     page_name: 'Nike',
@@ -136,6 +177,79 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 154000,
     impressions: 5400000,
     spend: 45000,
+    page_categories: ['Sportswear', 'Retail'],
+    disclaimer: 'Paid for by Nike Inc.',
+    advertiser_info: {
+        facebook_handle: '@nike',
+        facebook_followers: 185000000,
+        instagram_handle: '@nike',
+        instagram_followers: 305000000,
+        category: 'Sportswear & Apparel',
+        about_text: 'Just Do It. Nike delivers innovative products, experiences and services to inspire athletes. We champion continual progress for athletes and sport by taking action to help athletes reach their potential.'
+    },
+    about_disclaimer: {
+        text: "Based on where the ad is shown and the ad category, advertisers may be required to disclose the beneficiary and payer, and may also disclose additional information.",
+        location: "United States",
+        website_url: "https://www.nike.com/",
+        beneficiary: "NIKE INC",
+        payer: "NIKE INC"
+    },
+    beneficiary_payer: {
+        text: "When targeting certain locations, advertisers are required to disclose who will benefit from an ad and who is paying for it.",
+        beneficiary: "NIKE INC",
+        payer: "NIKE INC"
+    },
+    targeting: {
+        ages: ['18-35'],
+        genders: ['All'],
+        locations: ['Austria', 'Belgium', 'France', 'Germany', 'Netherlands', 'Spain'],
+        excluded_locations: ['Cyprus', 'Malta', 'Réunion'],
+        reach_estimate: 10452100,
+        breakdown: [
+            { location: 'Austria', age_range: '18-24', gender: 'Male', reach: 125000 },
+            { location: 'Austria', age_range: '18-24', gender: 'Female', reach: 110000 },
+            { location: 'Belgium', age_range: '25-34', gender: 'Male', reach: 240000 },
+            { location: 'Belgium', age_range: '25-34', gender: 'Female', reach: 215000 },
+            { location: 'France', age_range: '18-35', gender: 'All', reach: 4500000 },
+            { location: 'Germany', age_range: '18-35', gender: 'All', reach: 5200000 },
+            { location: 'Spain', age_range: '20-30', gender: 'Male', reach: 890000 },
+        ]
+    },
+    transparency_regions: [
+        {
+            region: "European Union",
+            description: "We provide additional information for ads that were shown on Meta technologies anywhere in the EU.",
+            ages: ['18-35'],
+            genders: ['All'],
+            locations: ['Austria', 'Belgium', 'France', 'Germany', 'Netherlands', 'Spain'],
+            excluded_locations: ['Cyprus', 'Malta', 'Réunion'],
+            reach_estimate: 10452100,
+            breakdown: [
+                { location: 'Austria', age_range: '18-24', gender: 'Male', reach: 125000 },
+                { location: 'Austria', age_range: '18-24', gender: 'Female', reach: 110000 },
+                { location: 'Belgium', age_range: '25-34', gender: 'Male', reach: 240000 },
+                { location: 'Belgium', age_range: '25-34', gender: 'Female', reach: 215000 },
+                { location: 'France', age_range: '18-35', gender: 'All', reach: 4500000 },
+                { location: 'Germany', age_range: '18-35', gender: 'All', reach: 5200000 },
+                { location: 'Spain', age_range: '20-30', gender: 'Male', reach: 890000 },
+            ]
+        },
+        {
+            region: "United Kingdom",
+            description: "We provide additional information for ads that were shown on Meta technologies in the United Kingdom.",
+            ages: ['18-65+'],
+            genders: ['All'],
+            locations: ['United Kingdom'],
+            excluded_locations: [],
+            reach_estimate: 4500000,
+            breakdown: [
+                 { location: 'United Kingdom', age_range: '25-34', gender: 'Female', reach: 1200000 },
+                 { location: 'United Kingdom', age_range: '25-34', gender: 'Male', reach: 950000 },
+                 { location: 'United Kingdom', age_range: '35-44', gender: 'Female', reach: 850000 },
+                 { location: 'United Kingdom', age_range: '35-44', gender: 'Male', reach: 750000 },
+            ]
+        }
+    ],
     snapshot: {
       cta_text: 'Shop New Arrivals',
       link_url: 'https://nike.com',
@@ -146,9 +260,122 @@ const BASE_META_ADS: MetaAd[] = [
       videos: []
     }
   },
-  // 7. Nike (Facebook Only)
+  // 6b. Nike / Sportswear - Version 2 (US/Canada Focus, different date)
   {
-    id: 'meta_base_7',
+    id: 'meta_844224584970398',
+    isActive: true, // FIX: Added isActive
+    publisher_platform: ['facebook', 'audience_network'],
+    start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(),
+    page_name: 'Nike',
+    page_profile_uri: 'https://instagram.com/nike',
+    ad_library_url: 'https://facebook.com/ads/library',
+    likes: 110000,
+    impressions: 3200000,
+    spend: 29000,
+    page_categories: ['Sportswear', 'Retail'],
+    disclaimer: 'Paid for by Nike Inc.',
+    advertiser_info: {
+        facebook_handle: '@nike',
+        facebook_followers: 185000000,
+        instagram_handle: '@nike',
+        instagram_followers: 305000000,
+        category: 'Sportswear & Apparel',
+        about_text: 'Just Do It. Nike delivers innovative products.'
+    },
+    targeting: {
+        ages: ['25-54'],
+        genders: ['All'],
+        locations: ['United States', 'Canada'],
+        reach_estimate: 8500000
+    },
+    snapshot: {
+      cta_text: 'Shop Now',
+      link_url: 'https://nike.com/flyknit',
+      body: {
+        text: 'Experience unrivaled comfort with Nike Flyknit. Revolutionize your footwear. Lightweight, form-fitting design that feels like a second skin. 👟🔥 #JustDoIt #Nike'
+      },
+      images: [{ resized_image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80' }],
+      videos: []
+    }
+  },
+  // 6c. Nike / Sportswear - Version 3 (UK Only, Female Focus)
+  {
+    id: 'meta_129482910394821',
+    isActive: true, // FIX: Added isActive
+    publisher_platform: ['instagram'],
+    start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 15).toISOString(),
+    page_name: 'Nike',
+    page_profile_uri: 'https://instagram.com/nike',
+    ad_library_url: 'https://facebook.com/ads/library',
+    likes: 45000,
+    impressions: 900000,
+    spend: 12000,
+    page_categories: ['Sportswear', 'Retail'],
+    disclaimer: 'Paid for by Nike Inc.',
+    advertiser_info: {
+        facebook_handle: '@nike',
+        facebook_followers: 185000000,
+        instagram_handle: '@nike',
+        instagram_followers: 305000000,
+        category: 'Sportswear & Apparel'
+    },
+    targeting: {
+        ages: ['18-34'],
+        genders: ['Female'],
+        locations: ['United Kingdom'],
+        reach_estimate: 2100000
+    },
+    snapshot: {
+      cta_text: 'Shop Women',
+      link_url: 'https://nike.com/women',
+      body: {
+        text: 'Experience unrivaled comfort with Nike Flyknit. Revolutionize your footwear. Lightweight, form-fitting design that feels like a second skin. 👟🔥 #JustDoIt #Nike'
+      },
+      images: [{ resized_image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80' }],
+      videos: []
+    }
+  },
+  // 6d. Nike / Sportswear - Version 4 (Germany Only, Male Focus)
+  {
+    id: 'meta_992837482716234',
+    isActive: true, // FIX: Added isActive
+    publisher_platform: ['facebook', 'messenger'],
+    start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 25).toISOString(),
+    page_name: 'Nike',
+    page_profile_uri: 'https://instagram.com/nike',
+    ad_library_url: 'https://facebook.com/ads/library',
+    likes: 22000,
+    impressions: 600000,
+    spend: 8000,
+    page_categories: ['Sportswear', 'Retail'],
+    disclaimer: 'Paid for by Nike Inc.',
+    advertiser_info: {
+        facebook_handle: '@nike',
+        facebook_followers: 185000000,
+        instagram_handle: '@nike',
+        instagram_followers: 305000000,
+        category: 'Sportswear & Apparel'
+    },
+    targeting: {
+        ages: ['25-45'],
+        genders: ['Male'],
+        locations: ['Germany'],
+        reach_estimate: 1200000
+    },
+    snapshot: {
+      cta_text: 'Shop Men',
+      link_url: 'https://nike.com/men',
+      body: {
+        text: 'Experience unrivaled comfort with Nike Flyknit. Revolutionize your footwear. Lightweight, form-fitting design that feels like a second skin. 👟🔥 #JustDoIt #Nike'
+      },
+      images: [{ resized_image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80' }],
+      videos: []
+    }
+  },
+  // 7. Nike (Facebook Only) - Different Text (Won't group with above)
+  {
+    id: 'meta_6758493021',
+    isActive: true, // FIX: Added isActive
     publisher_platform: ['facebook'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
     page_name: 'Nike Running',
@@ -157,6 +384,19 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 24000,
     impressions: 890000,
     spend: 12000,
+    page_categories: ['Sportswear'],
+    advertiser_info: {
+        facebook_handle: '@nikerunning',
+        facebook_followers: 15000000,
+        category: 'Sportswear',
+        about_text: 'Nike Running. Designed for every runner, from the world\'s best to those who just want to join the run.'
+    },
+    targeting: {
+        ages: ['20-50'],
+        genders: ['All'],
+        locations: ['United States', 'Japan'],
+        reach_estimate: 500000
+    },
     snapshot: {
       cta_text: 'Shop Now',
       link_url: 'https://nike.com/running',
@@ -167,9 +407,10 @@ const BASE_META_ADS: MetaAd[] = [
       videos: []
     }
   },
-  // 8. Nike (Instagram Only)
+  // 8. Nike (Instagram Only) - Different Text (Won't group with above)
   {
-    id: 'meta_base_8',
+    id: 'meta_2384910293',
+    isActive: true, // FIX: Added isActive
     publisher_platform: ['instagram'],
     start_date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
     page_name: 'Nike Sportswear',
@@ -178,6 +419,19 @@ const BASE_META_ADS: MetaAd[] = [
     likes: 89000,
     impressions: 1200000,
     spend: 25000,
+    page_categories: ['Clothing'],
+    advertiser_info: {
+        instagram_handle: '@nikesportswear',
+        instagram_followers: 8500000,
+        category: 'Clothing',
+        about_text: 'Nike Sportswear. Style meets sport. The future of comfort.'
+    },
+    targeting: {
+        ages: ['18-30'],
+        genders: ['Female'],
+        locations: ['France', 'Italy'],
+        reach_estimate: 800000
+    },
     snapshot: {
       cta_text: 'Watch More',
       link_url: 'https://nike.com/sportswear',
@@ -191,7 +445,6 @@ const BASE_META_ADS: MetaAd[] = [
 ];
 
 const BASE_TIKTOK_ADS: TikTokAd[] = [
-  // ... (Keep existing TikTok mock data as is, just pasting for context but not changing)
   // 1. Tech
   {
     id: 'tiktok_base_1',
@@ -318,9 +571,13 @@ const generateMetaAds = (count: number): MetaAd[] => {
         const randomFactor = 0.5 + Math.random(); // 0.5x to 1.5x multiplier
         const randomDays = Math.floor(Math.random() * 60);
         
+        // Use a realistic numeric ID structure
+        const randomIdSuffix = 5458000000000000 + Math.floor(Math.random() * 999999999999);
+        
         ads.push({
             ...template,
-            id: `meta_gen_${i}`,
+            id: `meta_${randomIdSuffix}`,
+            isActive: template.isActive, // FIX: Pass isActive through
             // Randomize metrics slightly
             likes: Math.floor(template.likes * randomFactor),
             impressions: Math.floor(template.impressions * randomFactor),

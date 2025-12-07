@@ -12,7 +12,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string;
+  country?: string; // Optionaler Country Code
 }
 
 export interface User {
@@ -71,6 +71,20 @@ export interface MetaAdAdvertiserInfo {
     category?: string;
 }
 
+export interface MetaAdAboutDisclaimer {
+    text: string;
+    location?: string;
+    website_url?: string;
+    beneficiary?: string;
+    payer?: string;
+}
+
+export interface MetaAdBeneficiaryPayer {
+    text: string;
+    beneficiary: string;
+    payer: string;
+}
+
 export interface MetaAd {
   id: string;
   ad_archive_id?: string;
@@ -87,17 +101,19 @@ export interface MetaAd {
   impressions: number | null;
   spend: number | null;
 
-  // Detailed Data
+  // Detailed Data (Optional machen, um Build-Fehler zu vermeiden)
   targeting?: MetaAdTargeting;
-  transparency_regions?: any[]; // Flexible array for raw data
+  transparency_regions?: any[]; 
   page_categories?: string[];
   disclaimer?: string;
   advertiser_info?: MetaAdAdvertiserInfo;
+  about_disclaimer?: MetaAdAboutDisclaimer;
+  beneficiary_payer?: MetaAdBeneficiaryPayer;
   
   avatar?: string | null;
 }
 
-// TikTok Ad Models (unchanged)
+// TikTok Ad Models
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;

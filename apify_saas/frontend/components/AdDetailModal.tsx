@@ -40,6 +40,11 @@ const formatMetric = (num?: number) => {
     return new Intl.NumberFormat('de-DE').format(num);
 };
 
+const formatFollowerCount = (num?: number) => {
+    if (!num) return '';
+    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
+};
+
 interface MetaAdDetailViewProps {
     ad: MetaAd;
     group: MetaAd[];
@@ -68,11 +73,14 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const mediaUrl = hasVideo ? snapshot?.videos[0].video_hd_url : (snapshot?.images.length > 0 ? snapshot?.images[0].resized_image_url : null);
     const platforms = ad.publisher_platform || [];
     
+    // Nimm die erste verfügbare Region oder das generische Targeting
+    const activeTargeting = (transparency_regions && transparency_regions.length > 0) ? transparency_regions[0] : targeting;
+    
     // Prüfen, ob wir Daten für die EU-Box haben
-    const hasTargetingData = (targeting?.locations && targeting.locations.length > 0) || 
-                             (targeting?.ages && targeting.ages.length > 0) ||
-                             targeting?.reach_estimate || 
-                             (targeting?.breakdown && targeting.breakdown.length > 0);
+    const hasTargetingData = (activeTargeting?.locations && activeTargeting.locations.length > 0) || 
+                             (activeTargeting?.ages && activeTargeting.ages.length > 0) ||
+                             activeTargeting?.reach_estimate || 
+                             (activeTargeting?.breakdown && activeTargeting.breakdown.length > 0);
 
     return (
         <div className={isActiveView ? "flex flex-col md:flex-row h-full" : "hidden h-full"}>
@@ -157,12 +165,12 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              {/* Reichweite Zahl */}
                              <div className="p-4 border border-gray-200 rounded-lg bg-slate-50">
                                  <div className="mb-1"><h5 className="text-sm font-bold text-gray-900">Geschätzte Reichweite</h5></div>
-                                 <div className="text-3xl font-bold text-gray-900">{formatMetric(targeting?.reach_estimate)}</div>
+                                 <div className="text-3xl font-bold text-gray-900">{formatMetric(activeTargeting?.reach_estimate)}</div>
                                  <div className="text-xs text-gray-500 mt-1">Nutzer in der EU, die diese Anzeige gesehen haben.</div>
                              </div>
 
                              {/* Breakdown Table */}
-                             {targeting?.breakdown && targeting.breakdown.length > 0 && (
+                             {activeTargeting?.breakdown && activeTargeting.breakdown.length > 0 && (
                                  <div className="border border-gray-200 rounded-lg overflow-hidden">
                                      <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
                                          <h5 className="text-xs font-bold text-gray-500 uppercase">Aufschlüsselung</h5>
@@ -177,7 +185,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                              </tr>
                                          </thead>
                                          <tbody className="divide-y divide-gray-50">
-                                             {targeting.breakdown.map((item: any, idx: number) => (
+                                             {activeTargeting.breakdown.map((item: any, idx: number) => (
                                                  <tr key={idx} className="bg-white">
                                                      <td className="px-4 py-2 text-gray-900">{item.location || 'N/A'}</td>
                                                      <td className="px-4 py-2 text-gray-500">{item.age_range || 'Alle'}</td>
@@ -191,21 +199,21 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              )}
 
                              {/* Fallback Liste wenn keine Tabelle da ist */}
-                             {(!targeting?.breakdown || targeting.breakdown.length === 0) && (
+                             {(!activeTargeting?.breakdown || activeTargeting.breakdown.length === 0) && (
                                  <div className="space-y-3">
                                      <div className="flex justify-between text-sm border-b border-gray-100 pb-2">
                                          <span className="text-gray-500">Standorte</span>
                                          <span className="font-medium text-gray-900 text-right max-w-[60%] truncate">
-                                             {targeting?.locations?.join(', ') || 'Nicht verfügbar'}
+                                             {activeTargeting?.locations?.join(', ') || 'Nicht verfügbar'}
                                          </span>
                                      </div>
                                      <div className="flex justify-between text-sm border-b border-gray-100 pb-2">
                                          <span className="text-gray-500">Alter</span>
-                                         <span className="font-medium text-gray-900">{targeting?.ages?.join(', ') || 'Alle'}</span>
+                                         <span className="font-medium text-gray-900">{activeTargeting?.ages?.join(', ') || 'Alle'}</span>
                                      </div>
                                      <div className="flex justify-between text-sm">
                                          <span className="text-gray-500">Geschlecht</span>
-                                         <span className="font-medium text-gray-900">{targeting?.genders?.join(', ') || 'Alle'}</span>
+                                         <span className="font-medium text-gray-900">{activeTargeting?.genders?.join(', ') || 'Alle'}</span>
                                      </div>
                                  </div>
                              )}
@@ -244,7 +252,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                         </button>
                     ) : (
                         // FIX: Hier übergeben wir jetzt nur noch EIN Argument (ad).
-                        // Das Eltern-Element hat bereits festgelegt, dass es sich um 'meta' handelt.
+                        // Das behebt den Fehler "Expected 1 arguments, but got 2"
                         <button onClick={() => onSave && onSave(ad)} className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl shadow-sm transition-all">
                             <Save className="w-4 h-4" /> In Bibliothek speichern
                         </button>
@@ -448,7 +456,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                 openTabs={openTabs}
                                 activeTabId={activeTabId}
                                 onOpenAd={handleOpenAd}
-                                // FIX: Hier wurde der Fehler behoben!
+                                // FIX: Der zweite Parameter 'meta' wurde entfernt
                                 onSave={(ad) => onSave && onSave(ad, 'meta')}
                                 onRemove={() => onRemove && onRemove()}
                                 isSaved={!!isSaved}

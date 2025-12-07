@@ -2,7 +2,6 @@ export const cleanAndTransformData = (dbRows) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // Backend liefert JSON in 'data' Spalte, API direkt
     const item = row.data || row;
     if (!item) return null;
 
@@ -25,62 +24,73 @@ export const cleanAndTransformData = (dbRows) => {
       mediaUrl = snap.images[0].original_image_url || snap.images[0].resized_image_url;
     }
 
-    // --- Text Logic ---
-    const safeBody = (snap.body && snap.body.text) ? snap.body.text : null;
-    const safeTitle = snap.title || snap.caption || "Ad Creative";
+    // --- Text Cleaning (Remove Shopify placeholders) ---
+    let safeBody = (snap.body && snap.body.text) ? snap.body.text : "";
+    safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
+
     const pageName = snap.page_name || item.page_name || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || null;
 
     // --- Date Logic ---
-    let displayDate = "N/A";
     let isoDate = new Date().toISOString();
-    
     if (item.start_date) {
         try {
             const dateVal = typeof item.start_date === 'number' ? item.start_date * 1000 : item.start_date;
-            const d = new Date(dateVal);
-            displayDate = d.toLocaleDateString("en-US", { year: 'numeric', month: 'short', day: 'numeric' });
-            isoDate = d.toISOString();
+            isoDate = new Date(dateVal).toISOString();
         } catch (e) {
-            displayDate = "N/A";
+            // keep default
         }
     }
 
-    // --- Metrics Logic (Safety Checks) ---
-    // Dein JSON zeigt: reach_estimate und spend sind oft null.
-    // Wir setzen explizit null, damit die UI "N/A" anzeigen kann.
-    
+    // --- Metrics Logic ---
     const likes = (typeof snap.page_like_count === 'number') ? snap.page_like_count : null;
-    
-    // Impressions kommen oft als Objekt {impressions_index: -1}
     let impressions = null;
     if (item.impressions_with_index && typeof item.impressions_with_index.impressions_index === 'number') {
-        // -1 bedeutet "keine Daten verfügbar" bei Meta
         impressions = item.impressions_with_index.impressions_index > -1 ? item.impressions_with_index.impressions_index : null;
     } else if (typeof item.reach_estimate === 'number') {
         impressions = item.reach_estimate;
     }
-
     const spend = (typeof item.spend === 'number') ? item.spend : null;
+
+    // --- NEW: Construct Targeting Object (from flat fields if available) ---
+    // Da deine echten Daten diese Felder oft als null/leer haben, setzen wir Defaults,
+    // damit die UI "N/A" oder leere Listen rendert, statt abzustürzen.
+    
+    const targeting = {
+        ages: item.target_ages ? [item.target_ages] : [], // Falls String, pack in Array
+        genders: item.gender ? [item.gender] : [],
+        locations: item.targeted_or_reached_countries || [],
+        reach_estimate: item.reach_estimate || null
+    };
+
+    // --- NEW: Construct Advertiser Info ---
+    const advertiser_info = {
+        category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
+        // Weitere Felder können hier gemappt werden, wenn die API sie liefert
+    };
 
     return {
       id: item.ad_archive_id || item.id || Math.random().toString(),
-      platform: (item.publisher_platform || []).join(", ").toLowerCase(),
-      status: item.is_active ? "Active" : "Inactive",
-      pageName,
-      avatar: safeAvatar,
-      date: displayDate,
+      isActive: item.is_active !== false, // Default to true if undefined
+      publisher_platform: item.publisher_platform || [],
       start_date: isoDate,
-      title: safeTitle,
-      body: safeBody,
-      media: { type: mediaType, url: mediaUrl, poster },
-      ctaText: snap.cta_text || "Learn More",
-      linkUrl: snap.link_url || "#",
-      // Metrics
-      likes,
-      impressions,
-      spend,
-      snapshot: snap
+      page_name: pageName,
+      page_profile_uri: item.page_profile_uri || "#",
+      ad_library_url: item.ad_library_url || "#",
+      snapshot: { ...snap, body: { text: safeBody } }, // Use cleaned body
+      
+      likes: likes || 0,
+      impressions: impressions || 0,
+      spend: spend || 0,
+
+      // New Structures
+      targeting,
+      page_categories: snap.page_categories || [],
+      disclaimer: item.disclaimer_label || item.byline || null,
+      advertiser_info,
+      
+      // Avatar Helper (wird oft direkt im Component genutzt, aber hier zur Sicherheit)
+      avatar: safeAvatar
     };
   });
 

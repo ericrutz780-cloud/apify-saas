@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-import { X, Save, ExternalLink, Play, ChevronLeft, ChevronRight, Layers, Download } from 'lucide-react';
+import { X, Globe, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, FileText, User, Layers, ExternalLink, Play, Monitor, Hash, LayoutGrid, Eye } from 'lucide-react';
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -8,168 +8,512 @@ interface AdDetailModalProps {
   onSave?: (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => void;
   onRemove?: () => void;
   isSaved?: boolean;
-  data: MetaAd | TikTokAd | null;
+  group: any[]; // Akzeptiert ein Array von Ads für die Versionierung
   type: 'meta' | 'tiktok' | undefined;
 }
 
-const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, onRemove, isSaved, data, type }) => {
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false }: { title: string, icon: any, children?: React.ReactNode, defaultOpen?: boolean }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+        <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+            >
+                <div className="flex items-center gap-3">
+                    <Icon className="w-5 h-5 text-gray-500" />
+                    <span className="font-semibold text-gray-900 text-sm">{title}</span>
+                </div>
+                {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+            {isOpen && (
+                <div className="p-4 bg-white border-t border-gray-200 text-sm">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const formatReach = (num?: number) => {
+    if (!num) return 'N/A';
+    return new Intl.NumberFormat('de-DE').format(num);
+};
+
+interface MetaAdDetailViewProps {
+    ad: MetaAd;
+    group: MetaAd[];
+    isActiveView: boolean;
+    openTabs: string[];
+    activeTabId: string;
+    onOpenAd: (id: string) => void;
+    onSave: (ad: MetaAd) => void;
+    onRemove: () => void;
+    isSaved: boolean;
+}
+
+const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({ 
+    ad, 
+    group, 
+    isActiveView, 
+    openTabs, 
+    activeTabId, 
+    onOpenAd, 
+    onSave, 
+    onRemove, 
+    isSaved 
+}) => {
+    const [activeRegionIndex, setActiveRegionIndex] = useState(0);
+
+    const { snapshot, targeting, advertiser_info, transparency_regions, about_disclaimer } = ad;
+    const hasVideo = snapshot?.videos && snapshot.videos.length > 0;
+    const mediaUrl = hasVideo ? snapshot?.videos[0].video_hd_url : (snapshot?.images.length > 0 ? snapshot?.images[0].resized_image_url : null);
+    const platforms = ad.publisher_platform || [];
+    const regions = transparency_regions || [];
+    const hasMultipleRegions = regions.length > 0;
+    
+    // Fallback: Wenn keine Transparenzregionen da sind, nutze targeting Objekt
+    const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
+
+    return (
+        <div className={isActiveView ? "flex flex-col md:flex-row h-full" : "hidden h-full"}>
+            {/* Left Column: Creative */}
+            <div className="w-full md:w-1/2 h-full overflow-y-auto bg-gray-50 border-r border-gray-200 p-6">
+                <div className="space-y-6 max-w-lg mx-auto">
+                    {/* Main Creative Card */}
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
+                        <div className="p-4 flex items-center gap-3 border-b border-gray-100">
+                             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold overflow-hidden">
+                                {/* @ts-ignore */}
+                                {ad.avatar ? <img src={ad.avatar} className="w-full h-full object-cover"/> : ad.page_name.charAt(0)}
+                             </div>
+                             <div>
+                                 <h4 className="font-semibold text-gray-900 text-sm">{ad.page_name}</h4>
+                                 <p className="text-xs text-gray-500">Gesponsert • ID: {ad.id.split('_')[1] || ad.id}</p>
+                             </div>
+                        </div>
+
+                        <div className="p-4 text-sm text-gray-900 whitespace-pre-wrap">
+                            {snapshot.body.text}
+                        </div>
+
+                        <div className="w-full bg-black">
+                            {hasVideo ? (
+                                <video src={mediaUrl || ''} controls className="w-full max-h-[500px] object-contain" />
+                            ) : (
+                                <img src={mediaUrl || ''} alt="Ad" className="w-full h-auto object-cover" />
+                            )}
+                        </div>
+
+                        <div className="bg-gray-50 p-3 flex justify-between items-center border-t border-gray-100">
+                             <span className="text-xs text-gray-500 uppercase font-medium ml-2">{new URL(snapshot.link_url || 'https://example.com').hostname}</span>
+                             <a href={snapshot.link_url} target="_blank" rel="noreferrer" className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold px-4 py-2 rounded transition-colors">
+                                 {snapshot.cta_text || 'Mehr dazu'}
+                             </a>
+                        </div>
+                    </div>
+                    
+                    {/* Versions Switcher */}
+                    {group.length > 1 && (
+                        <div className="pt-4 border-t border-gray-200">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Andere Versionen dieser Anzeige</h4>
+                            <div className="space-y-3">
+                                {group.map((sibling) => {
+                                    const isActive = sibling.id === activeTabId;
+                                    const isOpened = openTabs.includes(sibling.id);
+                                    
+                                    return (
+                                        <div 
+                                            key={sibling.id} 
+                                            onClick={() => onOpenAd(sibling.id)}
+                                            className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center gap-3 group relative ${
+                                                isActive 
+                                                ? 'bg-brand-50 border-brand-300 ring-1 ring-brand-300' 
+                                                : isOpened
+                                                    ? 'bg-gray-50 border-gray-300' 
+                                                    : 'bg-white border-gray-200 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <span className={`text-xs font-bold ${isActive ? 'text-brand-700' : 'text-gray-700'}`}>ID: {sibling.id.split('_')[1] || sibling.id}</span>
+                                                    {isActive && <CheckCircle2 className="w-3.5 h-3.5 text-brand-600" />}
+                                                </div>
+                                                <div className="text-[10px] text-gray-500">
+                                                    Start: {new Date(sibling.start_date).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Right Column: Metadata */}
+            <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Details zur Werbeanzeige</h2>
+                
+                {/* Info Cards */}
+                <div className="mb-6 space-y-4">
+                    <div className="flex items-start gap-4">
+                         <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                             <Info className="w-5 h-5" />
+                         </div>
+                         <div>
+                             <h3 className="font-medium text-gray-900">Status</h3>
+                             <p className="text-sm text-gray-600 mt-1 flex items-center gap-2">
+                                 <span className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                 {ad.isActive ? 'Aktiv' : 'Inaktiv'}
+                             </p>
+                             <p className="text-xs text-gray-500 mt-1">Auslieferung gestartet: {new Date(ad.start_date).toLocaleDateString()}</p>
+                         </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-4">
+                         <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                             <Monitor className="w-5 h-5" />
+                         </div>
+                         <div>
+                             <h3 className="font-medium text-gray-900">Plattformen</h3>
+                             <div className="flex flex-wrap gap-2 mt-2">
+                                 {platforms.map((p: string) => (
+                                     <span key={p} className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-xs font-medium text-gray-700 capitalize border border-gray-200">
+                                         {p.replace('_', ' ')}
+                                     </span>
+                                 ))}
+                             </div>
+                         </div>
+                    </div>
+                </div>
+
+                {/* Detail Sections */}
+                <CollapsibleSection title="EU-Transparenz & Zielgruppe" icon={Globe} defaultOpen={true}>
+                     <div className="space-y-6">
+                         
+                         <div>
+                             <h4 className="text-sm font-bold text-gray-800 mb-4">Zielgruppe</h4>
+                             <div className="space-y-4">
+                                 <div className="p-4 border border-gray-200 rounded-lg">
+                                     <div className="flex items-center gap-2 mb-1">
+                                         <h5 className="text-sm font-bold text-gray-900">Standort</h5>
+                                     </div>
+                                     <div className="text-sm text-gray-600">
+                                         {(activeTargeting?.locations || []).length > 0 
+                                            ? activeTargeting?.locations.join(', ') 
+                                            : "Keine Standortdaten verfügbar"}
+                                     </div>
+                                 </div>
+
+                                 <div className="grid grid-cols-2 gap-4">
+                                     <div className="p-4 border border-gray-200 rounded-lg">
+                                         <div className="flex items-center gap-2 mb-1"><h5 className="text-sm font-bold text-gray-900">Alter</h5></div>
+                                         <div className="text-lg font-medium text-gray-900">{(activeTargeting?.ages || []).join(', ') || 'Alle'}</div>
+                                     </div>
+                                     <div className="p-4 border border-gray-200 rounded-lg">
+                                         <div className="flex items-center gap-2 mb-1"><h5 className="text-sm font-bold text-gray-900">Geschlecht</h5></div>
+                                         <div className="text-lg font-medium text-gray-900">{(activeTargeting?.genders || []).join(', ') || 'Alle'}</div>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+
+                         <div className="h-px bg-gray-200"></div>
+
+                         <div>
+                             <h4 className="text-sm font-bold text-gray-800 mb-4">Geschätzte Reichweite</h4>
+                             <div className="p-4 border border-gray-200 rounded-lg mb-6 bg-slate-50">
+                                 <div className="text-3xl font-normal text-gray-900 mb-2">
+                                     {activeTargeting?.reach_estimate ? formatReach(activeTargeting.reach_estimate) : 'Nicht verfügbar'}
+                                 </div>
+                                 <div className="text-xs text-gray-500">
+                                     Dies ist eine Schätzung der Konten, die diese Anzeige gesehen haben könnten (oft nur für EU verfügbar).
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                </CollapsibleSection>
+
+                <CollapsibleSection title="Infos zum Werbetreibenden" icon={ShieldCheck} defaultOpen={false}>
+                    <div className="flex items-center gap-4 mb-5">
+                         <div className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-xl border border-gray-100 flex-shrink-0 overflow-hidden">
+                            {/* @ts-ignore */}
+                            {ad.avatar ? <img src={ad.avatar} className="w-full h-full object-cover"/> : ad.page_name.charAt(0)}
+                         </div>
+                         <div className="font-bold text-gray-900 text-lg">{ad.page_name}</div>
+                    </div>
+                    
+                    <div className="space-y-4 mb-5">
+                       {ad.disclaimer && (
+                           <div className="text-sm text-gray-600">
+                               <span className="font-bold">Disclaimer:</span> {ad.disclaimer}
+                           </div>
+                       )}
+                       {ad.page_categories && (
+                           <div className="text-sm text-gray-600">
+                               <span className="font-bold">Kategorie:</span> {ad.page_categories.join(', ')}
+                           </div>
+                       )}
+                    </div>
+                </CollapsibleSection>
+
+                {/* Footer Actions */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-gray-100">
+                    <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm">
+                        <Download className="w-4 h-4" />
+                        Medien herunterladen
+                    </button>
+                    {isSaved ? (
+                        <button 
+                            onClick={onRemove}
+                            className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
+                        >
+                            <X className="w-4 h-4" />
+                            Entfernen
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => onSave(ad)}
+                            className="flex-1 flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
+                        >
+                            <Save className="w-4 h-4" />
+                            Speichern
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, onRemove, isSaved, group, type }) => {
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string>('overview');
 
   useEffect(() => {
-      if (isOpen) setCurrentCardIndex(0);
-  }, [isOpen, data]);
-
-  if (!isOpen || !data || !type) return null;
-
-  const isMeta = type === 'meta';
-  const metaAd = data as MetaAd;
-  const tikTokAd = data as TikTokAd;
-
-  // --- Meta Carousel Logic ---
-  const cards = isMeta ? (metaAd.snapshot.cards || []) : [];
-  const isCarousel = cards.length > 0;
-  
-  let currentMediaUrl = null;
-  let currentVideoUrl = null;
-  let currentBody = "";
-  let currentLink = "";
-  let currentCta = "";
-
-  if (isMeta) {
-      if (isCarousel) {
-          const card = cards[currentCardIndex];
-          currentMediaUrl = card.resized_image_url || card.original_image_url || card.video_preview_image_url;
-          currentVideoUrl = card.video_hd_url || card.video_sd_url;
-          currentBody = card.body || metaAd.snapshot.body?.text || "";
-          currentLink = card.link_url || metaAd.snapshot.link_url;
-          currentCta = card.cta_text || metaAd.snapshot.cta_text;
+      if (isOpen && group && group.length > 0) {
+           if (group.length > 1 && type === 'meta') {
+               setOpenTabs(['overview']);
+               setActiveTabId('overview');
+           } else {
+               const firstId = group[0].id;
+               setOpenTabs([firstId]);
+               setActiveTabId(firstId);
+           }
       } else {
-          const videos = metaAd.snapshot.videos || [];
-          const images = metaAd.snapshot.images || [];
-          if (videos.length > 0) {
-              currentVideoUrl = videos[0].video_hd_url;
-              currentMediaUrl = videos[0].video_preview_image_url; 
-          } else if (images.length > 0) {
-              currentMediaUrl = images[0].resized_image_url;
-          }
-          currentBody = metaAd.snapshot.body?.text || "";
-          currentLink = metaAd.snapshot.link_url;
-          currentCta = metaAd.snapshot.cta_text;
+          setOpenTabs([]);
+          setActiveTabId('overview');
       }
-  } else {
-      currentMediaUrl = tikTokAd.videoMeta.coverUrl;
-      currentLink = tikTokAd.webVideoUrl;
-      currentBody = tikTokAd.text;
-      currentCta = "View on TikTok";
+  }, [isOpen, group, type]);
+
+  if (!isOpen || !group || group.length === 0 || !type) return null;
+
+  const handleContentClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleOpenAd = (adId: string) => {
+      if (!openTabs.includes(adId)) {
+          setOpenTabs(prev => [...prev, adId]);
+      }
+      setActiveTabId(adId);
+  };
+
+  const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
+      e.stopPropagation();
+      const newTabs = openTabs.filter(t => t !== tabId);
+      setOpenTabs(newTabs);
+      if (activeTabId === tabId) {
+          setActiveTabId(newTabs[newTabs.length - 1] || 'overview');
+      }
+  };
+
+  if (type === 'meta') {
+    const showTabs = group.length > 1; 
+    
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
+            <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
+            
+            <div 
+                className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+                onClick={handleContentClick}
+            >
+                <div className="flex flex-col border-b border-gray-200 bg-gray-50 flex-shrink-0">
+                    <div className="flex items-center justify-between px-6 py-4">
+                        <div className="flex items-center gap-3">
+                             <div className="p-2 bg-brand-100 text-brand-700 rounded-lg">
+                                <Layers className="w-5 h-5" />
+                             </div>
+                             <div>
+                                <h2 className="text-lg font-bold text-gray-900">
+                                    {group.length > 1 ? `${group.length} Ad Versionen` : 'Anzeigendetails'}
+                                </h2>
+                                <p className="text-xs text-gray-500">
+                                    {group.length > 1 ? 'Gleicher Text • Unterschiedliches Targeting/Datum' : 'Detaillierte Analyse'}
+                                </p>
+                             </div>
+                        </div>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {showTabs && (
+                        <div className="flex items-end px-6 gap-2 overflow-x-auto no-scrollbar">
+                            {openTabs.map(tabId => {
+                                if (tabId === 'overview') {
+                                    return (
+                                        <button 
+                                            key="overview"
+                                            onClick={() => setActiveTabId('overview')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 flex-shrink-0 ${
+                                                activeTabId === 'overview' 
+                                                ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' 
+                                                : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'
+                                            }`}
+                                            style={{ marginBottom: -1 }}
+                                        >
+                                            <LayoutGrid className="w-4 h-4" />
+                                            Übersicht
+                                        </button>
+                                    );
+                                }
+                                
+                                const isTabActive = activeTabId === tabId;
+                                return (
+                                    <button 
+                                        key={tabId}
+                                        onClick={() => setActiveTabId(tabId)}
+                                        className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 relative pr-9 flex-shrink-0 ${
+                                            isTabActive
+                                            ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' 
+                                            : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                        style={{ marginBottom: -1 }}
+                                    >
+                                        <Hash className="w-4 h-4" />
+                                        ID: {tabId.split('_')[1] || tabId}
+                                        <span onClick={(e) => handleCloseTab(e, tabId)} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-gray-300 text-gray-400 hover:text-gray-700">
+                                            <X className="w-3 h-3" />
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex-1 overflow-hidden bg-white relative">
+                    <div className={activeTabId === 'overview' ? "h-full overflow-y-auto p-6 bg-gray-50/50" : "hidden h-full"}>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
+                            {group.map((ad: MetaAd) => {
+                                const estReach = ad.targeting?.reach_estimate;
+                                const locs = ad.targeting?.locations || [];
+                                const ages = ad.targeting?.ages || [];
+                                
+                                return (
+                                    <div 
+                                        key={ad.id} 
+                                        onClick={() => handleOpenAd(ad.id)}
+                                        className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-brand-300 transition-all cursor-pointer flex flex-col group relative overflow-hidden"
+                                    >
+                                        <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                                <span className="text-xs font-semibold text-gray-700">{ad.isActive ? 'Aktiv' : 'Inaktiv'}</span>
+                                            </div>
+                                            <span className="text-xs text-gray-500">{new Date(ad.start_date).toLocaleDateString()}</span>
+                                        </div>
+
+                                        <div className="p-5 flex-1 flex flex-col gap-4">
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-0.5">Library ID</span>
+                                                    <span className="font-mono font-bold text-brand-600 text-sm flex items-center gap-1">
+                                                        <Hash className="w-3 h-3" />
+                                                        {ad.id.split('_')[1] || ad.id}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex gap-3">
+                                                <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
+                                                    {ad.snapshot.videos?.length > 0 ? (
+                                                        <div className="w-full h-full bg-black flex items-center justify-center"><Play className="w-6 h-6 text-white" /></div>
+                                                    ) : (
+                                                        <img src={ad.snapshot.images[0]?.resized_image_url} className="w-full h-full object-cover" alt="" />
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 flex flex-col justify-center gap-1">
+                                                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Reichweite</div>
+                                                        <div className="text-xl font-bold text-gray-900 flex items-center gap-1">
+                                                            {estReach ? formatReach(estReach) : 'N/A'}
+                                                            <Users className="w-3 h-3 text-gray-400" />
+                                                        </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 border-t border-gray-100">
+                                            <button className="w-full py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 group-hover:bg-brand-50 group-hover:text-brand-700 group-hover:border-brand-200 transition-colors flex items-center justify-center gap-2">
+                                                Details ansehen <ExternalLink className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {openTabs.filter(id => id !== 'overview').map((tabId) => {
+                         const ad = group.find(g => g.id === tabId);
+                         if (!ad) return null;
+                         return (
+                            <MetaAdDetailView
+                                key={ad.id}
+                                ad={ad}
+                                group={group}
+                                isActiveView={activeTabId === ad.id}
+                                openTabs={openTabs}
+                                activeTabId={activeTabId}
+                                onOpenAd={handleOpenAd}
+                                onSave={(ad) => onSave && onSave(ad, 'meta')}
+                                onRemove={() => onRemove && onRemove()}
+                                isSaved={!!isSaved}
+                            />
+                         );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
   }
 
-  const handleNextCard = () => {
-      if (currentCardIndex < cards.length - 1) setCurrentCardIndex(curr => curr + 1);
-  };
-
-  const handlePrevCard = () => {
-      if (currentCardIndex > 0) setCurrentCardIndex(curr => curr - 1);
-  };
-
+  // Fallback für TikTok (vereinfacht)
+  const currentAd = group.find(ad => ad.id === activeTabId) || group[0];
+  if (!currentAd) return null;
+  const tikTokAd = currentAd as TikTokAd;
+  
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
-      <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
-      
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-4 right-4 z-20 p-2 bg-white/80 backdrop-blur rounded-full hover:bg-white text-gray-500 hover:text-gray-900 transition-all border border-gray-200 shadow-sm"><X className="w-5 h-5" /></button>
-
-        {/* --- LEFT: MEDIA --- */}
-        <div className="w-full md:w-1/2 bg-black flex items-center justify-center relative overflow-hidden group">
-            {currentVideoUrl ? (
-                <video src={currentVideoUrl} controls className="w-full h-full object-contain max-h-[50vh] md:max-h-full" poster={currentMediaUrl || undefined} />
-            ) : (
-                <img src={currentMediaUrl || 'https://placehold.co/600x400?text=No+Media'} alt="Creative" className="w-full h-full object-contain" />
-            )}
-
-            {isCarousel && (
-                <>
-                    <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-10">
-                        {cards.map((_, idx) => (
-                            <div key={idx} className={`w-2 h-2 rounded-full transition-all ${idx === currentCardIndex ? 'bg-white scale-125' : 'bg-white/40'}`} />
-                        ))}
-                    </div>
-                    {currentCardIndex > 0 && (
-                        <button onClick={(e) => { e.stopPropagation(); handlePrevCard(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all backdrop-blur-sm"><ChevronLeft className="w-6 h-6" /></button>
-                    )}
-                    {currentCardIndex < cards.length - 1 && (
-                        <button onClick={(e) => { e.stopPropagation(); handleNextCard(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all backdrop-blur-sm"><ChevronRight className="w-6 h-6" /></button>
-                    )}
-                    <div className="absolute top-4 left-4 bg-black/60 text-white px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-md flex items-center gap-2">
-                        <Layers className="w-3 h-3" /> Card {currentCardIndex + 1} / {cards.length}
-                    </div>
-                </>
-            )}
-        </div>
-
-        {/* --- RIGHT: DETAILS --- */}
-        <div className="w-full md:w-1/2 flex flex-col h-full bg-white border-l border-gray-100">
-            <div className="p-6 border-b border-gray-100 flex items-center gap-4">
-                {isMeta ? (
-                    <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-bold text-lg border border-brand-100">
-                        {metaAd.page_name?.charAt(0)}
-                    </div>
-                ) : (
-                    <img src={tikTokAd.authorMeta.avatarUrl} className="w-12 h-12 rounded-full border border-gray-200" />
-                )}
-                <div>
-                    <h3 className="text-lg font-bold text-gray-900">{isMeta ? metaAd.page_name : tikTokAd.authorMeta.nickName}</h3>
-                    <p className="text-sm text-gray-500">
-                        {isMeta ? (isCarousel ? 'Carousel Ad' : 'Single Ad') : 'TikTok Ad'} • {new Date(isMeta ? metaAd.start_date : tikTokAd.createTimeISO).toLocaleDateString()}
-                    </p>
-                </div>
+        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200" onClick={handleContentClick}>
+            <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 bg-white/80 rounded-full text-gray-500 hover:text-gray-900 shadow-sm border border-gray-200"><X className="w-5 h-5" /></button>
+            <div className="w-full md:w-5/12 bg-black flex items-center justify-center relative overflow-hidden">
+                 <div className="relative w-full h-full">
+                     <img src={tikTokAd.videoMeta.coverUrl} className="w-full h-full object-cover blur-sm opacity-50 absolute" />
+                     <img src={tikTokAd.videoMeta.coverUrl} className="w-full h-full object-contain relative z-10" />
+                 </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
-                        <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">Likes</div>
-                        <div className="text-lg font-bold text-gray-900">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(isMeta ? metaAd.likes : tikTokAd.diggCount)}</div>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
-                        <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">{isMeta ? 'Impressions' : 'Views'}</div>
-                        <div className="text-lg font-bold text-gray-900">{new Intl.NumberFormat('en-US', { notation: "compact" }).format(isMeta ? metaAd.impressions : tikTokAd.playCount)}</div>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
-                        <div className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-1">{isMeta ? 'Spend' : 'Shares'}</div>
-                        <div className="text-lg font-bold text-gray-900">{isMeta ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(metaAd.spend) : new Intl.NumberFormat('en-US', { notation: "compact" }).format(tikTokAd.shareCount)}</div>
-                    </div>
-                </div>
-
-                <div>
-                    <h4 className="text-sm font-bold text-gray-900 mb-2">Primary Text</h4>
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
-                        {currentBody || <span className="italic text-gray-400">No text provided for this card.</span>}
-                    </div>
-                </div>
-
-                <div>
-                    <a href={currentLink} target="_blank" rel="noreferrer" className="flex items-center justify-center w-full py-3 bg-blue-50 text-blue-600 font-semibold rounded-xl border border-blue-100 hover:bg-blue-100 transition-colors">
-                        {currentCta || 'Learn More'} <ExternalLink className="w-4 h-4 ml-2" />
-                    </a>
-                </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
-                <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-all shadow-sm">
-                    <Download className="w-4 h-4" /> Download Media
-                </button>
-                {isSaved ? (
-                    <button onClick={onRemove} className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white font-semibold py-2.5 rounded-lg hover:bg-red-700 transition-all shadow-sm shadow-red-200">
-                        <X className="w-4 h-4" /> Remove
-                    </button>
-                ) : (
-                    <button onClick={() => onSave && data && type && onSave(data, type)} className="flex-1 flex items-center justify-center gap-2 bg-brand-600 text-white font-semibold py-2.5 rounded-lg hover:bg-brand-700 transition-all shadow-sm shadow-brand-200">
-                        <Save className="w-4 h-4" /> Save Ad
-                    </button>
-                )}
+            <div className="w-full md:w-7/12 bg-white p-6 overflow-y-auto">
+                <h2 className="text-xl font-bold mb-4">{tikTokAd.authorMeta.nickName}</h2>
+                <p className="text-sm text-gray-600 mb-4">{tikTokAd.text}</p>
+                <a href={tikTokAd.webVideoUrl} target="_blank" rel="noreferrer" className="block w-full bg-black text-white text-center py-3 rounded-lg font-bold">Auf TikTok ansehen</a>
             </div>
         </div>
-      </div>
     </div>
   );
 };

@@ -5,7 +5,7 @@ export interface SavedAd {
   savedAt: string;
 }
 
-// FIX: 'country' hinzugefügt, damit api.ts keinen Fehler mehr wirft
+// FIX: 'country' ist jetzt hier enthalten, damit der Fehler in api.ts verschwindet
 export interface SearchHistoryItem {
   id: string;
   query: string;
@@ -13,7 +13,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string; // Optionaler Country Code (z.B. "US", "DE")
+  country?: string; // WICHTIG für deine Rerun-Logik
 }
 
 export interface User {
@@ -34,18 +34,7 @@ export interface SearchParams {
   country?: string;
 }
 
-// Meta Ad Models
-export interface MetaAdCardItem {
-    title?: string;
-    body?: string;
-    link_url?: string;
-    cta_text?: string;
-    original_image_url?: string;
-    resized_image_url?: string;
-    video_hd_url?: string;
-    video_sd_url?: string;
-    video_preview_image_url?: string;
-}
+// --- META AD MODELS (Updated for Redesign) ---
 
 export interface MetaAdSnapshot {
   cta_text: string;
@@ -55,23 +44,91 @@ export interface MetaAdSnapshot {
   };
   images: Array<{ resized_image_url: string; original_image_url?: string }>;
   videos: Array<{ video_hd_url: string; video_sd_url?: string; video_preview_image_url?: string }>;
-  cards?: MetaAdCardItem[];
+  cards?: any[]; // Carousel cards
+}
+
+// Neue Interfaces für die Detailansicht
+export interface MetaAdTargetingBreakdown {
+    location: string;
+    age_range: string;
+    gender: string;
+    reach: number;
+}
+
+export interface MetaAdTargeting {
+  ages: string[]; 
+  genders: string[]; 
+  locations: string[]; 
+  excluded_locations?: string[];
+  reach_estimate?: number; 
+  breakdown?: MetaAdTargetingBreakdown[];
+}
+
+export interface MetaAdRegionTransparency {
+    region: string;
+    description: string;
+    ages: string[];
+    genders: string[];
+    locations: string[];
+    excluded_locations?: string[];
+    reach_estimate?: number;
+    breakdown?: MetaAdTargetingBreakdown[];
+}
+
+export interface MetaAdAdvertiserInfo {
+    facebook_handle?: string;
+    facebook_followers?: number;
+    instagram_handle?: string;
+    instagram_followers?: number;
+    about_text?: string;
+    category?: string;
+}
+
+export interface MetaAdAboutDisclaimer {
+    text: string;
+    location?: string;
+    website_url?: string;
+    beneficiary?: string;
+    payer?: string;
+}
+
+export interface MetaAdBeneficiaryPayer {
+    text: string;
+    beneficiary: string;
+    payer: string;
 }
 
 export interface MetaAd {
   id: string;
+  ad_archive_id?: string; // Fallback ID
+  isActive: boolean;
   publisher_platform: string[];
   start_date: string;
   page_name: string;
   page_profile_uri: string;
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
+  
+  // Metrics
   likes: number;
   impressions: number;
   spend: number;
+
+  // New Detailed Data Fields
+  targeting?: MetaAdTargeting;
+  transparency_regions?: MetaAdRegionTransparency[];
+  page_categories?: string[];
+  disclaimer?: string;
+  advertiser_info?: MetaAdAdvertiserInfo;
+  about_disclaimer?: MetaAdAboutDisclaimer;
+  beneficiary_payer?: MetaAdBeneficiaryPayer;
+  
+  // Avatar Helper
+  avatar?: string | null;
 }
 
-// TikTok Ad Models
+// --- TIKTOK AD MODELS ---
+
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;

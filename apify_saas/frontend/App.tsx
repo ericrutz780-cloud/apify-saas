@@ -14,7 +14,7 @@ import AdFeed from './AdFeed';
 import { 
     Search, Loader2, AlertCircle, CheckCircle2, CreditCard, 
     ArrowRight, Zap, Facebook, Instagram, Video,
-    ChevronDown, BarChart3, ListFilter, Globe, Bookmark, Trash2, Undo2, X, LayoutGrid 
+    ChevronDown, BarChart3, ListFilter, Globe, Bookmark, Trash2, Undo2, X, LayoutGrid, ArrowUpDown
 } from 'lucide-react';
 
 // --- Constants ---
@@ -167,9 +167,7 @@ const Dashboard = ({ user }: { user: User }) => {
 
     // --- NEUE RERUN LOGIK (SMART CACHE) ---
     const handleRerun = (item: SearchHistoryItem) => {
-        // 1. Suche im localStorage nach einem existierenden Ergebnis für diese Query/Plattform
         let cachedResultId = null;
-        
         try {
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
@@ -177,14 +175,13 @@ const Dashboard = ({ user }: { user: User }) => {
                     const resultStr = localStorage.getItem(key);
                     if (resultStr) {
                         const result = JSON.parse(resultStr);
-                        // Prüfen ob Query und Plattform übereinstimmen
                         if (
                             result.params && 
                             result.params.query === item.query && 
                             (result.params.platform === item.platform || item.platform === 'both')
                         ) {
                             cachedResultId = result.id;
-                            break; // Gefunden!
+                            break; 
                         }
                     }
                 }
@@ -194,20 +191,15 @@ const Dashboard = ({ user }: { user: User }) => {
         }
 
         if (cachedResultId) {
-            // Szenario A: Daten sind da -> Lade sofort ohne API Call und ohne Credits
             console.log(`Cache Hit for ${item.query}! Loading result ${cachedResultId}`);
             navigate(`/results/${cachedResultId}`);
         } else {
-            // Szenario B: Keine Daten -> Navigiere zur Suche
             console.log(`Cache Miss for ${item.query}. Redirecting to search.`);
-            
-            // FIX: Jetzt nutzen wir item.country sicher, da es in types.ts definiert ist
             const countryParam = item.country ? `&country=${item.country}` : '';
             navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}${countryParam}`);
         }
     };
 
-    // Helper für Datumsformatierung (z.B. "5.12.2025")
     const formatDate = (isoString: string) => {
         try {
             const date = new Date(isoString);
@@ -315,7 +307,7 @@ const Dashboard = ({ user }: { user: User }) => {
                  </div>
             </div>
 
-            {/* Card 4: Recent Searches Table - DESIGN UPDATE */}
+            {/* Card 4: Recent Searches Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-base font-semibold text-gray-900">Recent Searches</h3>
@@ -585,7 +577,7 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
     );
 };
 
-const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void }) => {
+const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUser: () => void, onOpenModal: (data: any[], type: any) => void }) => {
     const navigate = useNavigate();
     const path = window.location.hash;
     const id = path.split('/').pop();
@@ -647,9 +639,7 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
     const transformedMetaAds = useMemo(() => {
         if (!result || !result.metaAds) return [];
         const ads = result.metaAds;
-        // @ts-ignore
-        if (ads.length > 0 && ads[0].pageName) return ads;
-        
+        if (ads.length > 0 && ads[0].page_name) return ads; // Already clean
         const adsToTransform = ads.map(ad => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
@@ -662,8 +652,27 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
     const metaAds = transformedMetaAds;
     const tikTokAds = result.tikTokAds || [];
     
-    const facebookAds = metaAds.filter((ad: any) => ad.platform && ad.platform.includes('facebook'));
-    const instagramAds = metaAds.filter((ad: any) => ad.platform && ad.platform.includes('instagram'));
+    const facebookAds = metaAds.filter((ad: any) => ad.publisher_platform && ad.publisher_platform.includes('facebook'));
+    const instagramAds = metaAds.filter((ad: any) => ad.publisher_platform && ad.publisher_platform.includes('instagram'));
+
+    // --- GROUPING LOGIC FOR META ADS (NEW) ---
+    const groupAdsByText = (ads: MetaAd[]) => {
+        const groups: { [key: string]: MetaAd[] } = {};
+        ads.forEach(ad => {
+            const key = ad.snapshot.body.text ? ad.snapshot.body.text.trim() : ad.id;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(ad);
+        });
+        
+        return Object.values(groups).map(group => {
+            group.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+            return {
+                representative: group[0],
+                group: group,
+                count: group.length
+            };
+        });
+    };
 
     const getFilteredAndSortedAds = () => {
         let ads: any[] = [];
@@ -674,16 +683,23 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
         else { ads = [...tikTokAds]; isMetaTab = false; }
 
         if (isMetaTab) {
-            if (formatFilter === 'video') ads = ads.filter((ad: any) => ad.media?.type === 'video');
-            else if (formatFilter === 'image') ads = ads.filter((ad: any) => ad.media?.type === 'image' || ad.media?.type === 'carousel');
+            if (formatFilter === 'video') ads = ads.filter((ad: any) => ad.snapshot?.videos?.length > 0);
+            else if (formatFilter === 'image') ads = ads.filter((ad: any) => (!ad.snapshot?.videos || ad.snapshot?.videos.length === 0));
 
-            ads.sort((a, b) => {
-                if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
-                if (sortBy === 'reach_views') return (b.impressions || 0) - (a.impressions || 0);
-                if (sortBy === 'spend_shares') return (b.spend || 0) - (a.spend || 0);
-                return new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime();
+            // Grouping Step
+            const grouped = groupAdsByText(ads as MetaAd[]);
+
+            // Sort logic - using representative ad
+            grouped.sort((a, b) => {
+                const adA = a.representative;
+                const adB = b.representative;
+                // Fallback to newest, as metrics are scarce
+                if (sortBy === 'newest') return new Date(adB.start_date).getTime() - new Date(adA.start_date).getTime();
+                // If reach is available
+                if (sortBy === 'reach_views') return (adB.targeting?.reach_estimate || 0) - (adA.targeting?.reach_estimate || 0);
+                return 0;
             });
-            return ads;
+            return grouped;
         } else {
             if (formatFilter === 'image') return [];
             ads.sort((a, b) => {
@@ -708,7 +724,6 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
                 </div>
                 
                 <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
-                    {/* Simplified Search Bar */}
                     <div className="flex items-center px-4">
                         <Search className="w-6 h-6 text-gray-400 mr-3" />
                         <input 
@@ -782,22 +797,27 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
                 </div>
             
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                    {/* HIER NUTZEN WIR displayedAds (die transformierten und gefilterten Daten) */}
-                    {isMetaActive && displayedAds.map((ad: any, i: number) => (
-                        <MetaAdCard 
-                            key={ad.id || `fallback-meta-${i}`} 
-                            ad={ad} 
-                            viewMode={viewMode} 
-                            onClick={(data) => onOpenModal(data, 'meta')} 
-                            platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} 
-                        />
-                    ))}
-                    {activeTab === 'tiktok' && displayedAds.map((ad: any, i: number) => (
+                    {/* Meta Rendering with Grouping */}
+                    {isMetaActive && displayedAds.map((item: any) => {
+                        const ad = item.representative;
+                        return (
+                            <MetaAdCard 
+                                key={ad.id} 
+                                ad={ad} 
+                                versionCount={item.count}
+                                viewMode={viewMode} 
+                                onClick={(data) => onOpenModal(item.group, 'meta')} 
+                                platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} 
+                            />
+                        );
+                    })}
+                    {/* TikTok Rendering (no grouping) */}
+                    {activeTab === 'tiktok' && displayedAds.map((ad: any) => (
                         <TikTokAdCard 
-                            key={ad.id || `fallback-tiktok-${i}`} 
+                            key={ad.id} 
                             ad={ad} 
                             viewMode={viewMode} 
-                            onClick={(data) => onOpenModal(data, 'tiktok')} 
+                            onClick={(data) => onOpenModal([data], 'tiktok')} 
                         />
                     ))}
                 </div>
@@ -807,7 +827,7 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
     );
 };
 
-const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void, onRemove: (id: string) => void }) => {
+const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, refreshUser: () => void, onOpenModal: (data: any[], type: any) => void, onRemove: (id: string) => void }) => {
     if (user.savedAds.length === 0) return <div className="flex flex-col items-center justify-center py-32 text-center"><Bookmark className="w-8 h-8 text-brand-600 mb-6" /><h2 className="text-2xl font-bold text-gray-900">No saved ads yet</h2></div>;
 
     return (
@@ -816,7 +836,11 @@ const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, r
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
                 {user.savedAds.map((savedAd) => (
                     <div key={savedAd.id} className="relative group/saved">
-                         {savedAd.type === 'meta' ? <MetaAdCard ad={savedAd.data as MetaAd} onClick={(data) => onOpenModal(data, 'meta')} /> : <TikTokAdCard ad={savedAd.data as TikTokAd} onClick={(data) => onOpenModal(data, 'tiktok')} />}
+                         {savedAd.type === 'meta' ? (
+                             <MetaAdCard ad={savedAd.data as MetaAd} onClick={(data) => onOpenModal([data], 'meta')} />
+                         ) : (
+                             <TikTokAdCard ad={savedAd.data as TikTokAd} onClick={(data) => onOpenModal([data], 'tiktok')} />
+                         )}
                          <button onClick={(e) => { e.stopPropagation(); onRemove(savedAd.id); }} className="absolute top-2 right-2 z-10 p-2 bg-white/90 backdrop-blur text-red-600 rounded-full shadow-sm opacity-0 group-hover/saved:opacity-100 transition-opacity hover:bg-red-50 border border-gray-200"><X className="w-4 h-4" /></button>
                     </div>
                 ))}
@@ -869,7 +893,10 @@ const Account = ({ user }: { user: User }) => {
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedAd, setSelectedAd] = useState<{data: any, type: 'meta' | 'tiktok'} | null>(null);
+  
+  // MODAL STATE CHANGE: Accepts ARRAY now for grouping
+  const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
+  
   const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
 
   const refreshUser = async () => {
@@ -896,7 +923,7 @@ const App = () => {
   };
 
   const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
-      try { await api.saveAd(ad, type); await refreshUser(); setSelectedAd(null); showToast("Ad saved to library"); } catch (e) { console.error("Failed to save ad", e); }
+      try { await api.saveAd(ad, type); await refreshUser(); setSelectedAdsGroup(null); showToast("Ad saved to library"); } catch (e) { console.error("Failed to save ad", e); }
   };
 
   const handleRemoveAd = async (id: string) => {
@@ -906,7 +933,9 @@ const App = () => {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
 
-  const savedAdEntry = selectedAd && user?.savedAds.find(ad => ad.data.id === selectedAd.data.id && ad.type === selectedAd.type);
+  // Determine isSaved based on the first ad in group (simplification)
+  const primaryAd = selectedAdsGroup?.data[0];
+  const savedAdEntry = primaryAd && user?.savedAds.find(ad => ad.data.id === primaryAd.id && ad.type === selectedAdsGroup.type);
   const isSaved = !!savedAdEntry;
 
   return (
@@ -914,7 +943,18 @@ const App = () => {
         <Router>
           <Layout user={user}>
             <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
-            <AdDetailModal isOpen={!!selectedAd} onClose={() => setSelectedAd(null)} data={selectedAd?.data} type={selectedAd?.type} onSave={handleSaveAd} isSaved={isSaved} onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} />
+            
+            {/* UPDATED MODAL: Passing Group */}
+            <AdDetailModal 
+                isOpen={!!selectedAdsGroup} 
+                onClose={() => setSelectedAdsGroup(null)} 
+                group={selectedAdsGroup?.data || []} 
+                type={selectedAdsGroup?.type} 
+                onSave={handleSaveAd} 
+                isSaved={isSaved} 
+                onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} 
+            />
+
             <Routes>
               <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
               <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
@@ -923,8 +963,11 @@ const App = () => {
               <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
 
               <Route path="/search" element={user ? <SearchPage user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-              <Route path="/results/:id" element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAd({data, type})} /> : <Navigate to="/login" replace />} />
-              <Route path="/saved" element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAd({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} />
+              
+              {/* UPDATED PAGE PROPS: onOpenModal accepts (data[], type) */}
+              <Route path="/results/:id" element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} /> : <Navigate to="/login" replace />} />
+              <Route path="/saved" element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} />
+              
               <Route path="/account" element={user ? <Account user={user} /> : <Navigate to="/login" replace />} />
               <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />

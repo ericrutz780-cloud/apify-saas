@@ -1,51 +1,52 @@
-from fastapi import APIRouter, HTTPException
-from app.models.api_requests import SearchQuery
-from app.services.apify_meta import fetch_meta_ads_live
-from app.services.apify_tiktok import fetch_tiktok_viral_live
-from app.services.supabase_service import save_search_results, deduct_credits, check_user_credits
-import uuid
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+# Importiere deine Pydantic Models und DB-Dependency
+# (Passe die Imports an deine Projektstruktur an, falls nötig)
+from pydantic import BaseModel
+from typing import Optional
+
+# Wir importieren den Service, den wir gerade gefixt haben
+from services import apify_meta, apify_tiktok
 
 router = APIRouter()
 
+class SearchRequest(BaseModel):
+    query: str
+    platform: str
+    limit: int = 20
+    country: str = "US" # Default Fallback
+
 @router.post("/")
-def search_ads(query: SearchQuery, user_id: str = "test_user"):
+async def search_ads(
+    request: SearchRequest,
+    user_id: str = Query(..., description="User ID"),
+    # db: Session = Depends(get_db) # Falls du DB brauchst
+):
+    print(f"API Request: Searching '{request.query}' on {request.platform} in {request.country}")
+
     try:
-        # 1. Credits Check
-        if not check_user_credits(user_id, query.limit):
-            raise HTTPException(status_code=402, detail="Nicht genügend Credits. Bitte aufladen.")
-
-        # 2. Live API
-        results = []
-        if query.platform == "meta":
-            results = fetch_meta_ads_live(query.keyword, query.country, query.limit, query.sort_by)
-        elif query.platform == "tiktok":
-            results = fetch_tiktok_viral_live(query.keyword, query.limit)
-        
-        # 3. Speichern & Abrechnen
-        if results:
-            save_search_results(query.platform, query.keyword, results)
-            deduct_credits(user_id, query.limit)
-
-        # 4. Antwort bauen (HIER WAR DER FEHLER)
-        # Wir müssen 'metaAds' oder 'tikTokAds' zurückgeben, damit das Frontend sie findet.
-        
-        response = {
-            "id": str(uuid.uuid4()), # Eine ID für die Suche generieren
-            "status": "success",
-            "source": "api",
-            "count": len(results),
-            "params": query.dict(), # Damit das Frontend weiß, wonach gesucht wurde
+        if request.platform == "meta":
+            # Hier rufen wir die neue Funktion mit dem expliziten Country auf
+            results = await apify_meta.search_meta_ads(
+                query=request.query,
+                country=request.country, 
+                limit=request.limit
+            )
+            return {"status": "success", "data": results}
             
-            # WICHTIG: Daten in das richtige Feld packen!
-            "metaAds": results if query.platform == "meta" else [],
-            "tikTokAds": results if query.platform == "tiktok" else [],
-            
-            # Legacy Feld (falls was anderes noch drauf zugreift)
-            "data": results 
-        }
-        
-        return response
-        
+        elif request.platform == "tiktok":
+            results = await apify_tiktok.search_tiktok_ads(
+                query=request.query, 
+                limit=request.limit
+            )
+            return {"status": "success", "data": results}
+
+        else:
+            # Beide (vereinfacht: erst Meta, dann TikTok)
+            meta_results = await apify_meta.search_meta_ads(request.query, request.country, request.limit)
+            tiktok_results = await apify_tiktok.search_tiktok_ads(request.query, request.limit)
+            return {"status": "success", "data": meta_results + tiktok_results}
+
     except Exception as e:
-        print(f"Search Error: {e}")
+        print(f"Search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

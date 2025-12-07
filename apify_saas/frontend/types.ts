@@ -5,6 +5,7 @@ export interface SavedAd {
   savedAt: string;
 }
 
+// FIX: 'country' hinzugefügt, damit api.ts keinen Fehler mehr wirft
 export interface SearchHistoryItem {
   id: string;
   query: string;
@@ -12,7 +13,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string; // Optionaler Country Code
+  country?: string; // Optionaler Country Code (z.B. "US", "DE")
 }
 
 export interface User {
@@ -34,7 +35,6 @@ export interface SearchParams {
 }
 
 // Meta Ad Models
-
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;

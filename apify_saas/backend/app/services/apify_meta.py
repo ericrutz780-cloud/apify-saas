@@ -1,7 +1,10 @@
 from apify_client import ApifyClient
-from app.core.config import settings
+from core.config import settings
 import uuid
 import datetime
+
+# Client initialisieren (einmalig)
+client = ApifyClient(settings.APIFY_API_TOKEN)
 
 def normalize_meta_ad(item):
     """
@@ -27,7 +30,8 @@ def normalize_meta_ad(item):
     videos = raw_snapshot.get("videos") or []
     cards = raw_snapshot.get("cards") or []
     
-    # Karussell-Fix
+    # Karussell-Fix: Wenn keine direkten Bilder/Videos da sind, aber Cards,
+    # versuchen wir, das Bild aus der ersten Karte zu holen.
     if not images and not videos and cards:
         first_card = cards[0]
         img_url = first_card.get("resized_image_url") or \
@@ -41,6 +45,19 @@ def normalize_meta_ad(item):
     if not body_text and cards:
         body_text = cards[0].get("body")
 
+    # Metrics Parsing (Sicherstellen, dass Zahlen auch Zahlen sind)
+    likes = item.get("likes", 0) or item.get("page_like_count", 0)
+    
+    # Impressions Logik (Meta liefert das oft verschachtelt)
+    impressions = 0
+    imp_data = item.get("impressions_with_index")
+    if imp_data and isinstance(imp_data, dict):
+        # Versuche verschiedene Felder
+        impressions = imp_data.get("impressions_min") or \
+                      imp_data.get("impressions_index") or 0
+    elif item.get("reach_estimate"):
+         impressions = item.get("reach_estimate")
+
     return {
         "id": safe_id,
         "publisher_platform": item.get("publisher_platform", ["facebook"]),
@@ -48,8 +65,8 @@ def normalize_meta_ad(item):
         "page_name": item.get("page_name", "Unknown Page"),
         "page_profile_uri": item.get("page_profile_uri", "#"),
         "ad_library_url": item.get("ad_library_url", "#"),
-        "likes": item.get("likes", 0),
-        "impressions": item.get("impressions_with_index", {}).get("impressions_min", 0),
+        "likes": likes,
+        "impressions": impressions,
         "spend": item.get("spend", 0),
         "snapshot": {
             "cta_text": raw_snapshot.get("cta_text", "Learn More"),
@@ -61,70 +78,82 @@ def normalize_meta_ad(item):
         }
     }
 
-def fetch_meta_ads_live(keyword: str, country: str, limit: int, sort_by: str = "newest"):
-    client = ApifyClient(token=settings.APIFY_TOKEN)
-    target_country = country if country and country != "ALL" else "US"
+async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
+    """
+    Führt eine Suche auf der Meta Ad Library via Apify aus.
+    Nutzt 'fetch_meta_ads_live' Logik aber als async Service Funktion.
+    """
+    # Country Mapping / Fallback
+    target_country = country.upper() if country and country != "ALL" else "US"
     
-    # Wir begrenzen das Datum auf die letzten 90 Tage, um alte Daten zu vermeiden
+    # Datumsgrenze (letzte 90 Tage)
     start_date_min = (datetime.datetime.now() - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
     
-    sort_mode = "start_date_desc" 
-    if sort_by == "relevancy":
-        sort_mode = "relevancy_monthly_grouped"
+    # Sortierung
+    sort_mode = "relevancy_monthly_grouped" # Standard für beste Ergebnisse
 
+    # URL Konstruktion
     search_url = (
         f"https://www.facebook.com/ads/library/"
-        f"?active_status=active&ad_type=all&country={target_country}&q={keyword}"
+        f"?active_status=active&ad_type=all&country={target_country}&q={query}"
         f"&sort_data[direction]=desc&sort_data[mode]={sort_mode}"
         f"&start_date[min]={start_date_min}" 
         f"&media_type=all"
     )
 
-    # HIER IST DER FIX: Wir nutzen 'count' statt 'maxItems'
-    # Laut PDF/Screenshot ist 'count' der korrekte Parameter für diesen Actor.
+    # Actor Input Konfiguration
+    # WICHTIG: 'count' ist oft der entscheidende Parameter bei diesem Actor
     run_input = {
-        "urls": [{"url": search_url}], 
+        "startUrls": [{"url": search_url}], # Manche Actors nutzen 'startUrls', manche 'urls'
+        "urls": [{"url": search_url}],      # Wir senden beides zur Sicherheit
         
-        # --- DER ENTSCHEIDENDE PARAMETER ---
         "count": limit, 
-        # -----------------------------------
-        
-        # Wir lassen die anderen zur Sicherheit drin, falls er seine API ändert
         "maxItems": limit, 
+        "adsCount": limit, # Und noch eine Variante, die manche Actors nutzen
+
         "pageTimeoutSecs": 60,
         "proxy": {
             "useApifyProxy": True,
             "apifyProxyGroups": ["RESIDENTIAL"]
         },
+        # Zwinge den Scraper Details zu laden (wichtig für EU Daten!)
+        "scrapeAdDetails": True, 
+        "countryCode": target_country
     }
 
+    print(f"DEBUG: Starting Apify Scrape for {query} in {target_country} (Limit: {limit})")
+    print(f"DEBUG: Search URL: {search_url}")
+
     try:
-        print(f"🚀 Starte Scrape für {keyword} in {target_country} (Ziel: {limit} Ads)...")
-        
-        # Timeout zur Sicherheit auf 2 Minuten lassen
-        run = client.actor("XtaWFhbtfxyzqrFmd").call(
+        # Den richtigen Actor aufrufen (curious_coder/facebook-ads-library-scraper oder ähnlich)
+        # Ich nutze hier den String, den du in deinem Snippet hattest ("XtaWFhbtfxyzqrFmd" scheint eine ID zu sein, 
+        # aber 'curious_coder/facebook-ads-library-scraper' ist lesbarer. Ich nehme den Namen.)
+        run = client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=512,
-            timeout_secs=120 
+            memory_mbytes=1024, # Etwas mehr RAM geben
+            timeout_secs=180    # 3 Minuten Timeout
         )
         
         if not run:
-            print("⚠️ Scrape wurde abgebrochen (Timeout/User).")
+            print("⚠️ Scrape wurde abgebrochen oder lieferte kein Run-Objekt.")
             return []
 
         dataset_id = run.get("defaultDatasetId")
         if dataset_id:
             print(f"✅ Scrape beendet. Lade Daten aus Dataset {dataset_id}...")
-            items = client.dataset(dataset_id).list_items(clean=True).items
+            # Daten laden
+            dataset_items = client.dataset(dataset_id).list_items(clean=True).items
             
             normalized_results = []
             seen_ids = set()
 
-            for item in items:
+            for item in dataset_items:
                 norm = normalize_meta_ad(item)
                 if norm: 
+                    # Deduplizierung
                     if norm['id'] in seen_ids: continue
                     seen_ids.add(norm['id'])
+                    
                     normalized_results.append(norm)
                     
                     if len(normalized_results) >= limit:
@@ -134,7 +163,8 @@ def fetch_meta_ads_live(keyword: str, country: str, limit: int, sort_by: str = "
             return normalized_results
             
     except Exception as e:
-        print(f"❌ Apify Error: {str(e)}")
+        print(f"❌ Apify Error in search_meta_ads: {str(e)}")
+        # Im Fehlerfall leere Liste, damit Frontend nicht crasht
         return []
     
     return []

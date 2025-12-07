@@ -17,7 +17,7 @@ export const cleanAndTransformData = (dbRows) => {
     let mediaUrl = null;
     let poster = null;
 
-    // Prüfe CamelCase und SnakeCase Pfade
+    // Prüfe CamelCase und SnakeCase Pfade für Medien
     const videos = snap.videos || item.videos || [];
     const images = snap.images || item.images || [];
     const cards = snap.cards || item.cards || [];
@@ -54,18 +54,22 @@ export const cleanAndTransformData = (dbRows) => {
     // 5. Metriken & Targeting (Der entscheidende Fix!)
     const likes = item.likes || item.page_like_count || item.pageLikeCount || 0;
     
-    // Reichweite: Wir prüfen ALLE möglichen Felder (Doku vs. Realität)
-    // HIER IST DEIN PUNKT: reachEstimate aus der Doku wird explizit geprüft!
+    // WICHTIG: Wir prüfen zuerst reachEstimate (Doku), dann reach_estimate (JSON)
     let reach = item.reachEstimate || item.reach_estimate || null;
     
-    // Falls Reach leer ist, prüfen wir Impressions
+    // Fallback: Manchmal steckt es in eu_data
+    if (!reach && item.eu_data && item.eu_data.reach_estimate) {
+        reach = item.eu_data.reach_estimate;
+    }
+
+    // Fallback: Impressions
     if (!reach && (item.impressions_with_index || item.impressionsWithIndex)) {
         const impObj = item.impressions_with_index || item.impressionsWithIndex;
         const idx = impObj.impressions_index ?? impObj.impressionsIndex ?? -1;
         if (idx > -1) reach = idx;
     }
 
-    const spend = item.spend || null;
+    const spend = item.spend || item.spendEstimate || null;
 
     // EU & Targeting Daten sammeln
     const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
@@ -79,7 +83,7 @@ export const cleanAndTransformData = (dbRows) => {
         ages,
         genders,
         locations, 
-        reach_estimate: reach,
+        reach_estimate: reach, // Hier landet der Wert, egal woher er kam
         breakdown
     };
 
@@ -102,9 +106,7 @@ export const cleanAndTransformData = (dbRows) => {
       spend,
 
       targeting,
-      // Mapping für EU Daten falls vorhanden (manche Scraper nennen es 'eu_data')
       transparency_regions: item.eu_data || item.euData || [], 
-      
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
       advertiser_info,

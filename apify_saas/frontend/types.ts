@@ -5,7 +5,6 @@ export interface SavedAd {
   savedAt: string;
 }
 
-// FIX: 'country' ist jetzt hier enthalten, damit der Fehler in api.ts verschwindet
 export interface SearchHistoryItem {
   id: string;
   query: string;
@@ -13,7 +12,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string; // WICHTIG für deine Rerun-Logik
+  country?: string;
 }
 
 export interface User {
@@ -34,7 +33,7 @@ export interface SearchParams {
   country?: string;
 }
 
-// --- META AD MODELS (Updated for Redesign) ---
+// --- META AD MODELS ---
 
 export interface MetaAdSnapshot {
   cta_text: string;
@@ -44,10 +43,9 @@ export interface MetaAdSnapshot {
   };
   images: Array<{ resized_image_url: string; original_image_url?: string }>;
   videos: Array<{ video_hd_url: string; video_sd_url?: string; video_preview_image_url?: string }>;
-  cards?: any[]; // Carousel cards
+  cards?: any[];
 }
 
-// Neue Interfaces für die Detailansicht
 export interface MetaAdTargetingBreakdown {
     location: string;
     age_range: string;
@@ -100,7 +98,7 @@ export interface MetaAdBeneficiaryPayer {
 
 export interface MetaAd {
   id: string;
-  ad_archive_id?: string; // Fallback ID
+  ad_archive_id?: string;
   isActive: boolean;
   publisher_platform: string[];
   start_date: string;
@@ -114,7 +112,7 @@ export interface MetaAd {
   impressions: number;
   spend: number;
 
-  // New Detailed Data Fields
+  // Detailed Data
   targeting?: MetaAdTargeting;
   transparency_regions?: MetaAdRegionTransparency[];
   page_categories?: string[];
@@ -123,7 +121,6 @@ export interface MetaAd {
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
   
-  // Avatar Helper
   avatar?: string | null;
 }
 

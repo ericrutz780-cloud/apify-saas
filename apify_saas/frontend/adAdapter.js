@@ -2,98 +2,116 @@ export const cleanAndTransformData = (dbRows) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // API liefert Daten manchmal direkt, manchmal in 'data' wrapper
+    // Daten können direkt im Row-Objekt oder in einem 'data'-Wrapper liegen
     const item = row.data || row;
     if (!item) return null;
 
     const snap = item.snapshot || {};
 
-    // --- FIX: Platform Case Sensitivity ---
-    // API liefert ["FACEBOOK"], App erwartet ["facebook"]. Wir normalisieren hier.
-    const rawPlatforms = item.publisher_platform || [];
+    // 1. Plattform Normalisierung (Groß-/Kleinschreibung Fix)
+    // API liefert oft ["FACEBOOK"], wir brauchen "facebook"
+    const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
 
-    // --- Media Logic ---
+    // 2. Media Extraction (Video > Image)
     let mediaType = 'image';
     let mediaUrl = null;
     let poster = null;
 
-    if (snap.videos && snap.videos.length > 0) {
+    // Prüfe verschiedene Pfade für Medien
+    const videos = snap.videos || item.videos || [];
+    const images = snap.images || item.images || [];
+    const cards = snap.cards || item.cards || [];
+
+    if (videos.length > 0) {
       mediaType = 'video';
-      mediaUrl = snap.videos[0].video_hd_url || snap.videos[0].video_sd_url;
-      poster = snap.videos[0].video_preview_image_url;
-    } else if (snap.cards && snap.cards.length > 0) {
+      mediaUrl = videos[0].video_hd_url || videos[0].video_sd_url || videos[0].videoHdUrl;
+      poster = videos[0].video_preview_image_url || videos[0].videoPreviewImageUrl;
+    } else if (cards.length > 0) {
       mediaType = 'carousel';
-      mediaUrl = snap.cards[0].original_image_url || snap.cards[0].resized_image_url;
-    } else if (snap.images && snap.images.length > 0) {
+      mediaUrl = cards[0].original_image_url || cards[0].resized_image_url || cards[0].originalImageUrl;
+    } else if (images.length > 0) {
       mediaType = 'image';
-      mediaUrl = snap.images[0].original_image_url || snap.images[0].resized_image_url;
+      mediaUrl = images[0].original_image_url || images[0].resized_image_url || images[0].originalImageUrl;
     }
 
-    // --- Text Cleaning ---
-    let safeBody = (snap.body && snap.body.text) ? snap.body.text : "";
-    // Entfernt Shopify-Platzhalter
+    // 3. Text Cleaning
+    let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
+    // Entfernt technische Platzhalter
     safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
 
-    const pageName = snap.page_name || item.page_name || "Unknown Page";
-    const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || null;
+    const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
+    // Avatar Suche an mehreren Orten
+    const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || item.pageProfilePictureUrl || null;
 
-    // --- Date Logic ---
+    // 4. Datum Normalisierung
     let isoDate = new Date().toISOString();
-    if (item.start_date) {
+    const rawDate = item.start_date || item.startDate;
+    if (rawDate) {
         try {
-            // JSON hat Unix Timestamp (Sekunden) -> in MS umwandeln
-            const dateVal = typeof item.start_date === 'number' ? item.start_date * 1000 : item.start_date;
+            // Wenn Zahl: Unix Timestamp in Sekunden -> Millisekunden
+            // Wenn String: Direkt parsen
+            const dateVal = typeof rawDate === 'number' ? rawDate * 1000 : rawDate;
             isoDate = new Date(dateVal).toISOString();
         } catch (e) {
-            console.warn("Date parsing error", e);
+            // Fallback auf heute bei Fehler
         }
     }
 
-    // --- Metrics Logic ---
-    const likes = (typeof snap.page_like_count === 'number') ? snap.page_like_count : 0;
+    // 5. Metriken (Der "N/A" Fix)
+    // Wir prüfen CamelCase UND SnakeCase
+    const likes = item.likes || snap.page_like_count || item.page_like_count || 0;
     
     let impressions = null;
-    if (item.impressions_with_index && typeof item.impressions_with_index.impressions_index === 'number') {
-        impressions = item.impressions_with_index.impressions_index > -1 ? item.impressions_with_index.impressions_index : null;
-    } else if (typeof item.reach_estimate === 'number') {
-        impressions = item.reach_estimate;
+    if (item.impressions_with_index || item.impressionsWithIndex) {
+        const impObj = item.impressions_with_index || item.impressionsWithIndex;
+        // Meta gibt -1 zurück, wenn keine Daten da sind
+        const idx = impObj.impressions_index ?? impObj.impressionsIndex ?? -1;
+        impressions = idx > -1 ? idx : null;
     }
     
-    const spend = (typeof item.spend === 'number') ? item.spend : 0;
+    // Reichweite kann an vielen Orten stehen
+    const reach = item.reach_estimate ?? item.reachEstimate ?? impressions ?? null;
+    const spend = item.spend ?? null;
 
-    // --- Targeting Object Builder ---
-    // Baut die Struktur für die Detailansicht
+    // 6. Targeting & EU Daten (Der "Missing Data" Fix)
+    // Wir sammeln alles ein, was wir finden können
+    const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
+    const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
+    const genders = item.gender ? [item.gender] : (item.genders || []);
+    
+    // Versuche Breakdown Daten zu finden (EU Transparenz)
+    const breakdown = item.demographic_distribution || item.demographicDistribution || item.eu_data || [];
+
     const targeting = {
-        ages: item.target_ages ? [item.target_ages] : [], 
-        genders: item.gender ? [item.gender] : [],
-        locations: item.targeted_or_reached_countries || [], 
-        reach_estimate: item.reach_estimate || null
+        ages,
+        genders,
+        locations, 
+        reach_estimate: reach,
+        breakdown
     };
 
-    // --- Advertiser Info Builder ---
     const advertiser_info = {
         category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
     };
 
-    // Rückgabe-Objekt
+    // Finales Objekt für die UI
     return {
-      id: item.ad_archive_id || item.id || Math.random().toString(),
-      isActive: item.is_active !== false,
-      publisher_platform: platforms, // Jetzt in lowercase!
+      id: item.ad_archive_id || item.adArchiveID || item.id || Math.random().toString(),
+      isActive: item.is_active !== false && item.isActive !== false,
+      publisher_platform: platforms,
       start_date: isoDate,
       page_name: pageName,
-      page_profile_uri: item.page_profile_uri || "#",
-      ad_library_url: item.ad_library_url || "#",
+      page_profile_uri: item.page_profile_uri || item.pageProfileUri || "#",
+      ad_library_url: item.ad_library_url || item.adLibraryUrl || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
       
       likes,
-      impressions,
+      impressions: reach, // Wir nutzen Reach oft als Proxy für Impressions
       spend,
 
-      // UI Helper Objects
       targeting,
-      page_categories: snap.page_categories || [],
+      page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.byline || null,
       advertiser_info,
       avatar: safeAvatar

@@ -33,7 +33,7 @@ export interface SearchParams {
   country?: string;
 }
 
-// --- META AD MODELS ---
+// Meta Ad Models
 
 export interface MetaAdSnapshot {
   cta_text: string;
@@ -41,7 +41,7 @@ export interface MetaAdSnapshot {
   body: {
     text: string;
   };
-  images: Array<{ resized_image_url: string; original_image_url?: string }>;
+  images: Array<{ resized_image_url: string; original_image_url?: string; video_preview_image_url?: string }>;
   videos: Array<{ video_hd_url: string; video_sd_url?: string; video_preview_image_url?: string }>;
   cards?: any[];
 }
@@ -58,19 +58,8 @@ export interface MetaAdTargeting {
   genders: string[]; 
   locations: string[]; 
   excluded_locations?: string[];
-  reach_estimate?: number; 
+  reach_estimate?: number | null; 
   breakdown?: MetaAdTargetingBreakdown[];
-}
-
-export interface MetaAdRegionTransparency {
-    region: string;
-    description: string;
-    ages: string[];
-    genders: string[];
-    locations: string[];
-    excluded_locations?: string[];
-    reach_estimate?: number;
-    breakdown?: MetaAdTargetingBreakdown[];
 }
 
 export interface MetaAdAdvertiserInfo {
@@ -80,20 +69,6 @@ export interface MetaAdAdvertiserInfo {
     instagram_followers?: number;
     about_text?: string;
     category?: string;
-}
-
-export interface MetaAdAboutDisclaimer {
-    text: string;
-    location?: string;
-    website_url?: string;
-    beneficiary?: string;
-    payer?: string;
-}
-
-export interface MetaAdBeneficiaryPayer {
-    text: string;
-    beneficiary: string;
-    payer: string;
 }
 
 export interface MetaAd {
@@ -109,23 +84,20 @@ export interface MetaAd {
   
   // Metrics
   likes: number;
-  impressions: number;
-  spend: number;
+  impressions: number | null;
+  spend: number | null;
 
   // Detailed Data
   targeting?: MetaAdTargeting;
-  transparency_regions?: MetaAdRegionTransparency[];
+  transparency_regions?: any[]; // Flexible array for raw data
   page_categories?: string[];
   disclaimer?: string;
   advertiser_info?: MetaAdAdvertiserInfo;
-  about_disclaimer?: MetaAdAboutDisclaimer;
-  beneficiary_payer?: MetaAdBeneficiaryPayer;
   
   avatar?: string | null;
 }
 
-// --- TIKTOK AD MODELS ---
-
+// TikTok Ad Models (unchanged)
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-import { X, Globe, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, FileText, User, Layers, ExternalLink, Play, Monitor, Hash, LayoutGrid, Eye } from 'lucide-react';
+import { X, Globe, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, FileText, User, Layers, ExternalLink, Play, Monitor, Hash, LayoutGrid, Eye, ThumbsUp } from 'lucide-react';
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -8,7 +8,7 @@ interface AdDetailModalProps {
   onSave?: (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => void;
   onRemove?: () => void;
   isSaved?: boolean;
-  group: any[]; // Akzeptiert ein Array von Ads für die Versionierung
+  group: any[]; 
   type: 'meta' | 'tiktok' | undefined;
 }
 
@@ -35,8 +35,8 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false }
     );
 };
 
-const formatReach = (num?: number) => {
-    if (!num) return 'N/A';
+const formatMetric = (num?: number) => {
+    if (!num && num !== 0) return 'N/A';
     return new Intl.NumberFormat('de-DE').format(num);
 };
 
@@ -63,17 +63,16 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     onRemove, 
     isSaved 
 }) => {
-    const [activeRegionIndex, setActiveRegionIndex] = useState(0);
-
     const { snapshot, targeting, advertiser_info, transparency_regions, about_disclaimer } = ad;
     const hasVideo = snapshot?.videos && snapshot.videos.length > 0;
     const mediaUrl = hasVideo ? snapshot?.videos[0].video_hd_url : (snapshot?.images.length > 0 ? snapshot?.images[0].resized_image_url : null);
     const platforms = ad.publisher_platform || [];
-    const regions = transparency_regions || [];
-    const hasMultipleRegions = regions.length > 0;
     
-    // Fallback: Wenn keine Transparenzregionen da sind, nutze targeting Objekt
-    const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
+    // Prüfen, ob wir Daten für die EU-Box haben
+    const hasTargetingData = (targeting?.locations && targeting.locations.length > 0) || 
+                             (targeting?.ages && targeting.ages.length > 0) ||
+                             targeting?.reach_estimate || 
+                             (targeting?.breakdown && targeting.breakdown.length > 0);
 
     return (
         <div className={isActiveView ? "flex flex-col md:flex-row h-full" : "hidden h-full"}>
@@ -112,43 +111,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </a>
                         </div>
                     </div>
-                    
-                    {/* Versions Switcher */}
-                    {group.length > 1 && (
-                        <div className="pt-4 border-t border-gray-200">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Andere Versionen dieser Anzeige</h4>
-                            <div className="space-y-3">
-                                {group.map((sibling) => {
-                                    const isActive = sibling.id === activeTabId;
-                                    const isOpened = openTabs.includes(sibling.id);
-                                    
-                                    return (
-                                        <div 
-                                            key={sibling.id} 
-                                            onClick={() => onOpenAd(sibling.id)}
-                                            className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center gap-3 group relative ${
-                                                isActive 
-                                                ? 'bg-brand-50 border-brand-300 ring-1 ring-brand-300' 
-                                                : isOpened
-                                                    ? 'bg-gray-50 border-gray-300' 
-                                                    : 'bg-white border-gray-200 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between mb-0.5">
-                                                    <span className={`text-xs font-bold ${isActive ? 'text-brand-700' : 'text-gray-700'}`}>ID: {sibling.id.split('_')[1] || sibling.id}</span>
-                                                    {isActive && <CheckCircle2 className="w-3.5 h-3.5 text-brand-600" />}
-                                                </div>
-                                                <div className="text-[10px] text-gray-500">
-                                                    Start: {new Date(sibling.start_date).toLocaleDateString()}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -156,7 +118,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Details zur Werbeanzeige</h2>
                 
-                {/* Info Cards */}
                 <div className="mb-6 space-y-4">
                     <div className="flex items-start gap-4">
                          <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
@@ -168,7 +129,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                  <span className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                                  {ad.isActive ? 'Aktiv' : 'Inaktiv'}
                              </p>
-                             <p className="text-xs text-gray-500 mt-1">Auslieferung gestartet: {new Date(ad.start_date).toLocaleDateString()}</p>
+                             <p className="text-xs text-gray-500 mt-1">Start: {new Date(ad.start_date).toLocaleDateString()}</p>
                          </div>
                     </div>
                     
@@ -189,97 +150,103 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                     </div>
                 </div>
 
-                {/* Detail Sections */}
-                <CollapsibleSection title="EU-Transparenz & Zielgruppe" icon={Globe} defaultOpen={true}>
-                     <div className="space-y-6">
-                         
-                         <div>
-                             <h4 className="text-sm font-bold text-gray-800 mb-4">Zielgruppe</h4>
-                             <div className="space-y-4">
-                                 <div className="p-4 border border-gray-200 rounded-lg">
-                                     <div className="flex items-center gap-2 mb-1">
-                                         <h5 className="text-sm font-bold text-gray-900">Standort</h5>
-                                     </div>
-                                     <div className="text-sm text-gray-600">
-                                         {(activeTargeting?.locations || []).length > 0 
-                                            ? activeTargeting?.locations.join(', ') 
-                                            : "Keine Standortdaten verfügbar"}
-                                     </div>
-                                 </div>
-
-                                 <div className="grid grid-cols-2 gap-4">
-                                     <div className="p-4 border border-gray-200 rounded-lg">
-                                         <div className="flex items-center gap-2 mb-1"><h5 className="text-sm font-bold text-gray-900">Alter</h5></div>
-                                         <div className="text-lg font-medium text-gray-900">{(activeTargeting?.ages || []).join(', ') || 'Alle'}</div>
-                                     </div>
-                                     <div className="p-4 border border-gray-200 rounded-lg">
-                                         <div className="flex items-center gap-2 mb-1"><h5 className="text-sm font-bold text-gray-900">Geschlecht</h5></div>
-                                         <div className="text-lg font-medium text-gray-900">{(activeTargeting?.genders || []).join(', ') || 'Alle'}</div>
-                                     </div>
-                                 </div>
+                {/* --- EU TRANSPARENCY SECTION --- */}
+                {hasTargetingData && (
+                    <CollapsibleSection title="EU-Transparenz & Zielgruppe" icon={Globe} defaultOpen={true}>
+                         <div className="space-y-6">
+                             {/* Reichweite Zahl */}
+                             <div className="p-4 border border-gray-200 rounded-lg bg-slate-50">
+                                 <div className="mb-1"><h5 className="text-sm font-bold text-gray-900">Geschätzte Reichweite</h5></div>
+                                 <div className="text-3xl font-bold text-gray-900">{formatMetric(targeting?.reach_estimate)}</div>
+                                 <div className="text-xs text-gray-500 mt-1">Nutzer in der EU, die diese Anzeige gesehen haben.</div>
                              </div>
-                         </div>
 
-                         <div className="h-px bg-gray-200"></div>
-
-                         <div>
-                             <h4 className="text-sm font-bold text-gray-800 mb-4">Geschätzte Reichweite</h4>
-                             <div className="p-4 border border-gray-200 rounded-lg mb-6 bg-slate-50">
-                                 <div className="text-3xl font-normal text-gray-900 mb-2">
-                                     {activeTargeting?.reach_estimate ? formatReach(activeTargeting.reach_estimate) : 'Nicht verfügbar'}
+                             {/* Breakdown Table */}
+                             {targeting?.breakdown && targeting.breakdown.length > 0 && (
+                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                     <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                                         <h5 className="text-xs font-bold text-gray-500 uppercase">Aufschlüsselung</h5>
+                                     </div>
+                                     <table className="w-full text-sm text-left">
+                                         <thead className="bg-white text-gray-500 font-medium border-b border-gray-100">
+                                             <tr>
+                                                 <th className="px-4 py-2">Standort</th>
+                                                 <th className="px-4 py-2">Alter</th>
+                                                 <th className="px-4 py-2">Geschlecht</th>
+                                                 <th className="px-4 py-2 text-right">Reichweite</th>
+                                             </tr>
+                                         </thead>
+                                         <tbody className="divide-y divide-gray-50">
+                                             {targeting.breakdown.map((item: any, idx: number) => (
+                                                 <tr key={idx} className="bg-white">
+                                                     <td className="px-4 py-2 text-gray-900">{item.location || 'N/A'}</td>
+                                                     <td className="px-4 py-2 text-gray-500">{item.age_range || 'Alle'}</td>
+                                                     <td className="px-4 py-2 text-gray-500">{item.gender || 'Alle'}</td>
+                                                     <td className="px-4 py-2 text-gray-900 text-right font-medium">{formatMetric(item.reach)}</td>
+                                                 </tr>
+                                             ))}
+                                         </tbody>
+                                     </table>
                                  </div>
-                                 <div className="text-xs text-gray-500">
-                                     Dies ist eine Schätzung der Konten, die diese Anzeige gesehen haben könnten (oft nur für EU verfügbar).
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
-                </CollapsibleSection>
+                             )}
 
-                <CollapsibleSection title="Infos zum Werbetreibenden" icon={ShieldCheck} defaultOpen={false}>
-                    <div className="flex items-center gap-4 mb-5">
-                         <div className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-xl border border-gray-100 flex-shrink-0 overflow-hidden">
+                             {/* Fallback Liste wenn keine Tabelle da ist */}
+                             {(!targeting?.breakdown || targeting.breakdown.length === 0) && (
+                                 <div className="space-y-3">
+                                     <div className="flex justify-between text-sm border-b border-gray-100 pb-2">
+                                         <span className="text-gray-500">Standorte</span>
+                                         <span className="font-medium text-gray-900 text-right max-w-[60%] truncate">
+                                             {targeting?.locations?.join(', ') || 'Nicht verfügbar'}
+                                         </span>
+                                     </div>
+                                     <div className="flex justify-between text-sm border-b border-gray-100 pb-2">
+                                         <span className="text-gray-500">Alter</span>
+                                         <span className="font-medium text-gray-900">{targeting?.ages?.join(', ') || 'Alle'}</span>
+                                     </div>
+                                     <div className="flex justify-between text-sm">
+                                         <span className="text-gray-500">Geschlecht</span>
+                                         <span className="font-medium text-gray-900">{targeting?.genders?.join(', ') || 'Alle'}</span>
+                                     </div>
+                                 </div>
+                             )}
+                         </div>
+                    </CollapsibleSection>
+                )}
+
+                <CollapsibleSection title="Infos zum Werbetreibenden" icon={ShieldCheck} defaultOpen={!hasTargetingData}>
+                    <div className="flex items-center gap-4 mb-4">
+                         <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center font-bold text-lg border border-gray-200 overflow-hidden">
                             {/* @ts-ignore */}
                             {ad.avatar ? <img src={ad.avatar} className="w-full h-full object-cover"/> : ad.page_name.charAt(0)}
                          </div>
-                         <div className="font-bold text-gray-900 text-lg">{ad.page_name}</div>
+                         <div className="font-bold text-gray-900 text-base">{ad.page_name}</div>
                     </div>
                     
-                    <div className="space-y-4 mb-5">
+                    <div className="space-y-2 text-sm">
                        {ad.disclaimer && (
-                           <div className="text-sm text-gray-600">
-                               <span className="font-bold">Disclaimer:</span> {ad.disclaimer}
+                           <div className="text-gray-600">
+                               <span className="font-semibold text-gray-900">Disclaimer:</span> {ad.disclaimer}
                            </div>
                        )}
-                       {ad.page_categories && (
-                           <div className="text-sm text-gray-600">
-                               <span className="font-bold">Kategorie:</span> {ad.page_categories.join(', ')}
+                       {ad.page_categories && ad.page_categories.length > 0 && (
+                           <div className="text-gray-600">
+                               <span className="font-semibold text-gray-900">Kategorie:</span> {ad.page_categories.join(', ')}
                            </div>
                        )}
+                       <div className="text-gray-500 text-xs mt-2">ID: {ad.id}</div>
                     </div>
                 </CollapsibleSection>
 
-                {/* Footer Actions */}
-                <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-gray-100">
-                    <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm">
-                        <Download className="w-4 h-4" />
-                        Medien herunterladen
-                    </button>
+                <div className="pt-6 mt-6 border-t border-gray-100">
                     {isSaved ? (
-                        <button 
-                            onClick={onRemove}
-                            className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
-                        >
-                            <X className="w-4 h-4" />
-                            Entfernen
+                        <button onClick={onRemove} className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-3 rounded-xl transition-colors">
+                            <X className="w-4 h-4" /> Entfernen
                         </button>
                     ) : (
-                        <button 
-                            onClick={() => onSave(ad)}
-                            className="flex-1 flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
-                        >
-                            <Save className="w-4 h-4" />
-                            Speichern
+                        // FIX: Hier übergeben wir jetzt nur noch EIN Argument (ad).
+                        // Das Eltern-Element hat bereits festgelegt, dass es sich um 'meta' handelt.
+                        <button onClick={() => onSave && onSave(ad)} className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl shadow-sm transition-all">
+                            <Save className="w-4 h-4" /> In Bibliothek speichern
                         </button>
                     )}
                 </div>
@@ -288,6 +255,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     );
 };
 
+// Main Modal Component
 const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, onRemove, isSaved, group, type }) => {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('overview');
@@ -341,6 +309,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
                 onClick={handleContentClick}
             >
+                {/* Header */}
                 <div className="flex flex-col border-b border-gray-200 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center justify-between px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -406,13 +375,12 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                     )}
                 </div>
 
+                {/* Content */}
                 <div className="flex-1 overflow-hidden bg-white relative">
                     <div className={activeTabId === 'overview' ? "h-full overflow-y-auto p-6 bg-gray-50/50" : "hidden h-full"}>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
                             {group.map((ad: MetaAd) => {
                                 const estReach = ad.targeting?.reach_estimate;
-                                const locs = ad.targeting?.locations || [];
-                                const ages = ad.targeting?.ages || [];
                                 
                                 return (
                                     <div 
@@ -450,7 +418,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                                 <div className="flex-1 flex flex-col justify-center gap-1">
                                                         <div className="text-[10px] text-gray-500 font-semibold uppercase">Reichweite</div>
                                                         <div className="text-xl font-bold text-gray-900 flex items-center gap-1">
-                                                            {estReach ? formatReach(estReach) : 'N/A'}
+                                                            {estReach ? formatMetric(estReach) : 'N/A'}
                                                             <Users className="w-3 h-3 text-gray-400" />
                                                         </div>
                                                 </div>
@@ -480,6 +448,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                 openTabs={openTabs}
                                 activeTabId={activeTabId}
                                 onOpenAd={handleOpenAd}
+                                // FIX: Hier wurde der Fehler behoben!
                                 onSave={(ad) => onSave && onSave(ad, 'meta')}
                                 onRemove={() => onRemove && onRemove()}
                                 isSaved={!!isSaved}
@@ -492,7 +461,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
     );
   }
 
-  // Fallback für TikTok (vereinfacht)
+  // Fallback for TikTok
   const currentAd = group.find(ad => ad.id === activeTabId) || group[0];
   if (!currentAd) return null;
   const tikTokAd = currentAd as TikTokAd;

@@ -12,7 +12,6 @@ class ApiService {
   private user: User | null = null;
   private token: string | null = null;
 
-  // Hilfsfunktion: Lokale Historie laden
   private _getLocalHistory(): SearchHistoryItem[] {
     try {
       const stored = localStorage.getItem('adspy_local_history');
@@ -22,10 +21,8 @@ class ApiService {
     }
   }
 
-  // Hilfsfunktion: Zur lokalen Historie hinzufügen
   private _saveLocalHistory(item: SearchHistoryItem) {
     const history = this._getLocalHistory();
-    // Neues Item vorne anfügen, Duplikate vermeiden (optional), Limit 50
     const updated = [item, ...history].slice(0, 50);
     localStorage.setItem('adspy_local_history', JSON.stringify(updated));
   }
@@ -73,21 +70,17 @@ class ApiService {
             profileData = await response.json();
         }
 
-        // Lade lokale Historie, da Backend sie evtl. nicht speichert
         const localHistory = this._getLocalHistory();
 
         this.user = { 
             ...MOCK_USER, 
             ...profileData, 
             id: storedId,
-            // Hier führen wir Backend-Daten (falls vorhanden) mit lokaler Historie zusammen
-            // Wenn profileData.searchHistory leer ist, nehmen wir localHistory
             searchHistory: localHistory.length > 0 ? localHistory : (MOCK_USER.searchHistory || [])
         };
         
         return this.user;
     } catch (e) {
-        // Fallback im Fehlerfall
         const localHistory = this._getLocalHistory();
         this.user = { 
             ...MOCK_USER, 
@@ -132,10 +125,10 @@ class ApiService {
         cleanedMetaAds = cleanAndTransformData(rowsToTransform);
     }
 
-    // --- CRITICAL UPDATE: Update Local State & Persistence ---
     if (this.user) {
         this.user.credits -= params.limit;
 
+        // FIX: Jetzt ist 'country' erlaubt, da wir types.ts aktualisiert haben
         const newHistoryItem: SearchHistoryItem = {
             id: Math.random().toString(36).substring(7),
             query: params.query,
@@ -146,10 +139,7 @@ class ApiService {
             country: cleanCountry
         };
 
-        // 1. Update In-Memory User
         this.user.searchHistory = [newHistoryItem, ...this.user.searchHistory];
-        
-        // 2. Persist to LocalStorage (damit es nach Refresh noch da ist)
         this._saveLocalHistory(newHistoryItem);
     }
 

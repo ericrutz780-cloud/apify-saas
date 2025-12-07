@@ -178,8 +178,6 @@ const Dashboard = ({ user }: { user: User }) => {
                     if (resultStr) {
                         const result = JSON.parse(resultStr);
                         // Prüfen ob Query und Plattform übereinstimmen
-                        // Wir prüfen auch, ob das Ergebnis "neu genug" ist (z.B. < 24h), wenn nötig. 
-                        // Hier erstmal strikter Match auf Parameter.
                         if (
                             result.params && 
                             result.params.query === item.query && 
@@ -200,10 +198,12 @@ const Dashboard = ({ user }: { user: User }) => {
             console.log(`Cache Hit for ${item.query}! Loading result ${cachedResultId}`);
             navigate(`/results/${cachedResultId}`);
         } else {
-            // Szenario B: Keine Daten -> Navigiere zur Suche, damit User neu suchen kann (verbraucht Credits)
-            // Wir füllen die Suche vor.
+            // Szenario B: Keine Daten -> Navigiere zur Suche
             console.log(`Cache Miss for ${item.query}. Redirecting to search.`);
-            navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}`);
+            
+            // FIX: Jetzt nutzen wir item.country sicher, da es in types.ts definiert ist
+            const countryParam = item.country ? `&country=${item.country}` : '';
+            navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}${countryParam}`);
         }
     };
 
@@ -678,7 +678,6 @@ const ResultsPage = ({ user, refreshUser, onOpenModal }: { user: User, refreshUs
             else if (formatFilter === 'image') ads = ads.filter((ad: any) => ad.media?.type === 'image' || ad.media?.type === 'carousel');
 
             ads.sort((a, b) => {
-                // Nur noch Newest und Reach für Meta (da Likes/Spend oft fehlen)
                 if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
                 if (sortBy === 'reach_views') return (b.impressions || 0) - (a.impressions || 0);
                 if (sortBy === 'spend_shares') return (b.spend || 0) - (a.spend || 0);

@@ -5,6 +5,7 @@ export interface SavedAd {
   savedAt: string;
 }
 
+// FIX: 'country' hinzugefügt, damit api.ts keinen Fehler mehr wirft
 export interface SearchHistoryItem {
   id: string;
   query: string;
@@ -12,6 +13,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
+  country?: string; // Optionaler Country Code (z.B. "US", "DE")
 }
 
 export interface User {
@@ -53,7 +55,7 @@ export interface MetaAdSnapshot {
   };
   images: Array<{ resized_image_url: string; original_image_url?: string }>;
   videos: Array<{ video_hd_url: string; video_sd_url?: string; video_preview_image_url?: string }>;
-  cards?: MetaAdCardItem[]; // NEU: Carousel Support
+  cards?: MetaAdCardItem[];
 }
 
 export interface MetaAd {

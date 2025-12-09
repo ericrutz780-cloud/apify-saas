@@ -17,7 +17,6 @@ export const cleanAndTransformData = (dbRows) => {
     let mediaUrl = null;
     let poster = null;
 
-    // Prüfe CamelCase und SnakeCase Pfade
     const videos = snap.videos || item.videos || [];
     const images = snap.images || item.images || [];
     const cards = snap.cards || item.cards || [];
@@ -56,40 +55,40 @@ export const cleanAndTransformData = (dbRows) => {
     // 5. Metriken & Targeting (Der entscheidende Fix!)
     const likes = item.likes || item.page_like_count || item.pageLikeCount || 0;
     
-    // --- REICHWEITEN LOGIK (Bulletproof) ---
-    // Schritt A: Standard-Felder
+    // --- REICHWEITEN LOGIK (KORRIGIERT) ---
+    // Prio 1: Backend hat es schon vorbereitet
     let reach = item.reachEstimate || item.reach_estimate || null;
     
-    // Schritt B: EU Transparency Daten (Das ist der Fix für deine JSON!)
-    if (!reach && item.eu_data && item.eu_data.eu_total_reach) {
-        reach = item.eu_data.eu_total_reach;
-    }
-    // Falls das Backend die Rohdaten unter 'eu_transparency' durchreicht
+    // Prio 2: EU Transparency Daten (Rohdaten vom Scraper)
+    // HIER WAR DER FEHLER: Das Feld heißt 'eu_total_reach', nicht 'reach_estimate'
     if (!reach && item.eu_transparency && item.eu_transparency.eu_total_reach) {
         reach = item.eu_transparency.eu_total_reach;
     }
-    // Falls es im alten 'euAudience' Format steckt
-    if (!reach && item.euAudience && item.euAudience.reachEstimate) {
-        reach = item.euAudience.reachEstimate;
+    
+    // Prio 3: aaa_info (anderes Format von Meta)
+    if (!reach && item.aaa_info && item.aaa_info.eu_total_reach) {
+        reach = item.aaa_info.eu_total_reach;
     }
 
-    // Schritt C: Fallback auf Impressions
+    // Prio 4: Backend mapped eu_transparency auf eu_data
+    if (!reach && item.eu_data && item.eu_data.eu_total_reach) {
+        reach = item.eu_data.eu_total_reach;
+    }
+
+    // Prio 5: Impressions Fallback
     if (!reach && (item.impressions_with_index || item.impressionsWithIndex)) {
         const impObj = item.impressions_with_index || item.impressionsWithIndex;
         const idx = impObj.impressions_index ?? impObj.impressionsIndex ?? -1;
         if (idx > -1) reach = idx;
     }
-    
-    // Sicherstellen, dass reach eine Zahl ist
-    reach = Number(reach) || 0;
 
+    reach = Number(reach) || 0;
     const spend = item.spend || item.spendEstimate || null;
 
     // EU & Targeting Daten sammeln
     const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
     const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
     const genders = item.gender ? [item.gender] : (item.genders || []);
-    
     const breakdown = item.demographic_distribution || item.demographicDistribution || item.eu_audience_data || item.euAudienceData || [];
 
     const targeting = {
@@ -115,9 +114,8 @@ export const cleanAndTransformData = (dbRows) => {
       snapshot: { ...snap, body: { text: safeBody } }, 
       
       likes,
-      // Wir setzen beides, damit alte und neue UI-Komponenten glücklich sind
-      impressions: reach, 
-      reach: reach, 
+      impressions: reach, // Für alte Komponenten
+      reach: reach,       // Für neue Komponenten (AdDetailModal)
       
       spend,
       targeting,

@@ -57,6 +57,12 @@ export const cleanAndTransformData = (dbRows) => {
     // WICHTIG: Wir prüfen zuerst reachEstimate (Doku), dann reach_estimate (JSON)
     let reach = item.reachEstimate || item.reach_estimate || null;
     
+    // NEU: Fallback für EU Transparency Daten (eu_transparency.eu_total_reach)
+    // Dies greift die versteckte Reichweite für EU-Ads ab
+    if (!reach && item.eu_transparency && item.eu_transparency.eu_total_reach) {
+        reach = item.eu_transparency.eu_total_reach;
+    }
+
     // Fallback: Manchmal steckt es in eu_data oder euAudience
     if (!reach && item.eu_data && item.eu_data.reach_estimate) {
         reach = item.eu_data.reach_estimate;
@@ -105,12 +111,14 @@ export const cleanAndTransformData = (dbRows) => {
       snapshot: { ...snap, body: { text: safeBody } }, 
       
       likes,
+      // Hier weisen wir 'reach' zu, das jetzt auch eu_total_reach enthalten kann
       impressions: reach, 
+      reach: reach, // Explizites Feld für die UI Komponenten
       spend,
 
       targeting,
       // Mapping für EU Daten falls vorhanden
-      transparency_regions: item.eu_data || item.euData || [], 
+      transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
       
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,

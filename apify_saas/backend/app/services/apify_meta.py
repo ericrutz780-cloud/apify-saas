@@ -89,7 +89,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
         loop = asyncio.get_event_loop()
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=1024,
+            memory_mbytes=512,
             timeout_secs=240
         ))
         

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3 } from 'lucide-react';
+import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -16,18 +16,17 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const hasVideo = snapshot.videos && snapshot.videos.length > 0;
   const mediaUrl = hasVideo ? snapshot.videos[0].video_hd_url : (snapshot.images.length > 0 ? snapshot.images[0].resized_image_url : null);
   
-  // NEU: Reichweite für das Badge holen
+  // METRIKEN
   const reachCount = ad.reach || 0;
+  const score = ad.efficiency_score || 0;
 
   const handleCardClick = (e: React.MouseEvent) => {
-      // Prevent click if clicking on CTA button or other interactive elements
       if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
           return;
       }
       onClick(ad);
   };
 
-  // Helper to safely extract hostname without crashing on invalid URLs
   const getDisplayDomain = (url: string) => {
     try {
         if (!url || url === '#' || url.trim() === '') return '';
@@ -38,7 +37,6 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
     }
   };
 
-  // Process text to separate content and hashtags
   const { content, hashtags } = useMemo(() => {
       const text = snapshot.body.text || '';
       const words = text.replace(/\n/g, ' ').split(/\s+/);
@@ -66,12 +64,11 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const hasMessenger = platforms.includes('messenger');
   const hasAudience = platforms.includes('audience_network');
 
-  const formattedDate = new Date(ad.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formattedDate = new Date(ad.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // Targeting Summary
   const countries = targeting?.locations || [];
   const displayLocation = countries.length > 0 
-    ? (countries.length > 2 ? `${countries.length} countries` : countries.join(', ')) 
+    ? (countries.length > 2 ? `${countries.length} Standorte` : countries.join(', ')) 
     : null;
 
   return (
@@ -79,7 +76,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
         onClick={handleCardClick}
         className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md hover:border-brand-200 transition-all duration-300 cursor-pointer group"
     >
-      {/* 1. TOP HEADER: Status, Date, Platforms */}
+      {/* 1. TOP HEADER */}
       <div className="px-3 py-2.5 bg-white border-b border-gray-100 flex items-center justify-between text-[11px]">
           <div className="flex items-center gap-2.5">
               <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border shadow-sm transition-colors ${ad.isActive ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
@@ -97,39 +94,42 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
           </div>
       </div>
 
-      {/* 2. IDENTITY ROW: Avatar, Name, ID + Version Badge */}
+      {/* 2. IDENTITY ROW */}
       <div className="p-3 flex items-center gap-3 relative">
-          <div className="w-9 h-9 flex-shrink-0 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center font-bold text-brand-600 text-sm">
-                {ad.page_name.charAt(0)}
+          <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center">
+                {/* @ts-ignore */}
+                {ad.avatar ? <img src={ad.avatar} alt="" className="w-full h-full object-cover" /> : <div className="font-bold text-gray-400 text-sm">{ad.page_name.charAt(0)}</div>}
           </div>
           <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-semibold text-gray-900 truncate leading-tight hover:underline">
                     {ad.page_name}
                 </h3>
                 
-                {/* HIER IST DIE ÄNDERUNG: Reichweite als Badge anzeigen */}
+                {/* HIER IST DIE NEUE ANZEIGE: Viral Score & Reach */}
                 <div className="flex items-center gap-2 mt-0.5">
+                    {score > 1 ? (
+                        <div className="flex items-center gap-1 text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title={`Viralitäts-Faktor: ${score}`}>
+                            <Zap className="w-3 h-3 fill-amber-500 text-amber-600" />
+                            <span>{score}</span>
+                        </div>
+                    ) : null}
+                    
                     {reachCount > 0 ? (
-                        <div className="flex items-center gap-1 text-[10px] text-indigo-600 font-medium bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                        <div className="flex items-center gap-1 text-[10px] text-indigo-600 font-medium bg-indigo-50 px-1.5 py-0.5 rounded">
                             <BarChart3 className="w-3 h-3" />
-                            <span>{new Intl.NumberFormat('en-US').format(reachCount)} Reach</span>
+                            <span>{new Intl.NumberFormat('en-US', { notation: "compact" }).format(reachCount)}</span>
                         </div>
                     ) : (
-                        <div className="text-[10px] text-gray-400 font-medium">
-                            ID: {ad.id.split('_')[1] || '12345'}
-                        </div>
+                        <div className="text-[10px] text-gray-400 font-medium">ID: {ad.id.split('_')[1] || ad.id}</div>
                     )}
                 </div>
           </div>
           
           {versionCount > 1 && (
-              <div 
-                className="ml-auto flex-shrink-0 cursor-help"
-                title={`There are ${versionCount} versions of this ad`}
-              >
+              <div className="ml-auto flex-shrink-0">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100 hover:bg-blue-100 transition-colors shadow-sm whitespace-nowrap">
                       <Layers className="w-3 h-3" />
-                      {versionCount} versions
+                      {versionCount}
                   </span>
               </div>
           )}

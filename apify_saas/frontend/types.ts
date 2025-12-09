@@ -45,6 +45,19 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
+// NEU: Datenstrukturen für Demografie
+export interface DemographicBreakdown {
+  age_range: string;
+  male: number | null;
+  female: number | null;
+  unknown: number | null;
+}
+
+export interface CountryBreakdown {
+  country: string;
+  age_gender_breakdowns: DemographicBreakdown[];
+}
+
 export interface MetaAdTargetingBreakdown {
     location: string;
     age_range: string;
@@ -98,9 +111,12 @@ export interface MetaAd {
   // Metrics
   likes: number;
   impressions: number | null;
-  // NEU: Damit die Card darauf zugreifen darf
   reach?: number | null; 
   spend: number | null;
+
+  // NEU: Viralitäts-Metriken
+  efficiency_score?: number | null;
+  page_size?: number | null;
 
   // Detailed Data
   targeting?: MetaAdTargeting;
@@ -111,14 +127,14 @@ export interface MetaAd {
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
   
-  // NEU: Für Demografie-Daten
-  demographics?: any[];
+  // NEU: Demografie Rohdaten
+  demographics?: CountryBreakdown[];
   target_locations?: any[];
-
+  
   avatar?: string | null;
 }
 
-// TikTok Ad Models
+// TikTok Ad Models (unverändert)
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;

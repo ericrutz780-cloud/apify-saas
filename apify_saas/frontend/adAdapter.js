@@ -2,7 +2,6 @@ export const cleanAndTransformData = (dbRows) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // Supabase Wrapper Handling
     const item = row.data || row;
     if (!item) return null;
 
@@ -12,7 +11,7 @@ export const cleanAndTransformData = (dbRows) => {
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
 
-    // 2. Media Extraction (Video > Carousel > Image)
+    // 2. Media Extraction
     let mediaType = 'image';
     let mediaUrl = null;
     let poster = null;
@@ -40,7 +39,7 @@ export const cleanAndTransformData = (dbRows) => {
     const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || item.pageProfilePictureUrl || null;
 
-    // 4. Datum
+    // 4. Date
     let isoDate = new Date().toISOString();
     const rawDate = item.start_date || item.startDate;
     if (rawDate) {
@@ -50,26 +49,32 @@ export const cleanAndTransformData = (dbRows) => {
         } catch (e) {}
     }
 
-    // 5. METRIKEN & REACH
-    // Wir nehmen die Reichweite, die das Backend extrahiert hat
+    // 5. METRIKEN & SCORE
     const reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
     const likes = item.likes || item.page_like_count || 0;
+    
+    // NEU: Viralitäts-Daten vom Backend
+    const efficiencyScore = item.efficiency_score || 0;
+    const pageSize = item.page_size || 0;
 
-    // 6. TARGETING (Brücke zum Original AdDetailModal)
-    // Wir füllen 'targeting.reach_estimate', damit das Original-Modal es anzeigt!
+    const spend = item.spend || item.spendEstimate || null;
     const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
     const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
     const genders = item.gender ? [item.gender] : (item.genders || []);
     
-    // Wir versuchen, aus den Rohdaten Breakdown-Infos zu bauen, falls das Backend sie liefert
-    const breakdown = item.demographics || item.demographic_distribution || [];
+    // Fallback für alte Daten
+    const breakdown = item.demographic_distribution || item.demographicDistribution || item.eu_audience_data || item.euAudienceData || [];
 
     const targeting = {
         ages,
         genders,
         locations, 
-        reach_estimate: Number(reach), // Das ist der Schlüssel!
+        reach_estimate: Number(reach),
         breakdown
+    };
+
+    const advertiser_info = {
+        category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
     };
 
     return {
@@ -82,19 +87,23 @@ export const cleanAndTransformData = (dbRows) => {
       ad_library_url: item.ad_library_url || item.adLibraryUrl || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
       
-      // UI Felder
       likes,
+      impressions: Number(reach), 
       reach: Number(reach), 
-      impressions: Number(reach),
-      spend: item.spend,
-
-      targeting, // Hier stecken die Daten für das Detail-Modal
+      spend,
       
-      // Rich Data
+      // NEU: Neue Felder durchreichen
+      efficiency_score: Number(efficiencyScore),
+      page_size: Number(pageSize),
       demographics: item.demographics || [],
+      target_locations: item.target_locations || [],
+
+      targeting,
+      transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
       
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
+      advertiser_info,
       avatar: safeAvatar
     };
   });

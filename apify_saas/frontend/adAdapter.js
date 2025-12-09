@@ -61,7 +61,6 @@ export const cleanAndTransformData = (dbRows) => {
     let reach = item.reachEstimate || item.reach_estimate || null;
     
     // Schritt B: EU Transparency Daten (Das ist der Fix für deine JSON!)
-    // Dein Python-Backend mapped 'eu_transparency' oft auf 'eu_data'.
     if (!reach && item.eu_data && item.eu_data.eu_total_reach) {
         reach = item.eu_data.eu_total_reach;
     }
@@ -74,7 +73,7 @@ export const cleanAndTransformData = (dbRows) => {
         reach = item.euAudience.reachEstimate;
     }
 
-    // Schritt C: Fallback auf Impressions, wenn gar keine Reichweite da ist
+    // Schritt C: Fallback auf Impressions
     if (!reach && (item.impressions_with_index || item.impressionsWithIndex)) {
         const impObj = item.impressions_with_index || item.impressionsWithIndex;
         const idx = impObj.impressions_index ?? impObj.impressionsIndex ?? -1;
@@ -91,7 +90,6 @@ export const cleanAndTransformData = (dbRows) => {
     const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
     const genders = item.gender ? [item.gender] : (item.genders || []);
     
-    // Breakdown Daten (Doku sagt oft euAudience, JSON sagt demographic_distribution)
     const breakdown = item.demographic_distribution || item.demographicDistribution || item.eu_audience_data || item.euAudienceData || [];
 
     const targeting = {
@@ -122,9 +120,8 @@ export const cleanAndTransformData = (dbRows) => {
       reach: reach, 
       
       spend,
-
       targeting,
-      // Mapping für EU Daten falls vorhanden - wir geben alles weiter, was wir finden
+      // Mapping für EU Daten falls vorhanden
       transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
       
       page_categories: snap.page_categories || item.categories || [],

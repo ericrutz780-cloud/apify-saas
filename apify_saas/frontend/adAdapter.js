@@ -51,31 +51,31 @@ export const cleanAndTransformData = (dbRows) => {
         } catch (e) {}
     }
 
-    // 5. Metrics & Targeting (ULTIMATE REACH FIX)
+    // 5. Metrics & Targeting (FINALER FIX)
     const likes = item.likes || item.page_like_count || item.pageLikeCount || 0;
     
     // Wir suchen die Reichweite überall
     let reach = 0;
 
-    // Option 1: Direktes Feld vom Backend
-    if (item.reach_estimate) reach = item.reach_estimate;
-    else if (item.reachEstimate) reach = item.reachEstimate;
+    // Option 1: Direktes Feld (Standard)
+    if (item.reachEstimate) reach = item.reachEstimate;
+    else if (item.reach_estimate) reach = item.reach_estimate;
     
-    // Option 2: EU Transparency (direkt)
+    // Option 2: EU Transparency (Raw Data)
     else if (item.eu_transparency?.eu_total_reach) reach = item.eu_transparency.eu_total_reach;
     
-    // Option 3: EU Data (Backend Mapping)
+    // Option 3: EU Data (Backend Mapping) - HIER HAT ES GEFEHLT!
     else if (item.eu_data?.eu_total_reach) reach = item.eu_data.eu_total_reach;
-    else if (item.eu_data?.eu_transparency?.eu_total_reach) reach = item.eu_data.eu_transparency.eu_total_reach;
+    else if (item.eu_data?.reach_estimate) reach = item.eu_data.reach_estimate;
 
-    // Option 4: Transparency by Location (Raw Scrape)
-    else if (item.transparency_by_location?.eu_transparency?.eu_total_reach) {
-        reach = item.transparency_by_location.eu_transparency.eu_total_reach;
-    }
-
-    // Option 5: AAA Info (Raw Scrape)
+    // Option 4: AAA Info (Raw Scrape)
     else if (item.aaa_info?.eu_total_reach) {
         reach = item.aaa_info.eu_total_reach;
+    }
+    
+    // Option 5: Transparency by Location (Raw Scrape)
+    else if (item.transparency_by_location?.eu_transparency?.eu_total_reach) {
+        reach = item.transparency_by_location.eu_transparency.eu_total_reach;
     }
 
     // Option 6: Impressions Fallback
@@ -104,11 +104,6 @@ export const cleanAndTransformData = (dbRows) => {
         category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
     };
 
-    // WICHTIG: Wir geben eu_data korrekt weiter, egal wo es herkommt
-    const transparencyRegions = item.eu_data || item.euData || item.eu_transparency || 
-                              item.transparency_by_location?.eu_transparency || 
-                              item.aaa_info || [];
-
     return {
       id: item.ad_archive_id || item.adArchiveID || item.id || Math.random().toString(),
       isActive: item.is_active !== false && item.isActive !== false,
@@ -118,12 +113,14 @@ export const cleanAndTransformData = (dbRows) => {
       page_profile_uri: item.page_profile_uri || item.pageProfileUri || "#",
       ad_library_url: item.ad_library_url || item.adLibraryUrl || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
+      
       likes,
       impressions: reach, 
-      reach: reach, 
+      reach: reach, // Das Feld, auf das AdDetailModal wartet
       spend,
+
       targeting,
-      transparency_regions: transparencyRegions, 
+      transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
       advertiser_info,

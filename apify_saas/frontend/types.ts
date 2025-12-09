@@ -5,6 +5,7 @@ export interface SavedAd {
   savedAt: string;
 }
 
+// FIX: 'country' hinzugefügt, damit api.ts keinen Fehler mehr wirft
 export interface SearchHistoryItem {
   id: string;
   query: string;
@@ -12,7 +13,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string; 
+  country?: string; // Optionaler Country Code (z.B. "US", "DE")
 }
 
 export interface User {
@@ -98,11 +99,11 @@ export interface MetaAd {
   // Metrics
   likes: number;
   impressions: number | null;
-  // HIER HINZUGEFÜGT: Damit das Modal es offiziell nutzen darf
+  // HIER IST DAS NEUE FELD:
   reach?: number | null; 
   spend: number | null;
 
-  // Detailed Data
+  // Detailed Data (Optional machen, um Build-Fehler zu vermeiden)
   targeting?: MetaAdTargeting;
   transparency_regions?: any[]; 
   page_categories?: string[];

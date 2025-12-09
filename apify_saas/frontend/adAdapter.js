@@ -2,6 +2,7 @@ export const cleanAndTransformData = (dbRows) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
+    // Supabase Wrapper Handling
     const item = row.data || row;
     if (!item) return null;
 
@@ -11,7 +12,7 @@ export const cleanAndTransformData = (dbRows) => {
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
 
-    // 2. Media
+    // 2. Media Extraction (Original Logic)
     let mediaType = 'image';
     let mediaUrl = null;
     let poster = null;
@@ -34,9 +35,7 @@ export const cleanAndTransformData = (dbRows) => {
 
     // 3. Text
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
-    if (safeBody) {
-        safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
-    }
+    if (safeBody) safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
 
     const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || item.pageProfilePictureUrl || null;
@@ -51,58 +50,10 @@ export const cleanAndTransformData = (dbRows) => {
         } catch (e) {}
     }
 
-    // 5. Metrics & Targeting (FINALER FIX)
-    const likes = item.likes || item.page_like_count || item.pageLikeCount || 0;
-    
-    // Wir suchen die Reichweite überall
-    let reach = 0;
-
-    // Option 1: Direktes Feld (Standard)
-    if (item.reachEstimate) reach = item.reachEstimate;
-    else if (item.reach_estimate) reach = item.reach_estimate;
-    
-    // Option 2: EU Transparency (Raw Data)
-    else if (item.eu_transparency?.eu_total_reach) reach = item.eu_transparency.eu_total_reach;
-    
-    // Option 3: EU Data (Backend Mapping) - HIER HAT ES GEFEHLT!
-    else if (item.eu_data?.eu_total_reach) reach = item.eu_data.eu_total_reach;
-    else if (item.eu_data?.reach_estimate) reach = item.eu_data.reach_estimate;
-
-    // Option 4: AAA Info (Raw Scrape)
-    else if (item.aaa_info?.eu_total_reach) {
-        reach = item.aaa_info.eu_total_reach;
-    }
-    
-    // Option 5: Transparency by Location (Raw Scrape)
-    else if (item.transparency_by_location?.eu_transparency?.eu_total_reach) {
-        reach = item.transparency_by_location.eu_transparency.eu_total_reach;
-    }
-
-    // Option 6: Impressions Fallback
-    else if (item.impressions_with_index) {
-         const idx = item.impressions_with_index.impressions_index || -1;
-         if (idx > -1) reach = idx;
-    }
-
-    reach = Number(reach) || 0;
-
-    const spend = item.spend || item.spendEstimate || null;
-    const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
-    const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
-    const genders = item.gender ? [item.gender] : (item.genders || []);
-    const breakdown = item.demographic_distribution || item.demographicDistribution || item.eu_audience_data || item.euAudienceData || [];
-
-    const targeting = {
-        ages,
-        genders,
-        locations, 
-        reach_estimate: reach,
-        breakdown
-    };
-
-    const advertiser_info = {
-        category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
-    };
+    // 5. METRIKEN & REACH (HIER KOMMT DEIN BACKEND-WERT REIN)
+    // Da das Backend jetzt "reach_estimate" garantiert liefert, nehmen wir es direkt.
+    const reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
+    const likes = item.likes || item.page_like_count || 0;
 
     return {
       id: item.ad_archive_id || item.adArchiveID || item.id || Math.random().toString(),
@@ -110,20 +61,21 @@ export const cleanAndTransformData = (dbRows) => {
       publisher_platform: platforms,
       start_date: isoDate,
       page_name: pageName,
-      page_profile_uri: item.page_profile_uri || item.pageProfileUri || "#",
-      ad_library_url: item.ad_library_url || item.adLibraryUrl || "#",
+      page_profile_uri: item.page_profile_uri || "#",
+      ad_library_url: item.ad_library_url || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
       
+      // Metriken für UI
       likes,
-      impressions: reach, 
-      reach: reach, // Das Feld, auf das AdDetailModal wartet
-      spend,
+      reach: Number(reach), 
+      impressions: Number(reach),
+      spend: item.spend,
 
-      targeting,
-      transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
+      // Rich Data vom Backend durchreichen
+      demographics: item.demographics || [],
+      target_locations: item.target_locations || [],
+      
       page_categories: snap.page_categories || item.categories || [],
-      disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
-      advertiser_info,
       avatar: safeAvatar
     };
   });

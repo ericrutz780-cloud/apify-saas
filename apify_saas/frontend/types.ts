@@ -1,3 +1,5 @@
+// types.ts (Original Structure + New Fields)
+
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -5,7 +7,6 @@ export interface SavedAd {
   savedAt: string;
 }
 
-// FIX: 'country' hinzugefügt, damit api.ts keinen Fehler mehr wirft
 export interface SearchHistoryItem {
   id: string;
   query: string;
@@ -13,7 +14,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string; // Optionaler Country Code (z.B. "US", "DE")
+  country?: string;
 }
 
 export interface User {
@@ -34,7 +35,8 @@ export interface SearchParams {
   country?: string;
 }
 
-// Meta Ad Models
+// --- META ADS ---
+
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
@@ -46,43 +48,17 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
-export interface MetaAdTargetingBreakdown {
-    location: string;
-    age_range: string;
-    gender: string;
-    reach: number;
+// NEU: Für Demografie-Daten
+export interface DemographicBreakdown {
+  age_range: string;
+  male: number | null;
+  female: number | null;
+  unknown: number | null;
 }
 
-export interface MetaAdTargeting {
-  ages: string[]; 
-  genders: string[]; 
-  locations: string[]; 
-  excluded_locations?: string[];
-  reach_estimate?: number | null; 
-  breakdown?: MetaAdTargetingBreakdown[];
-}
-
-export interface MetaAdAdvertiserInfo {
-    facebook_handle?: string;
-    facebook_followers?: number;
-    instagram_handle?: string;
-    instagram_followers?: number;
-    about_text?: string;
-    category?: string;
-}
-
-export interface MetaAdAboutDisclaimer {
-    text: string;
-    location?: string;
-    website_url?: string;
-    beneficiary?: string;
-    payer?: string;
-}
-
-export interface MetaAdBeneficiaryPayer {
-    text: string;
-    beneficiary: string;
-    payer: string;
+export interface CountryBreakdown {
+  country: string;
+  age_gender_breakdowns: DemographicBreakdown[];
 }
 
 export interface MetaAd {
@@ -99,36 +75,31 @@ export interface MetaAd {
   // Metrics
   likes: number;
   impressions: number | null;
-  // HIER IST DAS NEUE FELD:
-  reach?: number | null; 
+  reach?: number | null; // Das wichtige Feld!
   spend: number | null;
 
-  // Detailed Data (Optional machen, um Build-Fehler zu vermeiden)
-  targeting?: MetaAdTargeting;
-  transparency_regions?: any[]; 
+  // Rich Data
+  demographics?: CountryBreakdown[]; // Rohdaten aus dem Backend
+  target_locations?: any[];
+  
+  // Legacy / UI Helpers
   page_categories?: string[];
   disclaimer?: string;
-  advertiser_info?: MetaAdAdvertiserInfo;
-  about_disclaimer?: MetaAdAboutDisclaimer;
-  beneficiary_payer?: MetaAdBeneficiaryPayer;
-  
   avatar?: string | null;
 }
 
-// TikTok Ad Models
+// ... (TikTok Interfaces bleiben wie im Original) ...
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;
   height: number;
   width: number;
 }
-
 export interface TikTokAuthorMeta {
   nickName: string;
   profileUrl: string;
   avatarUrl: string;
 }
-
 export interface TikTokAd {
   id: string;
   webVideoUrl: string;
@@ -142,7 +113,6 @@ export interface TikTokAd {
   videoMeta: TikTokVideoMeta;
   authorMeta: TikTokAuthorMeta;
 }
-
 export interface SearchResult {
   id: string;
   params: SearchParams;

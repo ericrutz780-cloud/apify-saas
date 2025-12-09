@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from services import apify_meta, apify_tiktok
+# HIER WAR DER FEHLER: Es muss "app.services" heißen
+from app.services import apify_meta, apify_tiktok
 
 router = APIRouter()
 

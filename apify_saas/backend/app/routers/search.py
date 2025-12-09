@@ -1,13 +1,14 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-# HIER WAR DER FEHLER: Es muss "app.services" heißen
+# Korrekter Import (das war der ursprüngliche Fix für den Crash)
 from app.services import apify_meta, apify_tiktok
 
 router = APIRouter()
 
+# --- HIER IST DER FIX FÜR DEN 422 FEHLER ---
 class SearchRequest(BaseModel):
-    query: str
+    keyword: str  # Umbenannt von 'query' zu 'keyword', damit es zum Frontend passt!
     platform: str
     limit: int = 20
     country: str = "US" # Default
@@ -17,16 +18,17 @@ async def search_ads(
     request: SearchRequest,
     user_id: str = Query(..., description="User ID")
 ):
-    print(f"API ROUTER: Received search for '{request.query}' in country '{request.country}'")
+    # Logge, was wirklich ankommt (zur Sicherheit)
+    print(f"API ROUTER: Received search for '{request.keyword}' in country '{request.country}'")
 
     results = []
 
     try:
         # Meta Search
         if request.platform == "meta" or request.platform == "both":
-            # Wir rufen den Service auf und übergeben explizit request.country
+            # Wir rufen den Service auf
             meta_results = await apify_meta.search_meta_ads(
-                query=request.query,
+                query=request.keyword, # Hier nutzen wir jetzt .keyword
                 country=request.country, 
                 limit=request.limit
             )
@@ -39,7 +41,7 @@ async def search_ads(
         # TikTok Search
         if request.platform == "tiktok" or request.platform == "both":
             tiktok_results = await apify_tiktok.search_tiktok_ads(
-                query=request.query, 
+                query=request.keyword, # Hier nutzen wir jetzt .keyword
                 limit=request.limit
             )
             results.extend(tiktok_results)
@@ -49,7 +51,7 @@ async def search_ads(
             "data": results,
             "meta": {
                 "count": len(results),
-                "query": request.query,
+                "query": request.keyword,
                 "country": request.country
             }
         }

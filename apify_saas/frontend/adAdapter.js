@@ -2,17 +2,16 @@ export const cleanAndTransformData = (dbRows) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // API liefert Daten manchmal direkt, manchmal in 'data' wrapper
     const item = row.data || row;
     if (!item) return null;
 
     const snap = item.snapshot || {};
 
-    // 1. Plattform Case-Insensitive machen
+    // 1. Platform
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
 
-    // 2. Media Extraction (Video > Carousel > Image)
+    // 2. Media
     let mediaType = 'image';
     let mediaUrl = null;
     let poster = null;
@@ -33,7 +32,7 @@ export const cleanAndTransformData = (dbRows) => {
       mediaUrl = images[0].original_image_url || images[0].resized_image_url || images[0].originalImageUrl;
     }
 
-    // 3. Text Cleaning
+    // 3. Text
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
     if (safeBody) {
         safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
@@ -42,7 +41,7 @@ export const cleanAndTransformData = (dbRows) => {
     const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || item.pageProfilePictureUrl || null;
 
-    // 4. Datum
+    // 4. Date
     let isoDate = new Date().toISOString();
     const rawDate = item.start_date || item.startDate;
     if (rawDate) {
@@ -52,40 +51,42 @@ export const cleanAndTransformData = (dbRows) => {
         } catch (e) {}
     }
 
-    // 5. Metriken & Targeting (Der entscheidende Fix!)
+    // 5. Metrics & Targeting (ULTIMATE REACH FIX)
     const likes = item.likes || item.page_like_count || item.pageLikeCount || 0;
     
-    // --- REICHWEITEN LOGIK (KORRIGIERT) ---
-    // Prio 1: Backend hat es schon vorbereitet
-    let reach = item.reachEstimate || item.reach_estimate || null;
+    // Wir suchen die Reichweite überall
+    let reach = 0;
+
+    // Option 1: Direktes Feld vom Backend
+    if (item.reach_estimate) reach = item.reach_estimate;
+    else if (item.reachEstimate) reach = item.reachEstimate;
     
-    // Prio 2: EU Transparency Daten (Rohdaten vom Scraper)
-    // HIER WAR DER FEHLER: Das Feld heißt 'eu_total_reach', nicht 'reach_estimate'
-    if (!reach && item.eu_transparency && item.eu_transparency.eu_total_reach) {
-        reach = item.eu_transparency.eu_total_reach;
+    // Option 2: EU Transparency (direkt)
+    else if (item.eu_transparency?.eu_total_reach) reach = item.eu_transparency.eu_total_reach;
+    
+    // Option 3: EU Data (Backend Mapping)
+    else if (item.eu_data?.eu_total_reach) reach = item.eu_data.eu_total_reach;
+    else if (item.eu_data?.eu_transparency?.eu_total_reach) reach = item.eu_data.eu_transparency.eu_total_reach;
+
+    // Option 4: Transparency by Location (Raw Scrape)
+    else if (item.transparency_by_location?.eu_transparency?.eu_total_reach) {
+        reach = item.transparency_by_location.eu_transparency.eu_total_reach;
     }
-    
-    // Prio 3: aaa_info (anderes Format von Meta)
-    if (!reach && item.aaa_info && item.aaa_info.eu_total_reach) {
+
+    // Option 5: AAA Info (Raw Scrape)
+    else if (item.aaa_info?.eu_total_reach) {
         reach = item.aaa_info.eu_total_reach;
     }
 
-    // Prio 4: Backend mapped eu_transparency auf eu_data
-    if (!reach && item.eu_data && item.eu_data.eu_total_reach) {
-        reach = item.eu_data.eu_total_reach;
-    }
-
-    // Prio 5: Impressions Fallback
-    if (!reach && (item.impressions_with_index || item.impressionsWithIndex)) {
-        const impObj = item.impressions_with_index || item.impressionsWithIndex;
-        const idx = impObj.impressions_index ?? impObj.impressionsIndex ?? -1;
-        if (idx > -1) reach = idx;
+    // Option 6: Impressions Fallback
+    else if (item.impressions_with_index) {
+         const idx = item.impressions_with_index.impressions_index || -1;
+         if (idx > -1) reach = idx;
     }
 
     reach = Number(reach) || 0;
-    const spend = item.spend || item.spendEstimate || null;
 
-    // EU & Targeting Daten sammeln
+    const spend = item.spend || item.spendEstimate || null;
     const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
     const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
     const genders = item.gender ? [item.gender] : (item.genders || []);
@@ -103,6 +104,11 @@ export const cleanAndTransformData = (dbRows) => {
         category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
     };
 
+    // WICHTIG: Wir geben eu_data korrekt weiter, egal wo es herkommt
+    const transparencyRegions = item.eu_data || item.euData || item.eu_transparency || 
+                              item.transparency_by_location?.eu_transparency || 
+                              item.aaa_info || [];
+
     return {
       id: item.ad_archive_id || item.adArchiveID || item.id || Math.random().toString(),
       isActive: item.is_active !== false && item.isActive !== false,
@@ -112,16 +118,12 @@ export const cleanAndTransformData = (dbRows) => {
       page_profile_uri: item.page_profile_uri || item.pageProfileUri || "#",
       ad_library_url: item.ad_library_url || item.adLibraryUrl || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
-      
       likes,
-      impressions: reach, // Für alte Komponenten
-      reach: reach,       // Für neue Komponenten (AdDetailModal)
-      
+      impressions: reach, 
+      reach: reach, 
       spend,
       targeting,
-      // Mapping für EU Daten falls vorhanden
-      transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
-      
+      transparency_regions: transparencyRegions, 
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
       advertiser_info,

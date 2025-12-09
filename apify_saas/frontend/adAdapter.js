@@ -36,7 +36,9 @@ export const cleanAndTransformData = (dbRows) => {
 
     // 3. Text Cleaning
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
-    safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
+    if (safeBody) {
+        safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
+    }
 
     const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || item.pageProfilePictureUrl || null;
@@ -54,29 +56,33 @@ export const cleanAndTransformData = (dbRows) => {
     // 5. Metriken & Targeting (Der entscheidende Fix!)
     const likes = item.likes || item.page_like_count || item.pageLikeCount || 0;
     
-    // WICHTIG: Wir prüfen zuerst reachEstimate (Doku), dann reach_estimate (JSON)
+    // --- REICHWEITEN LOGIK (Bulletproof) ---
+    // Schritt A: Standard-Felder
     let reach = item.reachEstimate || item.reach_estimate || null;
     
-    // NEU: Fallback für EU Transparency Daten (eu_transparency.eu_total_reach)
-    // Dies greift die versteckte Reichweite für EU-Ads ab
+    // Schritt B: EU Transparency Daten (Das ist der Fix für deine JSON!)
+    // Dein Python-Backend mapped 'eu_transparency' oft auf 'eu_data'.
+    if (!reach && item.eu_data && item.eu_data.eu_total_reach) {
+        reach = item.eu_data.eu_total_reach;
+    }
+    // Falls das Backend die Rohdaten unter 'eu_transparency' durchreicht
     if (!reach && item.eu_transparency && item.eu_transparency.eu_total_reach) {
         reach = item.eu_transparency.eu_total_reach;
     }
-
-    // Fallback: Manchmal steckt es in eu_data oder euAudience
-    if (!reach && item.eu_data && item.eu_data.reach_estimate) {
-        reach = item.eu_data.reach_estimate;
-    }
+    // Falls es im alten 'euAudience' Format steckt
     if (!reach && item.euAudience && item.euAudience.reachEstimate) {
         reach = item.euAudience.reachEstimate;
     }
 
-    // Fallback: Impressions
+    // Schritt C: Fallback auf Impressions, wenn gar keine Reichweite da ist
     if (!reach && (item.impressions_with_index || item.impressionsWithIndex)) {
         const impObj = item.impressions_with_index || item.impressionsWithIndex;
         const idx = impObj.impressions_index ?? impObj.impressionsIndex ?? -1;
         if (idx > -1) reach = idx;
     }
+    
+    // Sicherstellen, dass reach eine Zahl ist
+    reach = Number(reach) || 0;
 
     const spend = item.spend || item.spendEstimate || null;
 
@@ -111,13 +117,14 @@ export const cleanAndTransformData = (dbRows) => {
       snapshot: { ...snap, body: { text: safeBody } }, 
       
       likes,
-      // Hier weisen wir 'reach' zu, das jetzt auch eu_total_reach enthalten kann
+      // Wir setzen beides, damit alte und neue UI-Komponenten glücklich sind
       impressions: reach, 
-      reach: reach, // Explizites Feld für die UI Komponenten
+      reach: reach, 
+      
       spend,
 
       targeting,
-      // Mapping für EU Daten falls vorhanden
+      // Mapping für EU Daten falls vorhanden - wir geben alles weiter, was wir finden
       transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
       
       page_categories: snap.page_categories || item.categories || [],

@@ -1,11 +1,12 @@
 from apify_client import ApifyClient
-from core.config import settings
+from app.core.config import settings
 import uuid
 import datetime
 import asyncio
 
-# Client initialisieren (einmalig)
-client = ApifyClient(settings.APIFY_API_TOKEN)
+# WICHTIG: Prüfe, ob es in deiner settings-Datei APIFY_TOKEN oder APIFY_API_TOKEN heißt.
+# Basierend auf deiner config.py sollte es APIFY_TOKEN sein.
+client = ApifyClient(settings.APIFY_TOKEN)
 
 def normalize_meta_ad(item):
     """
@@ -92,25 +93,31 @@ def normalize_meta_ad(item):
 async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
     """
     Führt eine Suche auf der Meta Ad Library via Apify aus.
+    MODIFIZIERT: 'Winning Product' Logik -> Nur Ads, die älter als 30 Tage sind.
     """
     # Country Mapping
     target_country = country.upper() if country and country != "ALL" else "US"
     
-    start_date_min = (datetime.datetime.now() - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+    # --- NEUE LOGIK: 30-Tage-Filter ---
+    # Wir berechnen das Datum vor genau 30 Tagen.
+    # Alles was VOR diesem Datum gestartet ist und HEUTE noch aktiv ist, ist ein "Long-Runner" (Winner).
+    cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     
     # URL Konstruktion
+    # ÄNDERUNG: start_date[max] statt start_date[min]
+    # start_date[max] = "Zeige mir Ads, deren Startdatum KLEINER/ÄLTER ist als cutoff_date"
     search_url = (
         f"https://www.facebook.com/ads/library/"
         f"?active_status=active&ad_type=all&country={target_country}&q={query}"
         f"&sort_data[direction]=desc&sort_data[mode]=relevancy_monthly_grouped"
-        f"&start_date[min]={start_date_min}" 
+        f"&start_date[max]={cutoff_date}" 
         f"&media_type=all"
     )
 
     # Actor Input Konfiguration
-    # Wir übergeben 'count' UND 'maxItems' zur Sicherheit
     run_input = {
         "startUrls": [{"url": search_url}],
+        # Wir setzen count etwas höher als limit, da wir evtl. Duplikate filtern
         "count": limit, 
         "maxItems": limit, 
         
@@ -125,7 +132,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
         "countryCode": target_country
     }
 
-    print(f"DEBUG: Starting Apify Scrape for '{query}' in '{target_country}'")
+    print(f"DEBUG: Scrape 'Winning Products' (>30 Tage aktiv) für '{query}' in '{target_country}'")
 
     try:
         # Führe den Call in einem Threadpool aus, um Async nicht zu blockieren
@@ -158,7 +165,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
                     if len(normalized_results) >= limit:
                         break
             
-            print(f"✅ {len(normalized_results)} Ads verarbeitet.")
+            print(f"✅ {len(normalized_results)} Winning-Ads verarbeitet.")
             return normalized_results
             
     except Exception as e:

@@ -74,7 +74,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
 
     # Actor Input
     run_input = {
-        "startUrls": [{"url": search_url}],
+        "urls": [{"url": search_url}],
         "count": limit, 
         "maxItems": limit, 
         "pageTimeoutSecs": 60,

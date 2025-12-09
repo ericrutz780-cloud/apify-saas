@@ -46,7 +46,7 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
-// NEU: Interfaces für Demografie-Daten
+// NEU: Interfaces für Demografie-Daten (für das neue Feature)
 export interface DemographicBreakdown {
   age_range: string;
   male: number | null;
@@ -67,12 +67,23 @@ export interface MetaAdTargetingBreakdown {
 }
 
 export interface MetaAdTargeting {
-  ages: string[]; 
-  genders: string[]; 
-  locations: string[]; 
+  ages: string[]; // e.g. "18-65+"
+  genders: string[]; // e.g. "All", "Female"
+  locations: string[]; // e.g. "Germany", "France", "US"
   excluded_locations?: string[];
-  reach_estimate?: number | null; 
+  reach_estimate?: number | null; // EU Reach estimate
   breakdown?: MetaAdTargetingBreakdown[];
+}
+
+export interface MetaAdRegionTransparency {
+    region: string; // e.g. "European Union", "United Kingdom"
+    description: string;
+    ages: string[];
+    genders: string[];
+    locations: string[];
+    excluded_locations?: string[];
+    reach_estimate?: number;
+    breakdown?: MetaAdTargetingBreakdown[];
 }
 
 export interface MetaAdAdvertiserInfo {
@@ -109,21 +120,21 @@ export interface MetaAd {
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
   
-  // Metrics
+  // Metrics (Original + Neue Felder)
   likes: number;
   impressions: number | null;
   spend: number | null;
-
-  // NEU: Fehlende Felder für Viralitäts-Score und Reichweite ergänzt
+  
+  // NEU: Damit die Viralitäts-Logik funktioniert
   reach?: number | null; 
   efficiency_score?: number | null;
   page_size?: number | null;
 
-  // Detailed Data
+  // New Targeting Data
   targeting?: MetaAdTargeting;
-  transparency_regions?: any[]; 
-  page_categories?: string[];
-  disclaimer?: string;
+  transparency_regions?: any[]; // War vorher MetaAdRegionTransparency[], any[] ist flexibler für Rohdaten
+  page_categories?: string[]; // e.g. "Clothing Store"
+  disclaimer?: string; // "Paid for by..."
   advertiser_info?: MetaAdAdvertiserInfo;
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
@@ -155,7 +166,7 @@ export interface TikTokAd {
   webVideoUrl: string;
   text: string;
   createTimeISO: string;
-  diggCount: number; 
+  diggCount: number; // Likes
   shareCount: number;
   playCount: number;
   commentCount: number;

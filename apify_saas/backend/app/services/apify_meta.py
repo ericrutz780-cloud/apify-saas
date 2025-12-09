@@ -2,12 +2,11 @@ from apify_client import ApifyClient
 from app.core.config import settings
 import datetime
 import asyncio
-import math  # WICHTIG: Für die logarithmische Berechnung
+import math 
 
 client = ApifyClient(settings.APIFY_TOKEN)
 
 def get_nested_value(ad, path_list):
-    """Hilfsfunktion für tiefe JSON-Pfade."""
     current = ad
     for key in path_list:
         if isinstance(current, dict):
@@ -17,59 +16,46 @@ def get_nested_value(ad, path_list):
     return current
 
 def get_page_size(item):
-    """
-    Ermittelt die 'Macht' des Profils (Likes + Follower).
-    """
+    """Ermittelt die Macht des Profils (Likes + Follower)."""
     likes = item.get("likes", 0) or item.get("page_like_count", 0)
-    
     advertiser = item.get("advertiser", {})
     page_info = advertiser.get("ad_library_page_info", {}).get("page_info", {})
     
-    if not likes:
-        likes = page_info.get("likes", 0) or 0
-        
+    if not likes: likes = page_info.get("likes", 0) or 0
     ig_followers = page_info.get("ig_followers", 0) or 0
-    if not likes:
-        likes = item.get("snapshot", {}).get("page_like_count", 0) or 0
+    if not likes: likes = item.get("snapshot", {}).get("page_like_count", 0) or 0
 
     return (int(likes or 0) + int(ig_followers or 0))
 
 def get_demographics(ad):
-    """Extrahiert die Demografie-Daten."""
+    """Extrahiert Demografie."""
     breakdown = get_nested_value(ad, ['aaa_info', 'age_country_gender_reach_breakdown'])
-    if not breakdown:
-        breakdown = get_nested_value(ad, ['transparency_by_location', 'eu_transparency', 'age_country_gender_reach_breakdown'])
-    if not breakdown:
-        breakdown = get_nested_value(ad, ['eu_data', 'age_country_gender_reach_breakdown'])
+    if not breakdown: breakdown = get_nested_value(ad, ['transparency_by_location', 'eu_transparency', 'age_country_gender_reach_breakdown'])
+    if not breakdown: breakdown = get_nested_value(ad, ['eu_data', 'age_country_gender_reach_breakdown'])
     return breakdown or []
 
+def get_advertiser_info(item):
+    """Extrahiert Infos über den Advertiser für das Modal."""
+    page_info = item.get("advertiser", {}).get("ad_library_page_info", {}).get("page_info", {})
+    about_text = item.get("advertiser", {}).get("page", {}).get("about", {}).get("text")
+    
+    return {
+        "facebook_handle": page_info.get("page_alias"),
+        "facebook_followers": page_info.get("likes"),
+        "instagram_handle": page_info.get("ig_username"),
+        "instagram_followers": page_info.get("ig_followers"),
+        "about_text": about_text,
+        "category": page_info.get("page_category")
+    }
+
 def calculate_viral_score(reach, audience_size):
-    """
-    MODELL 1: Logarithmische Skalierung
-    Formel: Score = 15 * log2(1 + (Reach / Audience))
-    
-    - Floor für Audience: 1000 (vermeidet Verzerrung bei Mini-Seiten)
-    - Ergebnis: 0 bis ca. 100
-    """
-    # 1. Floor: Wir nehmen an, jede Seite hat min. 1000 "Reach-Potenzial"
+    """Logarithmischer Viral Score."""
     safe_audience = max(audience_size, 1000)
-    
-    # 2. Ratio
     ratio = reach / safe_audience
-    
-    # 3. Logarithmische Dämpfung
-    # log2(1 + ratio) -> Bei Ratio 1 (Reach=Follower) ist log2(2)=1 -> Score 15
-    # Bei Ratio 3 (Reach=3xFollower) ist log2(4)=2 -> Score 30
-    # Bei Ratio 100 (Mega Viral) -> Score ~100
     score = 15 * math.log2(1 + ratio)
-    
-    # 4. Deckeln bei 100 und runden
     return round(min(score, 100), 1)
 
 def normalize_meta_ad(item):
-    """
-    Normalisiert Daten und berechnet den 'Smart Viral Score'.
-    """
     if not item: return None
     if "error" in item or "errorMessage" in item: return None
 
@@ -78,7 +64,6 @@ def normalize_meta_ad(item):
     if not raw_id or str(raw_id) == "nan": return None 
     safe_id = str(raw_id)
 
-    # Medien
     images = raw_snapshot.get("images") or []
     videos = raw_snapshot.get("videos") or []
     cards = raw_snapshot.get("cards") or []
@@ -88,7 +73,6 @@ def normalize_meta_ad(item):
             img_url = first_card.get("resized_image_url") or first_card.get("original_image_url")
             if img_url: images.append({"resized_image_url": img_url})
 
-    # Text
     body_text = raw_snapshot.get("body", {}).get("text")
     if not body_text and cards and isinstance(cards[0], dict):
         body_text = cards[0].get("body")
@@ -108,13 +92,12 @@ def normalize_meta_ad(item):
     
     reach = int(reach) if reach else 0
 
-    # --- VIRAL SCORE ---
+    # --- SCORE & META ---
     page_size = get_page_size(item)
     efficiency_score = calculate_viral_score(reach, page_size)
-
-    # --- DEMOGRAFIE ---
     demographics_raw = get_demographics(item)
     target_locations = get_nested_value(item, ['aaa_info', 'location_audience']) or []
+    advertiser_info = get_advertiser_info(item) # NEU: Advertiser Info extrahieren
 
     return {
         "id": safe_id,
@@ -125,16 +108,15 @@ def normalize_meta_ad(item):
         "ad_library_url": item.get("ad_library_url", "#"),
         "likes": item.get("likes", 0) or item.get("page_like_count", 0),
         
-        # Metriken & Score
         "reach_estimate": reach, 
         "impressions": reach,
         "spend": item.get("spend", 0),
         "page_size": page_size,
-        "efficiency_score": efficiency_score, # <--- Der normalisierte Score (0-100)
+        "efficiency_score": efficiency_score,
         
-        # Rich Data
         "demographics": demographics_raw,
         "target_locations": target_locations,
+        "advertiser_info": advertiser_info, # NEU: Wird jetzt gespeichert
         
         "snapshot": {
             "cta_text": raw_snapshot.get("cta_text", "Learn More"),
@@ -201,13 +183,11 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
                 except Exception:
                     continue
             
-            # Sortierung nach dem neuen 'Smart Score'
-            print("DEBUG: Sortiere nach Viral Score (Logarithmisch)...")
+            print("DEBUG: Sortiere nach Viral Score...")
             normalized_results.sort(
                 key=lambda x: (x.get('efficiency_score') or 0), 
                 reverse=True
             )
-
             return normalized_results[:limit]
             
     except Exception as e:

@@ -9,7 +9,9 @@ client = ApifyClient(settings.APIFY_TOKEN)
 def normalize_meta_ad(item):
     """
     Normalisiert Daten aus Apify für das Frontend.
-    UPDATE: Holt jetzt auch Reichweite aus 'eu_transparency' (wichtig für DE!).
+    Strikte Validierung: Wenn kein Bild/Video da ist -> None.
+    Hält sich an den Code aus deinem Prompt, ergänzt um CamelCase Checks
+    und EU-Reichweiten-Logik.
     """
     if not item: return None
     
@@ -47,7 +49,7 @@ def normalize_meta_ad(item):
     if not body_text and cards:
         body_text = cards[0].get("body")
 
-    # Metrics Parsing
+    # Metrics Parsing (Sicherstellen, dass Zahlen auch Zahlen sind)
     likes = item.get("likes", 0) or item.get("page_like_count", 0)
     
     # --- REICHWEITEN LOGIK UPDATE ---
@@ -75,11 +77,11 @@ def normalize_meta_ad(item):
         "page_profile_uri": item.get("page_profile_uri", "#"),
         "ad_library_url": item.get("ad_library_url", "#"),
         "likes": likes,
-        "reach_estimate": reach,  # Jetzt korrekt mit EU-Daten befüllt
+        "reach_estimate": reach, 
         "impressions": reach,
         "spend": item.get("spend", 0),
         
-        # EU Daten weiterleiten für das Detail-Modal
+        # Leite EU-Daten weiter (prüfe auch CamelCase euAudienceData)
         "targeted_or_reached_countries": item.get("targeted_or_reached_countries", []),
         "eu_data": item.get("eu_data") or item.get("euAudienceData") or item.get("eu_transparency"), 
         
@@ -109,7 +111,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
     cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     
     # URL Konstruktion
-    # start_date[max] = "Startdatum darf maximal der 09.11. sein" (also älter)
+    # start_date[max] = "Startdatum darf maximal der cutoff_date sein" (also älter)
     search_url = (
         f"https://www.facebook.com/ads/library/"
         f"?active_status=active&ad_type=all&country={target_country}&q={query}"
@@ -144,11 +146,11 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
     print(f"DEBUG: Scrape (Buffer={scrape_limit}) 'Winning Products' (< {cutoff_date}) für '{query}'")
 
     try:
-        # Führe den Call in einem Threadpool aus
+        # Führe den Call in einem Threadpool aus, um Async nicht zu blockieren
         loop = asyncio.get_event_loop()
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=512, # 512MB reicht für 1 URL (spart Geld/Fehler)
+            memory_mbytes=512, # 512MB reicht für 1 URL (spart Geld & vermeidet Fehler)
             timeout_secs=240
         ))
         
@@ -168,14 +170,14 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
 
             for item in dataset_items:
                 norm = normalize_meta_ad(item)
-                if norm: 
-                    # Duplikate vermeiden
+                # WICHTIG: Nur hinzufügen, wenn norm NICHT None ist!
+                if norm and isinstance(norm, dict): 
                     if norm['id'] in seen_ids: continue
                     seen_ids.add(norm['id'])
                     normalized_results.append(norm)
             
             # B. SORTIEREN NACH REICHWEITE (High to Low)
-            # Wir nutzen den neuen, korrekten 'reach_estimate' Wert
+            # Wir nutzen 'reach_estimate' (oder 0 falls leer)
             print(f"DEBUG: Sortiere {len(normalized_results)} Ads nach Reichweite...")
             
             normalized_results.sort(

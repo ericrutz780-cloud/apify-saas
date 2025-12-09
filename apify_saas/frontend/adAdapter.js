@@ -53,17 +53,16 @@ export const cleanAndTransformData = (dbRows) => {
     const reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
     const likes = item.likes || item.page_like_count || 0;
     
-    // NEU: Viralitäts-Daten vom Backend
-    const efficiencyScore = item.efficiency_score || 0;
+    // NEU: Normalisierter Score vom Backend
+    const efficiency = item.efficiency_score || 0;
     const pageSize = item.page_size || 0;
 
-    const spend = item.spend || item.spendEstimate || null;
+    // 6. TARGETING
     const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
     const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
     const genders = item.gender ? [item.gender] : (item.genders || []);
     
-    // Fallback für alte Daten
-    const breakdown = item.demographic_distribution || item.demographicDistribution || item.eu_audience_data || item.euAudienceData || [];
+    const breakdown = item.demographics || item.demographic_distribution || [];
 
     const targeting = {
         ages,
@@ -71,10 +70,6 @@ export const cleanAndTransformData = (dbRows) => {
         locations, 
         reach_estimate: Number(reach),
         breakdown
-    };
-
-    const advertiser_info = {
-        category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
     };
 
     return {
@@ -88,18 +83,17 @@ export const cleanAndTransformData = (dbRows) => {
       snapshot: { ...snap, body: { text: safeBody } }, 
       
       likes,
-      impressions: Number(reach), 
       reach: Number(reach), 
-      spend,
+      impressions: Number(reach),
+      spend: item.spend,
       
-      // NEU: Neue Felder durchreichen
-      efficiency_score: Number(efficiencyScore),
+      // NEU: Felder
+      efficiency_score: Number(efficiency),
       page_size: Number(pageSize),
-      demographics: item.demographics || [],
-      target_locations: item.target_locations || [],
 
       targeting,
-      transparency_regions: item.eu_data || item.euData || item.eu_transparency || [], 
+      demographics: item.demographics || [],
+      target_locations: item.target_locations || [],
       
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,

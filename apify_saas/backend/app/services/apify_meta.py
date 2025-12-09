@@ -2,8 +2,8 @@ from apify_client import ApifyClient
 from app.core.config import settings
 import datetime
 import asyncio
+import math  # WICHTIG: Für die logarithmische Berechnung
 
-# Client initialisieren
 client = ApifyClient(settings.APIFY_TOKEN)
 
 def get_nested_value(ad, path_list):
@@ -16,6 +16,24 @@ def get_nested_value(ad, path_list):
             return None
     return current
 
+def get_page_size(item):
+    """
+    Ermittelt die 'Macht' des Profils (Likes + Follower).
+    """
+    likes = item.get("likes", 0) or item.get("page_like_count", 0)
+    
+    advertiser = item.get("advertiser", {})
+    page_info = advertiser.get("ad_library_page_info", {}).get("page_info", {})
+    
+    if not likes:
+        likes = page_info.get("likes", 0) or 0
+        
+    ig_followers = page_info.get("ig_followers", 0) or 0
+    if not likes:
+        likes = item.get("snapshot", {}).get("page_like_count", 0) or 0
+
+    return (int(likes or 0) + int(ig_followers or 0))
+
 def get_demographics(ad):
     """Extrahiert die Demografie-Daten."""
     breakdown = get_nested_value(ad, ['aaa_info', 'age_country_gender_reach_breakdown'])
@@ -25,53 +43,32 @@ def get_demographics(ad):
         breakdown = get_nested_value(ad, ['eu_data', 'age_country_gender_reach_breakdown'])
     return breakdown or []
 
-def get_effective_audience_size(item):
+def calculate_viral_score(reach, audience_size):
     """
-    Berechnet die relevante Follower-Basis basierend auf den Plattformen,
-    auf denen die Ad tatsächlich lief.
+    MODELL 1: Logarithmische Skalierung
+    Formel: Score = 15 * log2(1 + (Reach / Audience))
+    
+    - Floor für Audience: 1000 (vermeidet Verzerrung bei Mini-Seiten)
+    - Ergebnis: 0 bis ca. 100
     """
-    # 1. Plattformen prüfen
-    platforms = item.get("publisher_platform") or []
-    if isinstance(platforms, str): platforms = [platforms] # Falls String statt Liste
+    # 1. Floor: Wir nehmen an, jede Seite hat min. 1000 "Reach-Potenzial"
+    safe_audience = max(audience_size, 1000)
     
-    is_on_fb = "FACEBOOK" in platforms
-    is_on_ig = "INSTAGRAM" in platforms
+    # 2. Ratio
+    ratio = reach / safe_audience
     
-    # 2. Follower Zahlen holen (Tief graben)
-    # FB Likes
-    fb_likes = item.get("likes", 0) or item.get("page_like_count", 0)
-    if not fb_likes:
-        fb_likes = get_nested_value(item, ['advertiser', 'ad_library_page_info', 'page_info', 'likes'])
-    if not fb_likes:
-        fb_likes = get_nested_value(item, ['snapshot', 'page_like_count'])
+    # 3. Logarithmische Dämpfung
+    # log2(1 + ratio) -> Bei Ratio 1 (Reach=Follower) ist log2(2)=1 -> Score 15
+    # Bei Ratio 3 (Reach=3xFollower) ist log2(4)=2 -> Score 30
+    # Bei Ratio 100 (Mega Viral) -> Score ~100
+    score = 15 * math.log2(1 + ratio)
     
-    # IG Followers
-    ig_followers = get_nested_value(item, ['advertiser', 'ad_library_page_info', 'page_info', 'ig_followers'])
-    
-    # Sicherstellen, dass es Integers sind
-    fb_likes = int(fb_likes) if fb_likes else 0
-    ig_followers = int(ig_followers) if ig_followers else 0
-
-    # 3. Intelligente Basis berechnen
-    audience_base = 0
-    
-    if is_on_fb and not is_on_ig:
-        # Nur FB -> Nur FB Likes zählen
-        audience_base = fb_likes
-    elif is_on_ig and not is_on_fb:
-        # Nur IG -> Nur IG Follower zählen
-        audience_base = ig_followers
-    else:
-        # Beides oder Unbekannt -> Summe bilden
-        audience_base = fb_likes + ig_followers
-
-    # Fallback: Wenn wir keine Follower-Daten haben, nehmen wir an, es ist eine kleine Seite (1000)
-    # Damit der Score nicht durch 0 teilt und explodiert.
-    return max(audience_base, 1000)
+    # 4. Deckeln bei 100 und runden
+    return round(min(score, 100), 1)
 
 def normalize_meta_ad(item):
     """
-    Normalisiert Daten und berechnet den 'Efficiency Score' (Viralität).
+    Normalisiert Daten und berechnet den 'Smart Viral Score'.
     """
     if not item: return None
     if "error" in item or "errorMessage" in item: return None
@@ -96,7 +93,7 @@ def normalize_meta_ad(item):
     if not body_text and cards and isinstance(cards[0], dict):
         body_text = cards[0].get("body")
 
-    # --- 1. REICHWEITE (Umfassende Suche) ---
+    # --- REICHWEITE ---
     reach = 0
     reach = get_nested_value(item, ['eu_transparency', 'eu_total_reach'])
     if not reach: reach = get_nested_value(item, ['aaa_info', 'eu_total_reach'])
@@ -111,17 +108,13 @@ def normalize_meta_ad(item):
     
     reach = int(reach) if reach else 0
 
-    # --- 2. VIRAL SCORE BERECHNUNG (SMART) ---
-    # Wir vergleichen Reichweite mit der *relevanten* Audience
-    audience_base = get_effective_audience_size(item)
-    
-    # Formel: (Reach / Audience) * 100
-    # Beispiel: 10.000 Reach / 1.000 Follower = Score 1000 (Sehr Viral)
-    # Beispiel: 10.000 Reach / 1.000.000 Follower = Score 1 (Schwach)
-    efficiency_score = round((reach / audience_base) * 100, 2)
+    # --- VIRAL SCORE ---
+    page_size = get_page_size(item)
+    efficiency_score = calculate_viral_score(reach, page_size)
 
-    # Metadaten für das Frontend
-    likes = item.get("likes", 0) or item.get("page_like_count", 0)
+    # --- DEMOGRAFIE ---
+    demographics_raw = get_demographics(item)
+    target_locations = get_nested_value(item, ['aaa_info', 'location_audience']) or []
 
     return {
         "id": safe_id,
@@ -130,18 +123,18 @@ def normalize_meta_ad(item):
         "page_name": item.get("page_name", "Unknown Page"),
         "page_profile_uri": item.get("page_profile_uri", "#"),
         "ad_library_url": item.get("ad_library_url", "#"),
-        "likes": likes,
+        "likes": item.get("likes", 0) or item.get("page_like_count", 0),
         
-        # Die wichtigen Metriken
+        # Metriken & Score
         "reach_estimate": reach, 
         "impressions": reach,
         "spend": item.get("spend", 0),
-        "page_size": audience_base,     # Die Basis für den Score
-        "efficiency_score": efficiency_score, # Der neue Smart Score
+        "page_size": page_size,
+        "efficiency_score": efficiency_score, # <--- Der normalisierte Score (0-100)
         
         # Rich Data
-        "demographics": get_demographics(item),
-        "target_locations": get_nested_value(item, ['aaa_info', 'location_audience']) or [],
+        "demographics": demographics_raw,
+        "target_locations": target_locations,
         
         "snapshot": {
             "cta_text": raw_snapshot.get("cta_text", "Learn More"),
@@ -208,8 +201,8 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
                 except Exception:
                     continue
             
-            # SORTIERUNG: Wir nutzen jetzt den neuen, smarten "efficiency_score"
-            print("DEBUG: Sortiere nach Smart Viral Score...")
+            # Sortierung nach dem neuen 'Smart Score'
+            print("DEBUG: Sortiere nach Viral Score (Logarithmisch)...")
             normalized_results.sort(
                 key=lambda x: (x.get('efficiency_score') or 0), 
                 reverse=True

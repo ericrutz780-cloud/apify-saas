@@ -12,7 +12,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string;
+  country?: string; // Optionaler Country Code (z.B. "US", "DE")
 }
 
 export interface User {
@@ -33,7 +33,8 @@ export interface SearchParams {
   country?: string;
 }
 
-// Meta Ad Models
+// --- META AD MODELS ---
+
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
@@ -45,7 +46,7 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
-// NEU: Datenstrukturen für Demografie
+// NEU: Interfaces für Demografie-Daten
 export interface DemographicBreakdown {
   age_range: string;
   male: number | null;
@@ -111,10 +112,10 @@ export interface MetaAd {
   // Metrics
   likes: number;
   impressions: number | null;
-  reach?: number | null; 
   spend: number | null;
 
-  // NEU: Viralitäts-Metriken
+  // NEU: Fehlende Felder für Viralitäts-Score und Reichweite ergänzt
+  reach?: number | null; 
   efficiency_score?: number | null;
   page_size?: number | null;
 
@@ -127,14 +128,15 @@ export interface MetaAd {
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
   
-  // NEU: Demografie Rohdaten
+  // NEU: Rich Data vom Backend
   demographics?: CountryBreakdown[];
   target_locations?: any[];
-  
+
   avatar?: string | null;
 }
 
-// TikTok Ad Models (unverändert)
+// --- TIKTOK AD MODELS ---
+
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;

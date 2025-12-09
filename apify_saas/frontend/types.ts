@@ -1,5 +1,3 @@
-// types.ts (Original Structure + New Fields)
-
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -35,8 +33,7 @@ export interface SearchParams {
   country?: string;
 }
 
-// --- META ADS ---
-
+// Meta Ad Models
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
@@ -48,17 +45,43 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
-// NEU: Für Demografie-Daten
-export interface DemographicBreakdown {
-  age_range: string;
-  male: number | null;
-  female: number | null;
-  unknown: number | null;
+export interface MetaAdTargetingBreakdown {
+    location: string;
+    age_range: string;
+    gender: string;
+    reach: number;
 }
 
-export interface CountryBreakdown {
-  country: string;
-  age_gender_breakdowns: DemographicBreakdown[];
+export interface MetaAdTargeting {
+  ages: string[]; 
+  genders: string[]; 
+  locations: string[]; 
+  excluded_locations?: string[];
+  reach_estimate?: number | null; 
+  breakdown?: MetaAdTargetingBreakdown[];
+}
+
+export interface MetaAdAdvertiserInfo {
+    facebook_handle?: string;
+    facebook_followers?: number;
+    instagram_handle?: string;
+    instagram_followers?: number;
+    about_text?: string;
+    category?: string;
+}
+
+export interface MetaAdAboutDisclaimer {
+    text: string;
+    location?: string;
+    website_url?: string;
+    beneficiary?: string;
+    payer?: string;
+}
+
+export interface MetaAdBeneficiaryPayer {
+    text: string;
+    beneficiary: string;
+    payer: string;
 }
 
 export interface MetaAd {
@@ -75,31 +98,40 @@ export interface MetaAd {
   // Metrics
   likes: number;
   impressions: number | null;
-  reach?: number | null; // Das wichtige Feld!
+  // NEU: Damit die Card darauf zugreifen darf
+  reach?: number | null; 
   spend: number | null;
 
-  // Rich Data
-  demographics?: CountryBreakdown[]; // Rohdaten aus dem Backend
-  target_locations?: any[];
-  
-  // Legacy / UI Helpers
+  // Detailed Data
+  targeting?: MetaAdTargeting;
+  transparency_regions?: any[]; 
   page_categories?: string[];
   disclaimer?: string;
+  advertiser_info?: MetaAdAdvertiserInfo;
+  about_disclaimer?: MetaAdAboutDisclaimer;
+  beneficiary_payer?: MetaAdBeneficiaryPayer;
+  
+  // NEU: Für Demografie-Daten
+  demographics?: any[];
+  target_locations?: any[];
+
   avatar?: string | null;
 }
 
-// ... (TikTok Interfaces bleiben wie im Original) ...
+// TikTok Ad Models
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;
   height: number;
   width: number;
 }
+
 export interface TikTokAuthorMeta {
   nickName: string;
   profileUrl: string;
   avatarUrl: string;
 }
+
 export interface TikTokAd {
   id: string;
   webVideoUrl: string;
@@ -113,6 +145,7 @@ export interface TikTokAd {
   videoMeta: TikTokVideoMeta;
   authorMeta: TikTokAuthorMeta;
 }
+
 export interface SearchResult {
   id: string;
   params: SearchParams;

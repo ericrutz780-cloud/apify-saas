@@ -7,9 +7,11 @@ export const cleanAndTransformData = (dbRows) => {
 
     const snap = item.snapshot || {};
 
+    // 1. Platform
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
 
+    // 2. Media Extraction
     let mediaType = 'image';
     let mediaUrl = null;
     let poster = null;
@@ -30,12 +32,14 @@ export const cleanAndTransformData = (dbRows) => {
       mediaUrl = images[0].original_image_url || images[0].resized_image_url || images[0].originalImageUrl;
     }
 
+    // 3. Text
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
     if (safeBody) safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
 
     const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || item.pageProfilePictureUrl || null;
 
+    // 4. Date
     let isoDate = new Date().toISOString();
     const rawDate = item.start_date || item.startDate;
     if (rawDate) {
@@ -45,27 +49,33 @@ export const cleanAndTransformData = (dbRows) => {
         } catch (e) {}
     }
 
-    // --- SCORING & FALLBACK ---
+    // 5. METRIKEN & INTELLIGENTE REPARATUR
     let reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
     let likes = item.likes || item.page_like_count || 0;
+    let pageSize = item.page_size || (likes > 0 ? likes : 1000);
+    
     let efficiencyScore = item.efficiency_score;
     let viralFactor = item.viral_factor;
-    let pageSize = item.page_size || (likes > 0 ? likes : 1000);
 
-    // Fallback: Live-Berechnung wenn Daten fehlen
-    if (efficiencyScore === undefined || efficiencyScore === null) {
+    // WICHTIG: Wenn Score fehlt ODER unplausibel hoch ist (> 100), rechnen wir neu!
+    if (efficiencyScore === undefined || efficiencyScore === null || efficiencyScore > 100) {
         const safeReach = Number(reach) || 0;
         const safeAudience = Math.max(Number(pageSize), 1000);
         const ratio = safeReach / safeAudience;
+        
+        // Live-Berechnung: 15 * log2(1 + ratio), max 100
         efficiencyScore = Math.round(Math.min(15 * Math.log2(1 + ratio), 100) * 10) / 10;
-        viralFactor = ratio > 0 ? Math.round((ratio / 3.0) * 10) / 10 : 0; 
+        
+        // Faktor schätzen, falls er fehlt
+        if (viralFactor === undefined || viralFactor === null) {
+             viralFactor = ratio > 0 ? Math.round((ratio / 3.0) * 10) / 10 : 0;
+        }
     }
 
     const spend = item.spend || item.spendEstimate || null;
     const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
     const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
     const genders = item.gender ? [item.gender] : (item.genders || []);
-    
     const breakdown = item.demographics || item.demographic_distribution || [];
 
     const targeting = {
@@ -101,6 +111,8 @@ export const cleanAndTransformData = (dbRows) => {
       reach: Number(reach), 
       impressions: Number(reach),
       spend,
+      
+      // Jetzt garantiert sauberer 0-100 Score
       efficiency_score: Number(efficiencyScore),
       viral_factor: Number(viralFactor), 
       page_size: Number(pageSize),

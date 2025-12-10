@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
+import { Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, Zap } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -16,7 +16,6 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const hasVideo = snapshot.videos && snapshot.videos.length > 0;
   const mediaUrl = hasVideo ? snapshot.videos[0].video_hd_url : (snapshot.images.length > 0 ? snapshot.images[0].resized_image_url : null);
   
-  const reachCount = ad.reach || 0;
   const score = ad.efficiency_score || 0; 
   const factor = ad.viral_factor || 0;
 
@@ -52,9 +51,6 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const platforms = ad.publisher_platform || [];
   const hasFB = platforms.includes('facebook');
   const hasIG = platforms.includes('instagram');
-  const hasMessenger = platforms.includes('messenger');
-  const hasAudience = platforms.includes('audience_network');
-
   const formattedDate = new Date(ad.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const displayLocation = targeting?.locations?.length ? (targeting.locations.length > 2 ? `${targeting.locations.length} Standorte` : targeting.locations.join(', ')) : null;
 
@@ -87,24 +83,40 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
                     {ad.page_name}
                 </h3>
                 
+                {/* --- HIER SIND DIE BADGES --- */}
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    
+                    {/* 1. Viral Score (0-100) - IMMER SICHTBAR wenn > 0 */}
                     {score > 0 && (
-                        <div className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${score >= 50 ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-gray-50 text-gray-600 border-gray-100'}`} title="Viralitäts-Score (0-100)">
-                            <BarChart3 className="w-3 h-3" />
+                        <div className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${score >= 50 ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`} title="Viralitäts-Score (0-100)">
+                            <Zap className={`w-3 h-3 ${score >= 50 ? 'fill-indigo-500' : 'fill-blue-500'}`} />
                             <span>{score}</span>
                         </div>
                     )}
+
+                    {/* 2. Faktor (Feuer) - Wenn > 1.5x */}
                     {factor > 1.5 && (
                          <div className="flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100" title={`${factor}x besser als der Durchschnitt`}>
                             <span className="text-[10px]">🔥</span>
                             <span>{factor}x</span>
                         </div>
                     )}
+                    
+                    {/* Fallback ID (nur wenn gar keine Scores da sind) */}
                     {score === 0 && factor === 0 && (
                         <div className="text-[10px] text-gray-400 font-medium">ID: {ad.id.split('_')[1] || ad.id}</div>
                     )}
                 </div>
           </div>
+          
+          {versionCount > 1 && (
+              <div className="ml-auto flex-shrink-0">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100 shadow-sm whitespace-nowrap">
+                      <Layers className="w-3 h-3" />
+                      {versionCount}
+                  </span>
+              </div>
+          )}
       </div>
 
       <div className="bg-gray-100 relative w-full aspect-square border-y border-gray-100 overflow-hidden group-hover:opacity-95 transition-opacity">

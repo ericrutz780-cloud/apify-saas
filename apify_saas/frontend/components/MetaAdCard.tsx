@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
+import { Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -16,13 +16,12 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const hasVideo = snapshot.videos && snapshot.videos.length > 0;
   const mediaUrl = hasVideo ? snapshot.videos[0].video_hd_url : (snapshot.images.length > 0 ? snapshot.images[0].resized_image_url : null);
   
-  // METRIKEN LADEN
+  // METRIKEN
   const reachCount = ad.reach || 0;
-  const score = ad.efficiency_score || 0; // Viral Score (0-100)
-  const factor = ad.viral_factor || 0;    // Faktor (z.B. 12x)
+  const score = ad.efficiency_score || 0; 
+  const factor = ad.viral_factor || 0;
 
   const handleCardClick = (e: React.MouseEvent) => {
-      // Klick auf Buttons/Links soll Karte nicht öffnen
       if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
           return;
       }
@@ -78,12 +77,10 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
           <div className="flex items-center gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
                 {hasFB && <Facebook className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#1877F2]" />}
                 {hasIG && <Instagram className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#E4405F]" />}
-                {hasMessenger && <MessageCircle className="w-3.5 h-3.5 text-gray-400" />}
-                {hasAudience && <Globe className="w-3.5 h-3.5 text-gray-400" />}
           </div>
       </div>
 
-      {/* 2. IDENTITY ROW: Avatar & Name & Badges */}
+      {/* 2. IDENTITY ROW */}
       <div className="p-3 flex items-center gap-3 relative">
           <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center">
                 {/* @ts-ignore */}
@@ -94,26 +91,26 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
                     {ad.page_name}
                 </h3>
                 
-                {/* HIER SIND DIE NEUEN BADGES */}
+                {/* HIER SIND DIE BADGES - JETZT SICHTBAR DANK FALLBACK */}
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                     
-                    {/* 1. Viral Score (0-100) */}
+                    {/* 1. Viral Score (immer da, wenn > 0) */}
                     {score > 0 && (
-                        <div className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${score >= 80 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`} title="Viralitäts-Score (0-100)">
-                            <BarChart3 className="w-3 h-3" />
+                        <div className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${score >= 50 ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-gray-50 text-gray-600 border-gray-100'}`} title="Viralitäts-Score (0-100)">
+                            <Zap className={`w-3 h-3 ${score >= 50 ? 'fill-indigo-500' : 'fill-gray-400'}`} />
                             <span>{score}</span>
                         </div>
                     )}
 
-                    {/* 2. Faktor (Feuer) - Nur wenn relevant */}
-                    {factor > 3.0 && (
+                    {/* 2. Faktor (Feuer) - Schwelle auf 1.5 gesenkt! */}
+                    {factor > 1.5 && (
                          <div className="flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100" title={`${factor}x besser als der Durchschnitt`}>
-                            <Zap className="w-3 h-3 fill-amber-500 text-amber-600" />
-                            <span>🔥 {factor}x</span>
+                            <span className="text-[10px]">🔥</span>
+                            <span>{factor}x</span>
                         </div>
                     )}
                     
-                    {/* 3. Fallback: ID (nur wenn keine Scores da sind) */}
+                    {/* Fallback ID, falls gar keine Daten da sind */}
                     {score === 0 && factor === 0 && (
                         <div className="text-[10px] text-gray-400 font-medium">ID: {ad.id.split('_')[1] || ad.id}</div>
                     )}

@@ -32,7 +32,7 @@ export const cleanAndTransformData = (dbRows) => {
       mediaUrl = images[0].original_image_url || images[0].resized_image_url || images[0].originalImageUrl;
     }
 
-    // 3. Text
+    // 3. Text & Info
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
     if (safeBody) safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
 
@@ -49,20 +49,35 @@ export const cleanAndTransformData = (dbRows) => {
         } catch (e) {}
     }
 
-    // 5. METRIKEN & REACH
-    const reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
-    const likes = item.likes || item.page_like_count || 0;
+    // 5. METRIKEN & LIVE-REPARATUR FÜR ALTE DATEN
+    let reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
+    let likes = item.likes || item.page_like_count || 0;
     
-    // VIRALITÄTS-DATEN (Jetzt garantiert da)
-    const efficiencyScore = item.efficiency_score || 0;
-    const viralFactor = item.viral_factor || 0; 
-    const pageSize = item.page_size || 0;
+    // Wir holen die Werte vom Backend...
+    let efficiencyScore = item.efficiency_score;
+    let viralFactor = item.viral_factor;
+    let pageSize = item.page_size || (likes > 0 ? likes : 1000);
+
+    // ...FALLBACK: Wenn sie fehlen (alte Daten), berechnen wir sie live!
+    if (efficiencyScore === undefined || efficiencyScore === null) {
+        const safeReach = Number(reach) || 0;
+        const safeAudience = Math.max(Number(pageSize), 1000);
+        const ratio = safeReach / safeAudience;
+        
+        // Die Formel: 15 * log2(1 + ratio)
+        efficiencyScore = Math.round(Math.min(15 * Math.log2(1 + ratio), 100) * 10) / 10;
+        
+        // Faktor können wir ohne Pool-Durchschnitt nicht exakt berechnen, 
+        // wir setzen ihn konservativ auf 0 oder schätzen ihn (Ratio / 3.0 als Benchmark)
+        viralFactor = ratio > 0 ? Math.round((ratio / 3.0) * 10) / 10 : 0; 
+    }
 
     const spend = item.spend || item.spendEstimate || null;
+    
+    // Targeting
     const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
     const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
     const genders = item.gender ? [item.gender] : (item.genders || []);
-    
     const breakdown = item.demographics || item.demographic_distribution || [];
 
     const targeting = {
@@ -73,7 +88,6 @@ export const cleanAndTransformData = (dbRows) => {
         breakdown
     };
 
-    // ADVERTISER INFO (Sicherheits-Check gegen undefined)
     const backendInfo = item.advertiser_info || {};
     const advertiser_info = {
         category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
@@ -82,7 +96,7 @@ export const cleanAndTransformData = (dbRows) => {
         instagram_handle: backendInfo.instagram_handle,
         instagram_followers: backendInfo.instagram_followers,
         about_text: backendInfo.about_text,
-        ...backendInfo 
+        ...backendInfo
     };
 
     return {
@@ -95,13 +109,12 @@ export const cleanAndTransformData = (dbRows) => {
       ad_library_url: item.ad_library_url || item.adLibraryUrl || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
       
-      // UI Felder
       likes,
       reach: Number(reach), 
       impressions: Number(reach),
       spend,
       
-      // Neue Felder
+      // Jetzt haben wir IMMER Werte, auch bei alten Scrapes
       efficiency_score: Number(efficiencyScore),
       viral_factor: Number(viralFactor), 
       page_size: Number(pageSize),
@@ -109,10 +122,9 @@ export const cleanAndTransformData = (dbRows) => {
       targeting,
       demographics: item.demographics || [],
       target_locations: item.target_locations || [],
-      
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
-      advertiser_info, 
+      advertiser_info,
       avatar: safeAvatar
     };
   });

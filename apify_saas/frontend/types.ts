@@ -12,8 +12,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  // HIER WAR DER FEHLER: Das Feld hat gefehlt!
-  country?: string; 
+  country?: string;
 }
 
 export interface User {
@@ -34,8 +33,6 @@ export interface SearchParams {
   country?: string;
 }
 
-// --- META AD MODELS ---
-
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
@@ -47,7 +44,6 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
-// NEU: Interfaces für Demografie-Daten
 export interface DemographicBreakdown {
   age_range: string;
   male: number | null;
@@ -74,17 +70,6 @@ export interface MetaAdTargeting {
   excluded_locations?: string[];
   reach_estimate?: number | null; 
   breakdown?: MetaAdTargetingBreakdown[];
-}
-
-export interface MetaAdRegionTransparency {
-    region: string; // e.g. "European Union", "United Kingdom"
-    description: string;
-    ages: string[];
-    genders: string[];
-    locations: string[];
-    excluded_locations?: string[];
-    reach_estimate?: number;
-    breakdown?: MetaAdTargetingBreakdown[];
 }
 
 export interface MetaAdAdvertiserInfo {
@@ -126,13 +111,13 @@ export interface MetaAd {
   impressions: number | null;
   spend: number | null;
   
-  // NEU: Felder für Viralität & Co.
+  // Scoring
   reach?: number | null; 
   efficiency_score?: number | null;
   viral_factor?: number | null;
   page_size?: number | null;
 
-  // Detailed Data
+  // Data
   targeting?: MetaAdTargeting;
   transparency_regions?: any[]; 
   page_categories?: string[];
@@ -141,14 +126,11 @@ export interface MetaAd {
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
   
-  // Rich Data
   demographics?: CountryBreakdown[];
   target_locations?: any[];
 
   avatar?: string | null;
 }
-
-// --- TIKTOK AD MODELS ---
 
 export interface TikTokVideoMeta {
   coverUrl: string;

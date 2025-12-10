@@ -49,25 +49,26 @@ def get_advertiser_info(item):
 
 def get_ad_cluster(ad):
     """
-    Ordnet die Ad einem von 3 Clustern zu.
-    A: Standard / E-Commerce (Mode, Gadgets)
-    B: Service / High Intent (Arzt, Software, Beratung) -> Schwerer viral zu gehen
-    C: Viral / Entertainment (Blogs, News) -> Leichter viral zu gehen
+    ROBUSTE Cluster-Zuordnung.
     """
+    # Sicherstellen, dass wir Strings haben
     cats = ad.get("page_categories", [])
-    if isinstance(cats, str): cats = [cats]
+    if not cats: cats = []
+    cats_str = str(cats).lower()
     
-    # Snapshot CTAs prüfen
-    cta = ad.get("snapshot", {}).get("cta_text", "").lower()
+    snapshot = ad.get("snapshot") or {}
+    cta = snapshot.get("cta_text")
+    if not cta: cta = ""
+    cta = str(cta).lower() # Hier war der Fehler! Jetzt sicher.
     
     # Keywords für Cluster B (Service)
     service_keywords = ['medical', 'doctor', 'software', 'real estate', 'consulting', 'education', 'lawyer', 'dentist', 'service', 'health/beauty']
-    if any(k in str(cats).lower() for k in service_keywords) or cta in ['book now', 'contact us']:
+    if any(k in cats_str for k in service_keywords) or cta in ['book now', 'contact us']:
         return 'B'
         
     # Keywords für Cluster C (Viral)
     viral_keywords = ['media', 'news', 'blog', 'creator', 'comedian', 'gamer', 'just for fun', 'entertainment']
-    if any(k in str(cats).lower() for k in viral_keywords) or cta in ['watch more', 'like page']:
+    if any(k in cats_str for k in viral_keywords) or cta in ['watch more', 'like page']:
         return 'C'
         
     # Default: Cluster A (E-Commerce)
@@ -124,6 +125,8 @@ def normalize_meta_ad(item):
     demographics_raw = get_demographics(item)
     target_locations = get_nested_value(item, ['aaa_info', 'location_audience']) or []
     advertiser_info = get_advertiser_info(item)
+    
+    # Kategorien extrahieren
     page_cats = item.get("categories", [])
     if raw_snapshot.get("page_categories"):
         cats = raw_snapshot.get("page_categories")
@@ -146,8 +149,8 @@ def normalize_meta_ad(item):
         
         # Rohdaten für den Algorithmus
         "viral_ratio": viral_ratio, 
-        "efficiency_score": 0, # Wird im Search-Loop final berechnet
-        "viral_factor": 0,     # Wird im Search-Loop final berechnet
+        "efficiency_score": 0, 
+        "viral_factor": 0,     
         
         "demographics": demographics_raw,
         "target_locations": target_locations,
@@ -165,12 +168,6 @@ def normalize_meta_ad(item):
     }
 
 async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
-    """
-    HYBRIDE VIRAL SEARCH:
-    1. Pool von 100 Ads holen.
-    2. Clustern (Fashion vs. Service vs. Viral).
-    3. Dynamisch normalisieren (Selbstlernend bei >5 Ads, Heuristisch bei <5).
-    """
     target_country = country.upper() if country and country != "ALL" else "US"
     cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     
@@ -214,7 +211,6 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
             results_pool = []
             seen_ids = set()
 
-            # 1. Normalisieren
             for item in dataset_items:
                 try:
                     norm = normalize_meta_ad(item)
@@ -227,16 +223,13 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
             
             if not results_pool: return []
 
-            # --- HYBRIDER ALGORITHMUS START ---
-            
-            # 2. Clustern
+            # --- HYBRIDER ALGORITHMUS ---
             clusters = {'A': [], 'B': [], 'C': []}
             for ad in results_pool:
                 cluster = get_ad_cluster(ad)
-                ad['_cluster'] = cluster # Temporär speichern
+                ad['_cluster'] = cluster 
                 clusters[cluster].append(ad['viral_ratio'])
 
-            # 3. Cluster-Durchschnitte berechnen
             cluster_avgs = {}
             for c, ratios in clusters.items():
                 if ratios:
@@ -244,41 +237,28 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
                 else:
                     cluster_avgs[c] = 0
 
-            # 4. Globaler Durchschnitt für das Badge
             global_total = sum(ad['viral_ratio'] for ad in results_pool)
             global_avg = global_total / len(results_pool) if len(results_pool) > 0 else 1.0
             if global_avg < 0.1: global_avg = 0.1
 
-            # 5. Finales Scoring
             for ad in results_pool:
                 ratio = ad['viral_ratio']
                 cluster = ad['_cluster']
                 count_in_cluster = len(clusters[cluster])
                 
-                # DIE ENTSCHEIDUNG: Datengetrieben oder Heuristisch?
                 norm_factor = 1.0
-                
                 if count_in_cluster >= 5:
-                    # Genug Daten -> Wir nutzen den echten Cluster-Durchschnitt
-                    # Wir normieren alles auf eine "Basis-Ratio" von 3.0
                     c_avg = max(cluster_avgs[cluster], 0.1)
                     norm_factor = 3.0 / c_avg 
                 else:
-                    # Zu wenig Daten -> Fallback auf Experten-Wissen
-                    if cluster == 'B': norm_factor = 1.5   # Service Boost
-                    elif cluster == 'C': norm_factor = 0.6 # Viral Dampener
-                    else: norm_factor = 1.0                # Standard
+                    if cluster == 'B': norm_factor = 1.5   
+                    elif cluster == 'C': norm_factor = 0.6 
+                    else: norm_factor = 1.0                
                 
-                # Score berechnen (angepasste Ratio)
                 adjusted_ratio = ratio * norm_factor
                 ad['efficiency_score'] = calculate_log_score(adjusted_ratio)
-                
-                # Faktor berechnen (Vergleich zum Globalen Durchschnitt für das Badge)
                 ad['viral_factor'] = round(ratio / global_avg, 1)
 
-            # --- HYBRIDER ALGORITHMUS ENDE ---
-
-            # 6. Sortieren
             results_pool.sort(
                 key=lambda x: (x.get('efficiency_score') or 0), 
                 reverse=True

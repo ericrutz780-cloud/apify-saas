@@ -1,30 +1,36 @@
-// frontend_blue/AdFeed.jsx
 import React, { useEffect, useState } from 'react';
-
-// HIER NUTZEN WIR DEINE EXISTIERENDE DATEI:
-import { supabase } from './services/supabaseClient.js'; 
-
-// Hier nutzen wir den Adapter von Schritt 1
+import { supabase } from './services/supabaseClient';
 import { cleanAndTransformData } from './adAdapter';
+import MetaAdCard from './components/MetaAdCard'; // WICHTIG: Die Komponente nutzen!
+import AdDetailModal from './components/AdDetailModal'; // Für die Details
 
 const AdFeed = () => {
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // State für das Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedAdGroup, setSelectedAdGroup] = useState([]);
 
   useEffect(() => {
     const fetchAds = async () => {
       try {
         setLoading(true);
-        // Wir holen Daten aus der Tabelle 'ad_results' (wie im Backend definiert)
+        // Wir holen 100 Ads für den statistischen Pool
         const { data, error } = await supabase
           .from('ad_results')
           .select('data')
-          .limit(50); // Performance Limit
+          .limit(100); 
 
         if (error) throw error;
 
-        // Hier wird die "Brücke" genutzt, um Fehler zu beheben
+        // 1. Daten säubern
         const safeAds = cleanAndTransformData(data);
+
+        // 2. SORTIERUNG NACH VIRALITÄT (WICHTIG!)
+        // Höchster Score (z.B. 95) zuerst
+        safeAds.sort((a, b) => (b.efficiency_score || 0) - (a.efficiency_score || 0));
+
         setAds(safeAds);
 
       } catch (err) {
@@ -37,43 +43,36 @@ const AdFeed = () => {
     fetchAds();
   }, []);
 
-  if (loading) return <div className="p-10 text-center">Lade Feed...</div>;
-  if (ads.length === 0) return <div className="p-10 text-center">Keine Daten gefunden.</div>;
+  // Öffnet das Modal mit der angeklickten Ad
+  const handleCardClick = (ad) => {
+      // Da wir aktuell keine Gruppen haben, ist die Gruppe nur diese eine Ad
+      setSelectedAdGroup([ad]);
+      setIsModalOpen(true);
+  };
+
+  if (loading) return <div className="p-10 text-center text-gray-500">Lade Feed...</div>;
+  if (ads.length === 0) return <div className="p-10 text-center text-gray-500">Keine Daten gefunden.</div>;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-      {ads.map((ad) => (
-        <div key={ad.id} className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col">
-          {/* Header */}
-          <div className="p-4 flex items-center space-x-3 border-b border-gray-50">
-            <img src={ad.avatar} alt={ad.pageName} className="w-10 h-10 rounded-full object-cover bg-gray-100"/>
-            <div>
-              <h3 className="text-sm font-bold truncate">{ad.pageName}</h3>
-              <p className="text-xs text-gray-500">{ad.date}</p>
-            </div>
-          </div>
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+        {ads.map((ad) => (
+          <MetaAdCard 
+            key={ad.id} 
+            ad={ad} 
+            onClick={handleCardClick} 
+          />
+        ))}
+      </div>
 
-          {/* Media */}
-          <div className="w-full aspect-video bg-black">
-            {ad.media.type === 'video' ? (
-              <video src={ad.media.url} poster={ad.media.poster} controls className="w-full h-full object-contain"/>
-            ) : (
-              <img src={ad.media.url} alt="Ad" className="w-full h-full object-cover"/>
-            )}
-          </div>
-
-          {/* Body */}
-          <div className="p-4 flex-1">
-            <p className="text-sm text-gray-600 mb-4 line-clamp-3">
-              {ad.body || "Kein Textinhalt."}
-            </p>
-            <a href={ad.linkUrl} target="_blank" rel="noreferrer" className="block text-center bg-blue-600 text-white py-2 rounded">
-              {ad.ctaText}
-            </a>
-          </div>
-        </div>
-      ))}
-    </div>
+      {/* Das Modal für die Details */}
+      <AdDetailModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        group={selectedAdGroup}
+        type="meta"
+      />
+    </>
   );
 };
 

@@ -18,9 +18,10 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   
   // METRIKEN
   const reachCount = ad.reach || 0;
-  const score = ad.efficiency_score || 0; // Normalisierter Score 0-100
+  const factor = ad.viral_factor || 0; // WICHTIG: Wir nutzen hier den Faktor!
 
   const handleCardClick = (e: React.MouseEvent) => {
+      // Klick auf Buttons/Links soll Karte nicht öffnen
       if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
           return;
       }
@@ -63,7 +64,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
         onClick={handleCardClick}
         className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md hover:border-brand-200 transition-all duration-300 cursor-pointer group"
     >
-      {/* 1. TOP HEADER (Original) */}
+      {/* 1. TOP HEADER */}
       <div className="px-3 py-2.5 bg-white border-b border-gray-100 flex items-center justify-between text-[11px]">
           <div className="flex items-center gap-2.5">
               <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border shadow-sm transition-colors ${ad.isActive ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
@@ -76,10 +77,12 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
           <div className="flex items-center gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
                 {hasFB && <Facebook className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#1877F2]" />}
                 {hasIG && <Instagram className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#E4405F]" />}
+                {hasMessenger && <MessageCircle className="w-3.5 h-3.5 text-gray-400" />}
+                {hasAudience && <Globe className="w-3.5 h-3.5 text-gray-400" />}
           </div>
       </div>
 
-      {/* 2. IDENTITY ROW (Original + New Score Badge) */}
+      {/* 2. IDENTITY ROW */}
       <div className="p-3 flex items-center gap-3 relative">
           <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center">
                 {/* @ts-ignore */}
@@ -91,11 +94,16 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
                 </h3>
                 
                 <div className="flex items-center gap-2 mt-0.5">
-                    {/* VIRAL SCORE BADGE */}
-                    {score > 0 ? (
-                        <div className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${score > 50 ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`} title={`Viral Score: ${score}/100`}>
-                            <Zap className={`w-3 h-3 ${score > 50 ? 'fill-amber-500' : 'fill-blue-500'}`} />
-                            <span>{score}</span>
+                    {/* HIER IST DIE LOGIK: Wenn Faktor > 3, zeigen wir das Feuer! */}
+                    {factor > 3.0 ? (
+                        <div className="flex items-center gap-1 text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title={`Performance: ${factor}x über dem Durchschnitt`}>
+                            <Zap className="w-3 h-3 fill-amber-500 text-amber-600" />
+                            <span>{factor}x Viral</span>
+                        </div>
+                    ) : reachCount > 0 ? (
+                        <div className="flex items-center gap-1 text-[10px] text-indigo-600 font-medium bg-indigo-50 px-1.5 py-0.5 rounded">
+                            <BarChart3 className="w-3 h-3" />
+                            <span>{new Intl.NumberFormat('en-US', { notation: "compact" }).format(reachCount)}</span>
                         </div>
                     ) : (
                         <div className="text-[10px] text-gray-400 font-medium">ID: {ad.id.split('_')[1] || ad.id}</div>
@@ -113,7 +121,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
           )}
       </div>
 
-      {/* 3. MEDIA (Original) */}
+      {/* 3. MEDIA CONTENT */}
       <div className="bg-gray-100 relative w-full aspect-square border-y border-gray-100 overflow-hidden group-hover:opacity-95 transition-opacity">
         {mediaUrl ? (
           hasVideo ? (
@@ -134,11 +142,14 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
             <img src={mediaUrl} alt="Ad Creative" className="w-full h-full object-cover" />
           )
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400"><Info className="w-8 h-8 mb-2 opacity-50" /><span className="text-sm font-medium">Keine Vorschau</span></div>
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+              <Info className="w-8 h-8 mb-2 opacity-50" />
+              <span className="text-sm font-medium">Keine Vorschau</span>
+          </div>
         )}
       </div>
 
-      {/* 4. CTA (Original) */}
+      {/* 4. CTA BAR */}
       <div className="bg-white border-b border-gray-100 px-3 py-2.5 flex items-center justify-between">
           <div className="text-[10px] text-gray-500 truncate mr-2 font-medium tracking-wide">
               {getDisplayDomain(snapshot.link_url) || 'WEBSITE'}
@@ -148,14 +159,16 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
           </button>
       </div>
 
-      {/* 5. TEXT (Original) */}
+      {/* 5. DESCRIPTION */}
       <div className="p-3 bg-white flex-1 flex flex-col gap-1">
            <div className="text-xs text-gray-600 leading-5 font-normal line-clamp-2 h-10 overflow-hidden">
-                {content || <span className="text-gray-400 italic">No description available</span>}
+                {content || <span className="text-gray-400 italic">Kein Text verfügbar</span>}
            </div>
+           
            <div className="text-[11px] text-blue-600 font-medium leading-4 line-clamp-1 h-4 overflow-hidden">
-               {hashtags.join(' ')}
+               {hashtags.length > 0 ? hashtags.join(' ') : <span className="select-none">&nbsp;</span>}
            </div>
+
            {displayLocation && (
                <div className="mt-auto pt-2 border-t border-gray-50 flex items-center gap-1 text-[10px] text-gray-400">
                    <Globe className="w-3 h-3" />

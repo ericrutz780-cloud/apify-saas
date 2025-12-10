@@ -12,7 +12,6 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string; // Optionaler Country Code (z.B. "US", "DE")
 }
 
 export interface User {
@@ -33,8 +32,7 @@ export interface SearchParams {
   country?: string;
 }
 
-// --- META AD MODELS ---
-
+// Meta Ad Models
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
@@ -46,7 +44,7 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
-// NEU: Interfaces für Demografie-Daten (für das neue Feature)
+// NEU: Interfaces für die Demografie-Daten
 export interface DemographicBreakdown {
   age_range: string;
   male: number | null;
@@ -120,34 +118,34 @@ export interface MetaAd {
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
   
-  // Metrics (Original + Neue Felder)
+  // Metrics
   likes: number;
   impressions: number | null;
   spend: number | null;
   
-  // NEU: Damit die Viralitäts-Logik funktioniert
+  // NEU: Felder für Viralitäts-Logik und Frontend-Anzeige
   reach?: number | null; 
-  efficiency_score?: number | null;
+  efficiency_score?: number | null; // Der 0-100 Score
+  viral_factor?: number | null;     // Der Faktor (z.B. 37.5x)
   page_size?: number | null;
 
-  // New Targeting Data
+  // Detailed Data
   targeting?: MetaAdTargeting;
-  transparency_regions?: any[]; // War vorher MetaAdRegionTransparency[], any[] ist flexibler für Rohdaten
+  transparency_regions?: MetaAdRegionTransparency[];
   page_categories?: string[]; // e.g. "Clothing Store"
   disclaimer?: string; // "Paid for by..."
   advertiser_info?: MetaAdAdvertiserInfo;
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
   
-  // NEU: Rich Data vom Backend
+  // NEU: Rich Data direkt am Objekt
   demographics?: CountryBreakdown[];
   target_locations?: any[];
 
   avatar?: string | null;
 }
 
-// --- TIKTOK AD MODELS ---
-
+// TikTok Ad Models
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;

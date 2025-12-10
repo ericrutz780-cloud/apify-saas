@@ -12,6 +12,8 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
+  // HIER WAR DER FEHLER: Das Feld hat gefehlt!
+  country?: string; 
 }
 
 export interface User {
@@ -32,7 +34,8 @@ export interface SearchParams {
   country?: string;
 }
 
-// Meta Ad Models
+// --- META AD MODELS ---
+
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
@@ -44,7 +47,7 @@ export interface MetaAdSnapshot {
   cards?: any[];
 }
 
-// NEU: Interfaces für die Demografie-Daten
+// NEU: Interfaces für Demografie-Daten
 export interface DemographicBreakdown {
   age_range: string;
   male: number | null;
@@ -65,11 +68,11 @@ export interface MetaAdTargetingBreakdown {
 }
 
 export interface MetaAdTargeting {
-  ages: string[]; // e.g. "18-65+"
-  genders: string[]; // e.g. "All", "Female"
-  locations: string[]; // e.g. "Germany", "France", "US"
+  ages: string[]; 
+  genders: string[]; 
+  locations: string[]; 
   excluded_locations?: string[];
-  reach_estimate?: number | null; // EU Reach estimate
+  reach_estimate?: number | null; 
   breakdown?: MetaAdTargetingBreakdown[];
 }
 
@@ -123,29 +126,30 @@ export interface MetaAd {
   impressions: number | null;
   spend: number | null;
   
-  // NEU: Felder für Viralitäts-Logik und Frontend-Anzeige
+  // NEU: Felder für Viralität & Co.
   reach?: number | null; 
-  efficiency_score?: number | null; // Der 0-100 Score
-  viral_factor?: number | null;     // Der Faktor (z.B. 37.5x)
+  efficiency_score?: number | null;
+  viral_factor?: number | null;
   page_size?: number | null;
 
   // Detailed Data
   targeting?: MetaAdTargeting;
-  transparency_regions?: MetaAdRegionTransparency[];
-  page_categories?: string[]; // e.g. "Clothing Store"
-  disclaimer?: string; // "Paid for by..."
+  transparency_regions?: any[]; 
+  page_categories?: string[];
+  disclaimer?: string;
   advertiser_info?: MetaAdAdvertiserInfo;
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
   
-  // NEU: Rich Data direkt am Objekt
+  // Rich Data
   demographics?: CountryBreakdown[];
   target_locations?: any[];
 
   avatar?: string | null;
 }
 
-// TikTok Ad Models
+// --- TIKTOK AD MODELS ---
+
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;
@@ -164,7 +168,7 @@ export interface TikTokAd {
   webVideoUrl: string;
   text: string;
   createTimeISO: string;
-  diggCount: number; // Likes
+  diggCount: number; 
   shareCount: number;
   playCount: number;
   commentCount: number;

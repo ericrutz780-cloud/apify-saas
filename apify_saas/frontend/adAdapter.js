@@ -53,8 +53,9 @@ export const cleanAndTransformData = (dbRows) => {
     const reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
     const likes = item.likes || item.page_like_count || 0;
     
-    // NEU: Viralitäts-Daten
+    // HIER WAR DER FEHLER: Wir holen jetzt auch den viral_factor!
     const efficiencyScore = item.efficiency_score || 0;
+    const viralFactor = item.viral_factor || 0; // <--- DAS HAT GEFEHLT
     const pageSize = item.page_size || 0;
 
     const spend = item.spend || item.spendEstimate || null;
@@ -72,8 +73,6 @@ export const cleanAndTransformData = (dbRows) => {
         breakdown
     };
 
-    // HIER WAR DER FEHLER: Wir definieren die Variable jetzt sauber
-    // und nehmen die Daten vom Backend, falls vorhanden
     const backendInfo = item.advertiser_info || {};
     const advertiser_info = {
         category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
@@ -82,7 +81,7 @@ export const cleanAndTransformData = (dbRows) => {
         instagram_handle: backendInfo.instagram_handle,
         instagram_followers: backendInfo.instagram_followers,
         about_text: backendInfo.about_text,
-        ...backendInfo // Fallback für weitere Felder
+        ...backendInfo
     };
 
     return {
@@ -101,7 +100,9 @@ export const cleanAndTransformData = (dbRows) => {
       impressions: Number(reach),
       spend,
       
+      // NEU: Jetzt wird der Faktor korrekt durchgereicht
       efficiency_score: Number(efficiencyScore),
+      viral_factor: Number(viralFactor), 
       page_size: Number(pageSize),
 
       targeting,
@@ -110,7 +111,7 @@ export const cleanAndTransformData = (dbRows) => {
       
       page_categories: snap.page_categories || item.categories || [],
       disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
-      advertiser_info, // Jetzt korrekt definiert und gefüllt
+      advertiser_info,
       avatar: safeAvatar
     };
   });

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
+import { Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -18,10 +18,11 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   
   // METRIKEN
   const reachCount = ad.reach || 0;
-  const factor = ad.viral_factor || 0; // WICHTIG: Wir nutzen hier den Faktor!
+  // WICHTIG: Wir nutzen den Faktor für das Badge!
+  const factor = ad.viral_factor || 0; 
 
   const handleCardClick = (e: React.MouseEvent) => {
-      // Klick auf Buttons/Links soll Karte nicht öffnen
+      // Prevent click if clicking on CTA button or other interactive elements
       if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
           return;
       }
@@ -41,13 +42,22 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const { content, hashtags } = useMemo(() => {
       const text = snapshot.body.text || '';
       const words = text.replace(/\n/g, ' ').split(/\s+/);
+      
       const tags: string[] = [];
       const contentWords: string[] = [];
+
       words.forEach(w => {
-          if (w.startsWith('#')) tags.push(w);
-          else contentWords.push(w);
+          if (w.startsWith('#')) {
+              tags.push(w);
+          } else {
+              contentWords.push(w);
+          }
       });
-      return { content: contentWords.join(' '), hashtags: tags };
+
+      return {
+          content: contentWords.join(' '),
+          hashtags: tags
+      };
   }, [snapshot.body.text]);
 
   const platforms = ad.publisher_platform || [];
@@ -57,14 +67,19 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const hasAudience = platforms.includes('audience_network');
 
   const formattedDate = new Date(ad.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const displayLocation = targeting?.locations?.length ? (targeting.locations.length > 2 ? `${targeting.locations.length} Standorte` : targeting.locations.join(', ')) : null;
+
+  // Targeting Summary
+  const countries = targeting?.locations || [];
+  const displayLocation = countries.length > 0 
+    ? (countries.length > 2 ? `${countries.length} Standorte` : countries.join(', ')) 
+    : null;
 
   return (
     <div 
         onClick={handleCardClick}
         className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md hover:border-brand-200 transition-all duration-300 cursor-pointer group"
     >
-      {/* 1. TOP HEADER */}
+      {/* 1. TOP HEADER: Status, Date, Platforms */}
       <div className="px-3 py-2.5 bg-white border-b border-gray-100 flex items-center justify-between text-[11px]">
           <div className="flex items-center gap-2.5">
               <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border shadow-sm transition-colors ${ad.isActive ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
@@ -82,7 +97,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
           </div>
       </div>
 
-      {/* 2. IDENTITY ROW */}
+      {/* 2. IDENTITY ROW: Avatar, Name, Badge */}
       <div className="p-3 flex items-center gap-3 relative">
           <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center">
                 {/* @ts-ignore */}
@@ -93,12 +108,13 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
                     {ad.page_name}
                 </h3>
                 
+                {/* METRIKEN UNTER DEM NAMEN */}
                 <div className="flex items-center gap-2 mt-0.5">
-                    {/* HIER IST DIE LOGIK: Wenn Faktor > 3, zeigen wir das Feuer! */}
+                    {/* DAS NEUE FEUER-BADGE */}
                     {factor > 3.0 ? (
                         <div className="flex items-center gap-1 text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title={`Performance: ${factor}x über dem Durchschnitt`}>
                             <Zap className="w-3 h-3 fill-amber-500 text-amber-600" />
-                            <span>{factor}x Viral</span>
+                            <span>🔥 {factor}x</span>
                         </div>
                     ) : reachCount > 0 ? (
                         <div className="flex items-center gap-1 text-[10px] text-indigo-600 font-medium bg-indigo-50 px-1.5 py-0.5 rounded">

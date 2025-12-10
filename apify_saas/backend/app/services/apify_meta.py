@@ -6,39 +6,38 @@ import math
 
 client = ApifyClient(settings.APIFY_TOKEN)
 
+# ... (Helper Funktionen get_nested_value, get_page_size etc. bleiben gleich wie vorher) ...
+# ... (Bitte kopiere die Helper aus dem vorherigen Code-Block hier rein, falls nötig) ...
+
+# Hier nochmal die wichtigsten Helper kurz zusammengefasst für den Kontext:
 def get_nested_value(ad, path_list):
     current = ad
     for key in path_list:
-        if isinstance(current, dict):
-            current = current.get(key)
-        else:
-            return None
+        if isinstance(current, dict): current = current.get(key)
+        else: return None
     return current
 
 def get_page_size(item):
-    """Ermittelt die Macht des Profils (Likes + Follower)."""
+    # ... (Logik wie gehabt: Likes + Follower) ...
     likes = item.get("likes", 0) or item.get("page_like_count", 0)
     advertiser = item.get("advertiser", {})
     page_info = advertiser.get("ad_library_page_info", {}).get("page_info", {})
-    
     if not likes: likes = page_info.get("likes", 0) or 0
     ig_followers = page_info.get("ig_followers", 0) or 0
     if not likes: likes = item.get("snapshot", {}).get("page_like_count", 0) or 0
-
     return (int(likes or 0) + int(ig_followers or 0))
 
 def get_demographics(ad):
-    """Extrahiert Demografie."""
+    # ... (Logik wie gehabt) ...
     breakdown = get_nested_value(ad, ['aaa_info', 'age_country_gender_reach_breakdown'])
     if not breakdown: breakdown = get_nested_value(ad, ['transparency_by_location', 'eu_transparency', 'age_country_gender_reach_breakdown'])
     if not breakdown: breakdown = get_nested_value(ad, ['eu_data', 'age_country_gender_reach_breakdown'])
     return breakdown or []
 
 def get_advertiser_info(item):
-    """Extrahiert Infos über den Advertiser für das Modal."""
+    # ... (Logik wie gehabt) ...
     page_info = item.get("advertiser", {}).get("ad_library_page_info", {}).get("page_info", {})
     about_text = item.get("advertiser", {}).get("page", {}).get("about", {}).get("text")
-    
     return {
         "facebook_handle": page_info.get("page_alias"),
         "facebook_followers": page_info.get("likes"),
@@ -49,21 +48,23 @@ def get_advertiser_info(item):
     }
 
 def calculate_viral_score(reach, audience_size):
-    """Logarithmischer Viral Score."""
+    # ... (Logik wie gehabt: Modell 1) ...
     safe_audience = max(audience_size, 1000)
     ratio = reach / safe_audience
     score = 15 * math.log2(1 + ratio)
     return round(min(score, 100), 1)
 
 def normalize_meta_ad(item):
+    # ... (Die komplette Normalisierungs-Funktion von vorhin 1:1 übernehmen) ...
     if not item: return None
     if "error" in item or "errorMessage" in item: return None
-
+    
+    # ... (Extraktion von ID, Snapshot, Body wie gehabt) ...
     raw_snapshot = item.get("snapshot") or {}
     raw_id = item.get("ad_archive_id") or item.get("ad_id")
     if not raw_id or str(raw_id) == "nan": return None 
     safe_id = str(raw_id)
-
+    
     images = raw_snapshot.get("images") or []
     videos = raw_snapshot.get("videos") or []
     cards = raw_snapshot.get("cards") or []
@@ -77,7 +78,7 @@ def normalize_meta_ad(item):
     if not body_text and cards and isinstance(cards[0], dict):
         body_text = cards[0].get("body")
 
-    # --- REICHWEITE ---
+    # Reach
     reach = 0
     reach = get_nested_value(item, ['eu_transparency', 'eu_total_reach'])
     if not reach: reach = get_nested_value(item, ['aaa_info', 'eu_total_reach'])
@@ -89,15 +90,13 @@ def normalize_meta_ad(item):
     if not reach:
         reach = get_nested_value(item, ['impressions_with_index', 'impressions_index'])
         if reach == -1: reach = 0
-    
     reach = int(reach) if reach else 0
 
-    # --- SCORE & META ---
     page_size = get_page_size(item)
     efficiency_score = calculate_viral_score(reach, page_size)
     demographics_raw = get_demographics(item)
     target_locations = get_nested_value(item, ['aaa_info', 'location_audience']) or []
-    advertiser_info = get_advertiser_info(item) # NEU: Advertiser Info extrahieren
+    advertiser_info = get_advertiser_info(item)
 
     return {
         "id": safe_id,
@@ -107,17 +106,14 @@ def normalize_meta_ad(item):
         "page_profile_uri": item.get("page_profile_uri", "#"),
         "ad_library_url": item.get("ad_library_url", "#"),
         "likes": item.get("likes", 0) or item.get("page_like_count", 0),
-        
         "reach_estimate": reach, 
         "impressions": reach,
         "spend": item.get("spend", 0),
         "page_size": page_size,
         "efficiency_score": efficiency_score,
-        
         "demographics": demographics_raw,
         "target_locations": target_locations,
-        "advertiser_info": advertiser_info, # NEU: Wird jetzt gespeichert
-        
+        "advertiser_info": advertiser_info,
         "snapshot": {
             "cta_text": raw_snapshot.get("cta_text", "Learn More"),
             "link_url": raw_snapshot.get("link_url") or item.get("ad_library_url", "#"),
@@ -128,7 +124,15 @@ def normalize_meta_ad(item):
         }
     }
 
+# --- HIER IST DIE WICHTIGE ÄNDERUNG FÜR DEINE STRATEGIE ---
+
 async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
+    """
+    VIRAL SEARCH ENGINE:
+    1. Holt IMMER 100 Ads (fester Pool für statistische Relevanz).
+    2. Berechnet Viral Score für alle.
+    3. Gibt ALLE 100 zurück (Frontend schneidet ab oder filtert).
+    """
     target_country = country.upper() if country and country != "ALL" else "US"
     cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     
@@ -140,20 +144,21 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
         f"&media_type=all"
     )
 
-    scrape_limit = limit * 5 
-    if scrape_limit > 100: scrape_limit = 100 
+    # FESTES LIMIT: Wir holen immer 100 Ads für den "Pool".
+    # Das kostet ca. 7-8 Cent pro Suche bei Apify.
+    POOL_SIZE = 100
 
     run_input = {
         "urls": [{"url": search_url}],
-        "count": scrape_limit,
-        "maxItems": scrape_limit,
+        "count": POOL_SIZE,
+        "maxItems": POOL_SIZE,
         "pageTimeoutSecs": 60,
         "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
         "scrapeAdDetails": True, 
         "countryCode": target_country
     }
 
-    print(f"DEBUG: Scrape Winning Products (< {cutoff_date}) für '{query}'")
+    print(f"DEBUG: Starte 'Viral Search' (Pool={POOL_SIZE}) für '{query}'...")
 
     try:
         loop = asyncio.get_event_loop()
@@ -167,7 +172,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
 
         dataset_id = run.get("defaultDatasetId")
         if dataset_id:
-            print(f"✅ Scrape beendet. Lade Daten...")
+            print(f"✅ Scrape beendet. Verarbeite Daten...")
             dataset_items = await loop.run_in_executor(None, lambda: client.dataset(dataset_id).list_items(clean=True).items)
             
             normalized_results = []
@@ -183,12 +188,16 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
                 except Exception:
                     continue
             
-            print("DEBUG: Sortiere nach Viral Score...")
+            # Sortierung nach Viralität (Höchster Score zuerst)
             normalized_results.sort(
                 key=lambda x: (x.get('efficiency_score') or 0), 
                 reverse=True
             )
-            return normalized_results[:limit]
+
+            # WICHTIG: Wir geben jetzt ALLES zurück, nicht nur 'limit'.
+            # Das Frontend entscheidet, wie viele es anzeigt (Pagination/Infinite Scroll).
+            print(f"✅ Sende {len(normalized_results)} analysierte Ads an das Frontend.")
+            return normalized_results
             
     except Exception as e:
         print(f"❌ Apify Error: {str(e)}")

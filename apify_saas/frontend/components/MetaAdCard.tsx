@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
+import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, BarChart3, Zap } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -16,13 +16,13 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const hasVideo = snapshot.videos && snapshot.videos.length > 0;
   const mediaUrl = hasVideo ? snapshot.videos[0].video_hd_url : (snapshot.images.length > 0 ? snapshot.images[0].resized_image_url : null);
   
-  // METRIKEN
+  // METRIKEN LADEN
   const reachCount = ad.reach || 0;
-  // WICHTIG: Wir nutzen den Faktor für das Badge!
-  const factor = ad.viral_factor || 0; 
+  const score = ad.efficiency_score || 0; // Viral Score (0-100)
+  const factor = ad.viral_factor || 0;    // Faktor (z.B. 12x)
 
   const handleCardClick = (e: React.MouseEvent) => {
-      // Prevent click if clicking on CTA button or other interactive elements
+      // Klick auf Buttons/Links soll Karte nicht öffnen
       if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
           return;
       }
@@ -42,22 +42,13 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const { content, hashtags } = useMemo(() => {
       const text = snapshot.body.text || '';
       const words = text.replace(/\n/g, ' ').split(/\s+/);
-      
       const tags: string[] = [];
       const contentWords: string[] = [];
-
       words.forEach(w => {
-          if (w.startsWith('#')) {
-              tags.push(w);
-          } else {
-              contentWords.push(w);
-          }
+          if (w.startsWith('#')) tags.push(w);
+          else contentWords.push(w);
       });
-
-      return {
-          content: contentWords.join(' '),
-          hashtags: tags
-      };
+      return { content: contentWords.join(' '), hashtags: tags };
   }, [snapshot.body.text]);
 
   const platforms = ad.publisher_platform || [];
@@ -67,19 +58,14 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
   const hasAudience = platforms.includes('audience_network');
 
   const formattedDate = new Date(ad.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-  // Targeting Summary
-  const countries = targeting?.locations || [];
-  const displayLocation = countries.length > 0 
-    ? (countries.length > 2 ? `${countries.length} Standorte` : countries.join(', ')) 
-    : null;
+  const displayLocation = targeting?.locations?.length ? (targeting.locations.length > 2 ? `${targeting.locations.length} Standorte` : targeting.locations.join(', ')) : null;
 
   return (
     <div 
         onClick={handleCardClick}
         className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md hover:border-brand-200 transition-all duration-300 cursor-pointer group"
     >
-      {/* 1. TOP HEADER: Status, Date, Platforms */}
+      {/* 1. TOP HEADER */}
       <div className="px-3 py-2.5 bg-white border-b border-gray-100 flex items-center justify-between text-[11px]">
           <div className="flex items-center gap-2.5">
               <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border shadow-sm transition-colors ${ad.isActive ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
@@ -97,7 +83,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
           </div>
       </div>
 
-      {/* 2. IDENTITY ROW: Avatar, Name, Badge */}
+      {/* 2. IDENTITY ROW: Avatar & Name & Badges */}
       <div className="p-3 flex items-center gap-3 relative">
           <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center">
                 {/* @ts-ignore */}
@@ -108,20 +94,27 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({ ad, versionCount = 1, viewMode 
                     {ad.page_name}
                 </h3>
                 
-                {/* METRIKEN UNTER DEM NAMEN */}
-                <div className="flex items-center gap-2 mt-0.5">
-                    {/* DAS NEUE FEUER-BADGE */}
-                    {factor > 3.0 ? (
-                        <div className="flex items-center gap-1 text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100" title={`Performance: ${factor}x über dem Durchschnitt`}>
+                {/* HIER SIND DIE NEUEN BADGES */}
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    
+                    {/* 1. Viral Score (0-100) */}
+                    {score > 0 && (
+                        <div className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${score >= 80 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`} title="Viralitäts-Score (0-100)">
+                            <BarChart3 className="w-3 h-3" />
+                            <span>{score}</span>
+                        </div>
+                    )}
+
+                    {/* 2. Faktor (Feuer) - Nur wenn relevant */}
+                    {factor > 3.0 && (
+                         <div className="flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100" title={`${factor}x besser als der Durchschnitt`}>
                             <Zap className="w-3 h-3 fill-amber-500 text-amber-600" />
                             <span>🔥 {factor}x</span>
                         </div>
-                    ) : reachCount > 0 ? (
-                        <div className="flex items-center gap-1 text-[10px] text-indigo-600 font-medium bg-indigo-50 px-1.5 py-0.5 rounded">
-                            <BarChart3 className="w-3 h-3" />
-                            <span>{new Intl.NumberFormat('en-US', { notation: "compact" }).format(reachCount)}</span>
-                        </div>
-                    ) : (
+                    )}
+                    
+                    {/* 3. Fallback: ID (nur wenn keine Scores da sind) */}
+                    {score === 0 && factor === 0 && (
                         <div className="text-[10px] text-gray-400 font-medium">ID: {ad.id.split('_')[1] || ad.id}</div>
                     )}
                 </div>

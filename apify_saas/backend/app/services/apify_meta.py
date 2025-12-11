@@ -50,32 +50,48 @@ def get_advertiser_info(item):
 def get_ad_cluster(ad):
     """
     ROBUSTE Cluster-Zuordnung.
+    A: Standard / E-Commerce (Mode, Gadgets) -> Normal
+    B: Service / High Intent (Arzt, Software, Job) -> Bonus
+    C: Viral / Entertainment (Blogs, News) -> Malus
     """
-    # Sicherstellen, dass wir Strings haben
+    # 1. Kategorien prüfen
     cats = ad.get("page_categories", [])
     if not cats: cats = []
     cats_str = str(cats).lower()
     
+    # 2. CTA prüfen
     snapshot = ad.get("snapshot") or {}
     cta = snapshot.get("cta_text")
     if not cta: cta = ""
-    cta = str(cta).lower() # Hier war der Fehler! Jetzt sicher.
+    cta = str(cta).lower()
     
-    # Keywords für Cluster B (Service)
-    service_keywords = ['medical', 'doctor', 'software', 'real estate', 'consulting', 'education', 'lawyer', 'dentist', 'service', 'health/beauty']
-    if any(k in cats_str for k in service_keywords) or cta in ['book now', 'contact us']:
+    # --- CLUSTER B (Service / Jobs / B2B) ---
+    service_keywords = [
+        'medical', 'doctor', 'software', 'real estate', 'consulting', 
+        'education', 'lawyer', 'dentist', 'service', 'health/beauty',
+        'employment', 'job', 'karriere', 'b2b', 'agency'
+    ]
+    # Wenn CTA "Book now" ist ODER Keywords passen -> Cluster B
+    if any(k in cats_str for k in service_keywords) or cta in ['book now', 'contact us', 'apply now']:
         return 'B'
         
-    # Keywords für Cluster C (Viral)
-    viral_keywords = ['media', 'news', 'blog', 'creator', 'comedian', 'gamer', 'just for fun', 'entertainment']
+    # --- CLUSTER C (Viral / Entertainment) ---
+    viral_keywords = [
+        'media', 'news', 'blog', 'creator', 'comedian', 'gamer', 
+        'just for fun', 'entertainment', 'meme'
+    ]
     if any(k in cats_str for k in viral_keywords) or cta in ['watch more', 'like page']:
         return 'C'
         
-    # Default: Cluster A (E-Commerce)
+    # --- CLUSTER A (Default: E-Commerce) ---
     return 'A'
 
 def calculate_log_score(ratio):
-    """Logarithmische Skalierung auf 0-100."""
+    """
+    Logarithmische Skalierung auf 0-100.
+    Formel: 15 * log2(1 + Ratio)
+    """
+    if ratio <= 0: return 0
     score = 15 * math.log2(1 + ratio)
     return round(min(score, 100), 1)
 
@@ -118,7 +134,7 @@ def normalize_meta_ad(item):
 
     # --- BASIS DATEN ---
     page_size = get_page_size(item)
-    safe_audience = max(page_size, 1000)
+    safe_audience = max(page_size, 1000) # Floor von 1000
     viral_ratio = reach / safe_audience
     
     # Meta Infos
@@ -126,7 +142,7 @@ def normalize_meta_ad(item):
     target_locations = get_nested_value(item, ['aaa_info', 'location_audience']) or []
     advertiser_info = get_advertiser_info(item)
     
-    # Kategorien extrahieren
+    # Kategorien sauber extrahieren (Wichtig für Cluster!)
     page_cats = item.get("categories", [])
     if raw_snapshot.get("page_categories"):
         cats = raw_snapshot.get("page_categories")
@@ -147,7 +163,7 @@ def normalize_meta_ad(item):
         "spend": item.get("spend", 0),
         "page_size": page_size,
         
-        # Rohdaten für den Algorithmus
+        # Rohdaten für den Algorithmus (werden unten final berechnet)
         "viral_ratio": viral_ratio, 
         "efficiency_score": 0, 
         "viral_factor": 0,     
@@ -168,6 +184,12 @@ def normalize_meta_ad(item):
     }
 
 async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
+    """
+    HYBRIDER VIRAL SEARCH ALGORITHMUS:
+    1. Holt 100 Ads (Pool).
+    2. Weist Cluster zu (A/B/C).
+    3. Berechnet dynamische Faktoren ("Boost") basierend auf dem Wettbewerb.
+    """
     target_country = country.upper() if country and country != "ALL" else "US"
     cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     
@@ -211,6 +233,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
             results_pool = []
             seen_ids = set()
 
+            # 1. Normalisieren & Sammeln
             for item in dataset_items:
                 try:
                     norm = normalize_meta_ad(item)
@@ -223,13 +246,16 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
             
             if not results_pool: return []
 
-            # --- HYBRIDER ALGORITHMUS ---
+            # --- HYBRIDER ALGORITHMUS START ---
+            
+            # 2. Clustern (Gruppieren für Statistik)
             clusters = {'A': [], 'B': [], 'C': []}
             for ad in results_pool:
                 cluster = get_ad_cluster(ad)
-                ad['_cluster'] = cluster 
+                ad['_cluster'] = cluster # Temporär speichern
                 clusters[cluster].append(ad['viral_ratio'])
 
+            # 3. Cluster-Durchschnitte berechnen (Benchmark)
             cluster_avgs = {}
             for c, ratios in clusters.items():
                 if ratios:
@@ -237,34 +263,51 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
                 else:
                     cluster_avgs[c] = 0
 
+            # 4. Globaler Durchschnitt für das Badge
             global_total = sum(ad['viral_ratio'] for ad in results_pool)
             global_avg = global_total / len(results_pool) if len(results_pool) > 0 else 1.0
             if global_avg < 0.1: global_avg = 0.1
 
+            # 5. Finales Scoring für jede Ad
             for ad in results_pool:
                 ratio = ad['viral_ratio']
                 cluster = ad['_cluster']
                 count_in_cluster = len(clusters[cluster])
                 
+                # DIE LOGIK: Datengetrieben oder Heuristisch?
                 norm_factor = 1.0
+                
                 if count_in_cluster >= 5:
+                    # Genug Daten -> Wir nutzen den echten Cluster-Durchschnitt (Smart Boost)
+                    # Wir normieren alles auf eine "Ziel-Ratio" von 3.0
                     c_avg = max(cluster_avgs[cluster], 0.1)
                     norm_factor = 3.0 / c_avg 
                 else:
-                    if cluster == 'B': norm_factor = 1.5   
-                    elif cluster == 'C': norm_factor = 0.6 
-                    else: norm_factor = 1.0                
+                    # Zu wenig Daten -> Fallback auf Experten-Faktoren
+                    if cluster == 'B': norm_factor = 1.5   # Service Boost
+                    elif cluster == 'C': norm_factor = 0.6 # Viral Bremse
+                    else: norm_factor = 1.0                # Standard
                 
+                # Begrenzung des Faktors (Sicherheit)
+                if norm_factor > 5.0: norm_factor = 5.0
+                if norm_factor < 0.2: norm_factor = 0.2
+
+                # Finalen Score berechnen
                 adjusted_ratio = ratio * norm_factor
                 ad['efficiency_score'] = calculate_log_score(adjusted_ratio)
+                
+                # Faktor für das Frontend-Badge (Vergleich zum Pool)
                 ad['viral_factor'] = round(ratio / global_avg, 1)
 
+            # --- HYBRIDER ALGORITHMUS ENDE ---
+
+            # 6. Sortieren nach dem neuen Score
             results_pool.sort(
                 key=lambda x: (x.get('efficiency_score') or 0), 
                 reverse=True
             )
 
-            print(f"📊 Analyse fertig. Sende {len(results_pool)} Ads.")
+            print(f"📊 Analyse fertig. Top Score: {results_pool[0]['efficiency_score']}. Sende {len(results_pool)} Ads.")
             return results_pool
             
     except Exception as e:

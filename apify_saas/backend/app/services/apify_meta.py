@@ -47,10 +47,8 @@ def get_days_active(start_timestamp):
     if not start_timestamp:
         return 1.0
     try:
-        # Falls Timestamp als String oder Int kommt
         if isinstance(start_timestamp, str):
             try:
-                # Versuch ISO Format (z.B. '2025-11-09')
                 if len(start_timestamp) == 10:
                     start_date = datetime.datetime.strptime(start_timestamp, "%Y-%m-%d")
                 else:
@@ -62,9 +60,6 @@ def get_days_active(start_timestamp):
             
         now = datetime.datetime.now()
         delta = now - start_date
-        
-        # Wir nutzen Float für Präzision bei ganz frischen Ads (z.B. 0.5 Tage = 12h)
-        # Minimum 0.5, damit Velocity bei ganz neuen Ads nicht ins Unendliche schießt
         days = max(0.5, delta.total_seconds() / 86400)
         return days
     except:
@@ -72,17 +67,14 @@ def get_days_active(start_timestamp):
 
 def get_time_cohort(days):
     """Ordnet die Ad einer Zeit-Phase zu."""
-    if days <= 3: return "LAUNCH"      # 0-3 Tage (Explosive Starts)
-    if days <= 14: return "TRENDING"   # 4-14 Tage (Skalierung)
-    if days <= 30: return "ESTABLISHED"# 15-30 Tage (Stabile Winner)
-    return "EVERGREEN"                 # 30+ Tage (Dauerbrenner)
+    if days <= 3: return "LAUNCH"      # 0-3 Tage
+    if days <= 14: return "TRENDING"   # 4-14 Tage
+    if days <= 30: return "ESTABLISHED"# 15-30 Tage
+    return "EVERGREEN"                 # 30+ Tage
 
 def get_ad_cluster(ad):
     """
-    Kategorie-Cluster:
-    A: Standard / E-Commerce (Mode, Gadgets)
-    B: Service / High Intent (Arzt, Software, Job) -> Bonus
-    C: Viral / Entertainment (Blogs, News) -> Malus
+    Kategorie-Cluster: A (E-Comm), B (Service), C (Viral)
     """
     cats = ad.get("page_categories", [])
     if not cats: cats = []
@@ -116,7 +108,6 @@ def get_ad_cluster(ad):
 def calculate_log_score(value):
     """Logarithmische Skalierung auf 0-100."""
     if value <= 0: return 0
-    # Skalierung angepasst für Velocity-Werte
     score = 18 * math.log2(1 + value)
     return round(min(score, 100), 1)
 
@@ -139,7 +130,6 @@ def normalize_meta_ad(item):
         if isinstance(reach_est, dict): reach = reach_est.get('reach_upper_bound')
         elif isinstance(reach_est, (int, float)): reach = reach_est
     if not reach:
-        # Fallback für Impressions Index wenn gar nichts da ist
         reach = get_nested_value(item, ['impressions_with_index', 'impressions_index'])
         if reach == -1: reach = 0
         
@@ -150,10 +140,10 @@ def normalize_meta_ad(item):
     safe_audience = max(page_size, 1000) 
     viral_ratio = reach / safe_audience
     
-    # --- ZEIT & GESCHWINDIGKEIT (Velocity) ---
+    # --- ZEIT & GESCHWINDIGKEIT ---
     start_date_ts = item.get("start_date") 
     days_active = get_days_active(start_date_ts)
-    viral_velocity = viral_ratio / days_active # Ratio pro Tag = Geschwindigkeit
+    viral_velocity = viral_ratio / days_active 
     
     # Meta Infos
     advertiser_info = get_advertiser_info(item)
@@ -174,6 +164,16 @@ def normalize_meta_ad(item):
     if not body_text and cards and isinstance(cards[0], dict):
         body_text = cards[0].get("body")
 
+    # Mapping für Beneficiary Infos (Wichtig für Frontend!)
+    payer_beneficiary = get_nested_value(item, ['aaa_info', 'payer_beneficiary_data'])
+    if payer_beneficiary and isinstance(payer_beneficiary, list) and len(payer_beneficiary) > 0:
+        beneficiary_payer = {
+            "payer": payer_beneficiary[0].get("payer"),
+            "beneficiary": payer_beneficiary[0].get("beneficiary")
+        }
+    else:
+        beneficiary_payer = None
+
     return {
         "id": safe_id,
         "publisher_platform": item.get("publisher_platform", ["facebook"]),
@@ -188,18 +188,17 @@ def normalize_meta_ad(item):
         "spend": item.get("spend", 0),
         "page_size": page_size,
         
-        # --- NEUE METRIKEN FÜR DEN ALGORITHMUS ---
         "viral_ratio": viral_ratio, 
         "days_active": days_active,
         "viral_velocity": viral_velocity,
         
-        # Platzhalter (werden unten final berechnet)
         "efficiency_score": 0, 
         "viral_factor": 0,     
         
         "demographics": demographics_raw,
         "target_locations": target_locations,
         "advertiser_info": advertiser_info,
+        "beneficiary_payer": beneficiary_payer,
         "page_categories": page_cats,
         
         "snapshot": {
@@ -212,22 +211,30 @@ def normalize_meta_ad(item):
         }
     }
 
-async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
+async def search_meta_ads(query: str, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "active", limit: int = 20):
     """
-    HYBRIDER VIRAL SEARCH v2 (Velocity Edition)
-    1. Holt ALLE aktiven Ads (kein Datums-Filter).
-    2. Bildet Kohorten (Launch, Trending, Evergreen).
-    3. Normalisiert Velocity innerhalb der Kohorten.
+    HYBRIDER VIRAL SEARCH v3 (Dynamic Filtering)
+    Parameter für Datum und Status, plus Velocity-Scoring.
     """
     target_country = country.upper() if country and country != "ALL" else "US"
     
-    # WICHTIG: Kein start_date[max], damit wir auch Ads von HEUTE bekommen!
+    # 1. Basis URL mit Status-Parameter
     search_url = (
         f"https://www.facebook.com/ads/library/"
-        f"?active_status=active&ad_type=all&country={target_country}&q={query}"
+        f"?active_status={active_status}" 
+        f"&ad_type=all"
+        f"&country={target_country}"
+        f"&q={query}"
         f"&sort_data[direction]=desc&sort_data[mode]=relevancy_monthly_grouped"
         f"&media_type=all"
     )
+
+    # 2. Datums-Filter anhängen (falls vom User gewählt)
+    if start_date_min:
+        search_url += f"&start_date[min]={start_date_min}"
+    
+    if start_date_max:
+        search_url += f"&start_date[max]={start_date_max}"
 
     POOL_SIZE = 100
 
@@ -241,7 +248,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
         "countryCode": target_country
     }
 
-    print(f"DEBUG: Starte Velocity Search (Pool={POOL_SIZE}) für '{query}'...")
+    print(f"DEBUG: Starte Search für '{query}' (Status={active_status}, Min={start_date_min}, Max={start_date_max})...")
 
     try:
         loop = asyncio.get_event_loop()
@@ -255,13 +262,12 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
 
         dataset_id = run.get("defaultDatasetId")
         if dataset_id:
-            print(f"✅ Scrape beendet. Verarbeite Velocity-Daten...")
+            print(f"✅ Scrape beendet. Analysiere Daten...")
             dataset_items = await loop.run_in_executor(None, lambda: client.dataset(dataset_id).list_items(clean=True).items)
             
             results_pool = []
             seen_ids = set()
 
-            # 1. Normalisieren
             for item in dataset_items:
                 try:
                     norm = normalize_meta_ad(item)
@@ -276,8 +282,7 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
 
             # --- INTELLIGENTES SCORING SYSTEM ---
             
-            # A) Metadaten anreichern (Cluster & Kohorte)
-            cohort_buckets = {} # z.B. "A_LAUNCH", "A_TRENDING"
+            cohort_buckets = {}
             
             for ad in results_pool:
                 cat_cluster = get_ad_cluster(ad)
@@ -290,63 +295,46 @@ async def search_meta_ads(query: str, country: str = "US", limit: int = 20):
                     cohort_buckets[bucket_key] = []
                 cohort_buckets[bucket_key].append(ad['viral_velocity'])
 
-            # B) Benchmarks berechnen (Durchschnitts-Velocity pro Bucket)
             bucket_avgs = {}
             for key, velocities in cohort_buckets.items():
                 if velocities:
                     bucket_avgs[key] = sum(velocities) / len(velocities)
                 else:
-                    bucket_avgs[key] = 0.1 # Fallback
+                    bucket_avgs[key] = 0.1 
 
-            # Globaler Durchschnitt für das Badge (wir nutzen Ratio für User-Verständlichkeit)
             global_ratio_total = sum(ad['viral_ratio'] for ad in results_pool)
             global_ratio_avg = global_ratio_total / len(results_pool) if len(results_pool) > 0 else 1.0
             if global_ratio_avg < 0.1: global_ratio_avg = 0.1
 
-            # C) Finales Scoring für jede Ad
             for ad in results_pool:
                 velocity = ad['viral_velocity']
                 bucket = ad['_bucket']
                 
-                # Wir vergleichen die Ad mit ihrem Kohorten-Durchschnitt
-                # "Wie viel schneller wächst diese Ad als andere in derselben Phase?"
                 count_in_bucket = len(cohort_buckets[bucket])
                 
-                # Wenn genug Daten da sind, nutzen wir den echten Durchschnitt
                 norm_factor = 1.0
                 if count_in_bucket >= 3:
                     benchmark = max(bucket_avgs[bucket], 0.05)
-                    # Ziel: Ein "guter" Wert (2x besser) soll auf ~3.0 Velocity normiert werden
                     norm_factor = 2.0 / benchmark 
                 else:
-                    # Fallback Heuristiken, falls Kohorte leer ist
                     cluster_char = bucket.split('_')[0]
-                    if cluster_char == 'B': norm_factor = 3.0 # Service braucht Boost
-                    elif cluster_char == 'C': norm_factor = 0.5 # Viral braucht Bremse
+                    if cluster_char == 'B': norm_factor = 3.0 
+                    elif cluster_char == 'C': norm_factor = 0.5 
                     else: norm_factor = 1.0
                 
-                # Begrenzung für Sicherheit
                 if norm_factor > 10.0: norm_factor = 10.0
                 
-                # Adjusted Velocity -> Score
-                # Wir nehmen die Velocity mal Faktor. 
-                # Eine Velocity von 1.0 (100% Reach in 1 Tag) ist extrem gut.
-                # Wir skalieren das mit *5 für die Log-Formel.
                 adjusted_val = velocity * norm_factor * 5 
                 
                 ad['efficiency_score'] = calculate_log_score(adjusted_val)
-                
-                # Das Badge zeigt weiterhin den absoluten Faktor (Ratio vs Global Avg)
-                # Das versteht der User am besten ("10x viraler als der Rest")
                 ad['viral_factor'] = round(ad['viral_ratio'] / global_ratio_avg, 1)
 
-            # 6. Sortieren nach dem neuen Score
             results_pool.sort(
                 key=lambda x: (x.get('efficiency_score') or 0), 
                 reverse=True
             )
 
-            print(f"📊 Velocity-Analyse fertig. Top Score: {results_pool[0]['efficiency_score']}. Sende {len(results_pool)} Ads.")
+            print(f"📊 Analyse fertig. Top Score: {results_pool[0]['efficiency_score']}.")
             return results_pool
             
     except Exception as e:

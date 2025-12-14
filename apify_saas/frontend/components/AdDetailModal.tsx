@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { MetaAd, TikTokAd } from '../types';
 import { X, Heart, Share2, ExternalLink, Play, Calendar, Globe, Monitor, Info, ChevronDown, ChevronUp, MapPin, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, XCircle, ArrowUp, ArrowDown, FileText, User, CreditCard, Layers, ArrowLeft, MessageCircle, BarChart3, Hash, LayoutGrid, Eye, Building2, Sparkles, Bot, Loader2, ThumbsUp, ThumbsDown, Lightbulb, TrendingUp, Clock, ArrowUpDown } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
 
 interface AdDetailModalProps {
   isOpen: boolean;

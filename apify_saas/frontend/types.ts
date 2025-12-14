@@ -1,3 +1,5 @@
+
+
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -12,14 +14,16 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string;
 }
+
+export type UserPlan = 'starter' | 'pro' | 'agency';
 
 export interface User {
   id: string;
   email: string;
   name: string;
   credits: number;
+  plan: UserPlan;
   savedAds: SavedAd[];
   searchHistory: SearchHistoryItem[];
 }
@@ -31,29 +35,19 @@ export interface SearchParams {
   platform: Platform;
   limit: number;
   country?: string;
+  startDateMin?: string;
+  startDateMax?: string;
 }
 
+// Meta Ad Models
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
   body: {
     text: string;
   };
-  images: Array<{ resized_image_url: string; original_image_url?: string; video_preview_image_url?: string }>;
-  videos: Array<{ video_hd_url: string; video_sd_url?: string; video_preview_image_url?: string }>;
-  cards?: any[];
-}
-
-export interface DemographicBreakdown {
-  age_range: string;
-  male: number | null;
-  female: number | null;
-  unknown: number | null;
-}
-
-export interface CountryBreakdown {
-  country: string;
-  age_gender_breakdowns: DemographicBreakdown[];
+  images: Array<{ resized_image_url: string }>;
+  videos: Array<{ video_hd_url: string }>;
 }
 
 export interface MetaAdTargetingBreakdown {
@@ -64,12 +58,23 @@ export interface MetaAdTargetingBreakdown {
 }
 
 export interface MetaAdTargeting {
-  ages: string[]; 
-  genders: string[]; 
-  locations: string[]; 
+  ages: string[]; // e.g. "18-65+"
+  genders: string[]; // e.g. "All", "Female"
+  locations: string[]; // e.g. "Germany", "France", "US"
   excluded_locations?: string[];
-  reach_estimate?: number | null; 
+  reach_estimate?: number; // EU Reach estimate
   breakdown?: MetaAdTargetingBreakdown[];
+}
+
+export interface MetaAdRegionTransparency {
+    region: string; // e.g. "European Union", "United Kingdom"
+    description: string;
+    ages: string[];
+    genders: string[];
+    locations: string[];
+    excluded_locations?: string[];
+    reach_estimate?: number;
+    breakdown?: MetaAdTargetingBreakdown[];
 }
 
 export interface MetaAdAdvertiserInfo {
@@ -97,7 +102,6 @@ export interface MetaAdBeneficiaryPayer {
 
 export interface MetaAd {
   id: string;
-  ad_archive_id?: string;
   isActive: boolean;
   publisher_platform: string[];
   start_date: string;
@@ -105,33 +109,22 @@ export interface MetaAd {
   page_profile_uri: string;
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
-  
   // Metrics
   likes: number;
-  impressions: number | null;
-  spend: number | null;
-  
-  // Scoring
-  reach?: number | null; 
-  efficiency_score?: number | null;
-  viral_factor?: number | null;
-  page_size?: number | null;
-
-  // Data
+  impressions: number;
+  spend: number;
+  efficiency_score?: number; // Viral Score (0-100)
+  // New Targeting Data
   targeting?: MetaAdTargeting;
-  transparency_regions?: any[]; 
-  page_categories?: string[];
-  disclaimer?: string;
+  transparency_regions?: MetaAdRegionTransparency[];
+  page_categories?: string[]; // e.g. "Clothing Store"
+  disclaimer?: string; // "Paid for by..."
   advertiser_info?: MetaAdAdvertiserInfo;
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
-  
-  demographics?: CountryBreakdown[];
-  target_locations?: any[];
-
-  avatar?: string | null;
 }
 
+// TikTok Ad Models
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;
@@ -150,7 +143,7 @@ export interface TikTokAd {
   webVideoUrl: string;
   text: string;
   createTimeISO: string;
-  diggCount: number; 
+  diggCount: number; // Likes
   shareCount: number;
   playCount: number;
   commentCount: number;

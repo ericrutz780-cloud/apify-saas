@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useMemo } from 'react';
 import { TikTokAd } from '../types';
 import { Heart, MessageCircle, Share2, Play, Bookmark, ExternalLink, Video, Clock } from 'lucide-react';
 
@@ -6,22 +7,44 @@ interface TikTokAdCardProps {
   ad: TikTokAd;
   viewMode?: 'condensed' | 'details';
   onClick: (ad: TikTokAd) => void;
+  onAction?: (ad: TikTokAd) => void;
+  actionIcon?: React.ReactNode;
 }
 
 const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(num);
 };
 
-const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', onClick }) => {
+const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', onClick, onAction, actionIcon }) => {
   
   const handleCardClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('a')) {
+    if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
         return;
     }
     onClick(ad);
   };
 
+  const handleActionClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (onAction) {
+          onAction(ad);
+      }
+  };
+
   const daysActive = Math.floor((new Date().getTime() - new Date(ad.createTimeISO).getTime()) / (1000 * 3600 * 24));
+
+  // Process text
+  const { content, hashtags } = useMemo(() => {
+    const text = ad.text || '';
+    const words = text.replace(/\n/g, ' ').split(/\s+/);
+    const tags: string[] = [];
+    const contentWords: string[] = [];
+    words.forEach(w => {
+        if (w.startsWith('#')) tags.push(w);
+        else contentWords.push(w);
+    });
+    return { content: contentWords.join(' '), hashtags: tags };
+  }, [ad.text]);
 
   return (
     <div 
@@ -56,6 +79,16 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
                   <Video className="w-4 h-4 text-[#E4405F]" />
               </div>
           </div>
+
+          {/* Action Button - Bottom Right */}
+          {onAction && actionIcon && (
+             <button
+                onClick={handleActionClick}
+                className="absolute bottom-3 right-3 z-10 p-2 rounded-full shadow-sm bg-white/90 text-red-600 hover:bg-red-50 hover:text-red-700 border border-gray-200 transition-all duration-200"
+             >
+                 {actionIcon}
+             </button>
+          )}
        </div>
 
        {/* 2. Metrics Row - Always Visible */}
@@ -88,22 +121,23 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
 
        {/* DETAILS VIEW ONLY - Identity & Text */}
        {viewMode === 'details' && (
-            <div className="p-4 flex-1 flex flex-col gap-3">
+            <div className="p-4 flex-1 flex flex-col gap-1">
                 {/* Identity */}
-                <div className="flex items-center gap-3">
-                    <img src={ad.authorMeta.avatarUrl} alt="" className="w-8 h-8 rounded-full border border-gray-200 bg-gray-50 object-cover" />
-                    <div className="min-w-0">
+                <div className="flex items-center gap-3 mb-3">
+                    <img src={ad.authorMeta.avatarUrl} alt="" className="w-9 h-9 rounded-full border border-gray-200 bg-gray-50 object-cover" />
+                    <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-semibold text-gray-900 truncate hover:text-brand-600 transition-colors">
                             {ad.authorMeta.nickName}
                         </h3>
                     </div>
                 </div>
 
-                {/* Description - Fixed Height */}
-                <div className="h-10">
-                    <p className="text-sm text-gray-600 leading-snug line-clamp-2">
-                        {ad.text}
-                    </p>
+                {/* Description & Tags */}
+                <div className="text-sm text-gray-600 leading-5 font-normal line-clamp-2 h-10 overflow-hidden">
+                    {content || <span className="text-gray-400 italic">No description</span>}
+                </div>
+                <div className="text-xs text-blue-600 font-medium leading-4 line-clamp-1 h-4 overflow-hidden">
+                    {hashtags.length > 0 ? hashtags.join(' ') : <span className="select-none">&nbsp;</span>}
                 </div>
             </div>
        )}

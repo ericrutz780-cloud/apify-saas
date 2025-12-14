@@ -1,30 +1,22 @@
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
-class SearchQuery(BaseModel):
+class SearchRequest(BaseModel):
     # --- PFLICHTFELDER ---
-    
-    # Das Keyword (min. 2 Zeichen, damit keine leeren Suchen passieren)
     keyword: str = Field(..., min_length=2, example="fitness")
+    platform: Literal['meta', 'tiktok', 'both'] = Field(..., example="meta")
     
-    # Welcher Scraper soll genutzt werden?
-    platform: Literal['meta', 'tiktok'] = Field(..., example="tiktok")
+    # --- OPTIONALE FELDER & FILTER ---
+    limit: int = Field(20, ge=1, le=100, example=20)
     
-    # --- OPTIONALE FELDER MIT DEFAULTS ---
-    
-    # Das Limit (Schutz vor Kostenexplosion: Max 100)
-    limit: int = Field(10, ge=1, le=100, example=10)
-    
-    # Das Land (Backend erwartet STRIKT 2 Buchstaben, z.B. "US")
-    # Das Frontend muss "United States" in "US" umwandeln, bevor es das sendet!
+    # Frontend sendet Ländercodes wie "US", "DE"
     country: str = Field("US", min_length=2, max_length=2, pattern="^[A-Z]{2}$", example="US")
     
-    # Zeitraum in Tagen (Wichtig für TikTok "Viralität")
-    # Default: 30 Tage (Standard für Dropshipping Trends)
-    period: int = Field(30, ge=1, le=365, example=30)
+    # V3 Algorithmus Filter (Datums-Range & Status)
+    start_date_min: Optional[str] = Field(None, example="2023-12-01")
+    start_date_max: Optional[str] = Field(None, example="2023-12-31")
+    active_status: Optional[str] = Field("active", example="active")
     
-    # Sortierung (Wir erlauben nur sichere Werte)
-    # 'relevancy' = Standard Meta
-    # 'likes' = Viralität TikTok
-    # 'newest' = Frische Ads
-    sort_by: Literal['relevancy', 'likes', 'newest'] = Field("relevancy", example="likes")
+    # Sortierung (Wichtig für das Frontend-Mapping)
+    # Erlaubt: 'newest', 'likes', 'relevancy', 'reach_views', 'spend_shares'
+    sort_by: Optional[str] = Field("newest", example="newest")

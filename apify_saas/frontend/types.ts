@@ -14,6 +14,7 @@ export interface SearchHistoryItem {
   timestamp: string;
   resultsCount: number;
   limit: number;
+  country?: string;
 }
 
 export type UserPlan = 'starter' | 'pro' | 'agency';

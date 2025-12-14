@@ -1,155 +1,196 @@
-
-import { MOCK_META_ADS, MOCK_TIKTOK_ADS, MOCK_USER } from './mockData';
+/// <reference types="vite/client" />
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd, SearchHistoryItem, UserPlan } from '../types';
+import { MOCK_USER } from './mockData'; // Nur als Fallback für User-Struktur
+// @ts-ignore
+import { cleanAndTransformData } from '../adAdapter';
 
-// Simulate network delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const PLAN_LIMITS: Record<UserPlan, number> = {
-    'starter': 100,
-    'pro': 250,
-    'agency': 500
-};
+// Verbindung zum echten Backend herstellen
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
+const API_URL = `${CLEAN_BASE_URL}/api/v1`;
 
 class ApiService {
-  private user: User = { ...MOCK_USER };
+  private user: User | null = null;
+  private token: string | null = null;
 
-  async getUser(): Promise<User> {
-    await delay(500);
-    return { ...this.user };
+  private _getLocalHistory(): SearchHistoryItem[] {
+    try {
+      const stored = localStorage.getItem('adspy_local_history');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  private _saveLocalHistory(item: SearchHistoryItem) {
+    const history = this._getLocalHistory();
+    const updated = [item, ...history].slice(0, 50);
+    localStorage.setItem('adspy_local_history', JSON.stringify(updated));
+  }
+
+  async login(email: string, password: string): Promise<User> {
+    try {
+        const response = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Login failed');
+        }
+
+        const data = await response.json();
+        this.token = data.access_token;
+        localStorage.setItem('adspy_user_id', data.user.id);
+
+        await this.getUser();
+        return this.user!;
+    } catch (e: any) {
+        console.error("Login Error:", e);
+        throw new Error(e.message || "Login failed");
+    }
+  }
+
+  async getUser(): Promise<User | null> {
+    const storedId = localStorage.getItem('adspy_user_id');
+    if (!storedId) return null;
+
+    try {
+        const response = await fetch(`${API_URL}/user/me?user_id=${storedId}`);
+        let profileData = {};
+        
+        if (response.ok) {
+            profileData = await response.json();
+        }
+
+        const localHistory = this._getLocalHistory();
+
+        // Wir mischen die echte User-ID mit der Struktur, die das neue Design erwartet
+        this.user = { 
+            ...MOCK_USER, 
+            ...profileData, 
+            id: storedId,
+            searchHistory: localHistory.length > 0 ? localHistory : (MOCK_USER.searchHistory || [])
+        };
+        
+        return this.user;
+    } catch (e) {
+        console.warn("User fetch failed", e);
+        return null;
+    }
   }
 
   async updateUser(data: Partial<User>): Promise<User> {
-    await delay(800);
-    this.user = { ...this.user, ...data };
-    return { ...this.user };
+      if (this.user) {
+          this.user = { ...this.user, ...data };
+      }
+      return this.user!;
   }
 
   async runSearch(params: SearchParams): Promise<SearchResult> {
-    await delay(800); // Simulate Apify scrapping time
-    
-    // Determine limit based on plan, ignore params.limit logic for cost calculation if passed from UI
-    // In a real app, backend enforces this.
-    const effectiveLimit = PLAN_LIMITS[this.user.plan] || 100;
-    const cost = effectiveLimit; // 1 credit per result requested
-    
-    if (this.user.credits < cost) {
-      throw new Error("Insufficient credits");
+    if (!this.user) throw new Error("Unauthorized: Bitte einloggen.");
+
+    const cleanCountry = (!params.country || params.country === 'ALL') ? 'US' : params.country;
+
+    // Mapping: Frontend (camelCase) -> Backend (snake_case)
+    const payload = {
+        keyword: params.query,
+        platform: params.platform === 'both' ? 'meta' : params.platform,
+        limit: params.limit,
+        country: cleanCountry,
+        start_date_min: params.startDateMin, // Hier wird das Datum übergeben!
+        start_date_max: params.startDateMax,
+        sort_by: 'newest',
+        active_status: 'active'
+    };
+
+    console.log("🚀 Sende echte Anfrage an Backend:", payload);
+
+    const response = await fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Search failed");
     }
 
-    // Deduct credits
-    this.user.credits -= cost;
+    const responseBody = await response.json();
+    let rawAdList = responseBody.data || [];
 
-    // Filter Logic to simulate real search
-    const query = params.query.toLowerCase();
-    
-    // --- META FILTERING ---
-    let filteredMeta: MetaAd[] = [];
+    // Daten für das Frontend aufbereiten
+    let cleanedMetaAds: any[] = [];
+    let tikTokAds: any[] = [];
+
     if (params.platform !== 'tiktok') {
-        filteredMeta = MOCK_META_ADS.filter(ad => {
-            const matchesQuery = ad.page_name.toLowerCase().includes(query) || 
-                               ad.snapshot.body.text.toLowerCase().includes(query);
-            
-            let matchesDate = true;
-            if (params.startDateMin) {
-                matchesDate = matchesDate && new Date(ad.start_date) >= new Date(params.startDateMin);
-            }
-            if (params.startDateMax) {
-                matchesDate = matchesDate && new Date(ad.start_date) <= new Date(params.startDateMax);
-            }
-            
-            return matchesQuery && matchesDate;
-        });
+        const metaRaw = rawAdList.filter((ad: any) => !ad.platform || ad.platform === 'meta' || ad.publisher_platform);
+        if (metaRaw.length > 0) {
+             const rowsToTransform = metaRaw.map((item: any) => ({ data: item }));
+             cleanedMetaAds = cleanAndTransformData(rowsToTransform);
+        }
     }
 
-    // --- TIKTOK FILTERING ---
-    let filteredTikTok: TikTokAd[] = [];
     if (params.platform !== 'meta') {
-        filteredTikTok = MOCK_TIKTOK_ADS.filter(ad => {
-             const matchesQuery = ad.authorMeta.nickName.toLowerCase().includes(query) || 
-                                ad.text.toLowerCase().includes(query);
-             
-             let matchesDate = true;
-             if (params.startDateMin) {
-                 matchesDate = matchesDate && new Date(ad.createTimeISO) >= new Date(params.startDateMin);
-             }
-             if (params.startDateMax) {
-                 matchesDate = matchesDate && new Date(ad.createTimeISO) <= new Date(params.startDateMax);
-             }
-             
-             return matchesQuery && matchesDate;
-        });
+        tikTokAds = rawAdList.filter((ad: any) => ad.platform === 'tiktok');
     }
 
-    // Apply Limit based on Plan (distribute limit between platforms if 'both' is selected)
-    
-    // Simple distribution for 'both': take half from each if possible, or fill up.
-    if (params.platform === 'both') {
-        const metaLimit = Math.ceil(effectiveLimit / 2);
-        // If meta matches are less than half, give more quota to tiktok
-        const metaTake = Math.min(filteredMeta.length, metaLimit);
-        const tiktokTake = Math.min(filteredTikTok.length, effectiveLimit - metaTake);
+    // Credits abziehen (Lokal aktualisieren)
+    if (this.user) {
+        this.user.credits -= params.limit;
         
-        filteredMeta = filteredMeta.slice(0, metaTake);
-        filteredTikTok = filteredTikTok.slice(0, tiktokTake);
-    } else {
-        filteredMeta = filteredMeta.slice(0, effectiveLimit);
-        filteredTikTok = filteredTikTok.slice(0, effectiveLimit);
+        const newHistoryItem: SearchHistoryItem = {
+            id: Math.random().toString(36).substring(7),
+            query: params.query,
+            platform: params.platform,
+            timestamp: new Date().toISOString(),
+            resultsCount: cleanedMetaAds.length + tikTokAds.length,
+            limit: params.limit,
+            country: cleanCountry
+        };
+        this.user.searchHistory = [newHistoryItem, ...this.user.searchHistory];
+        this._saveLocalHistory(newHistoryItem);
     }
 
-    const result: SearchResult = {
+    return {
       id: Math.random().toString(36).substring(7),
-      params: { ...params, limit: effectiveLimit }, // Update params with actual used limit
+      params,
       timestamp: new Date().toISOString(),
       status: 'completed',
-      metaAds: filteredMeta,
-      tikTokAds: filteredTikTok,
-      cost
+      metaAds: cleanedMetaAds,
+      tikTokAds: tikTokAds,
+      cost: params.limit
     };
-    
-    // Add to history
-    const historyItem: SearchHistoryItem = {
-        id: result.id,
-        query: params.query,
-        platform: params.platform,
-        timestamp: new Date().toISOString(),
-        resultsCount: result.metaAds.length + result.tikTokAds.length,
-        limit: effectiveLimit
-    };
-    
-    // Add to beginning of array
-    this.user.searchHistory.unshift(historyItem);
-
-    return result;
-  }
-
-  async purchaseCredits(amount: number): Promise<void> {
-    await delay(1000);
-    this.user.credits += amount;
   }
 
   async saveAd(ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok'): Promise<SavedAd> {
-    await delay(300);
+    if (!this.user) throw new Error("Login required");
+
+    await fetch(`${API_URL}/user/saved-ads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: this.user.id, type, data: ad })
+    });
+
     const savedAd: SavedAd = {
       id: Math.random().toString(36).substring(7),
-      type,
-      data: ad,
-      savedAt: new Date().toISOString()
+      type, data: ad, savedAt: new Date().toISOString()
     };
-    // Check if already saved
-    const exists = this.user.savedAds.find(s => 
-      s.data.id === ad.id && s.type === type
-    );
-    
-    if (!exists) {
-        this.user.savedAds.unshift(savedAd);
-    }
+    this.user.savedAds.unshift(savedAd);
     return savedAd;
   }
 
   async removeSavedAd(id: string): Promise<void> {
-      await delay(300);
+      if (!this.user) return;
+      await fetch(`${API_URL}/user/saved-ads/${id}?user_id=${this.user.id}`, { method: 'DELETE' });
       this.user.savedAds = this.user.savedAds.filter(ad => ad.id !== id);
+  }
+
+  async purchaseCredits(amount: number): Promise<void> {
+    if (this.user) this.user.credits += amount;
   }
 }
 

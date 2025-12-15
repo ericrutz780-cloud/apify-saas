@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-import { X, Globe, Info, ChevronDown, ChevronUp, Facebook, Instagram, CheckCircle2, FileText, User, Layers, Play, Monitor, LayoutGrid, Eye, Sparkles, Building2, BarChart3, MapPin, Zap, Download, Save, ShieldCheck, Clock, TrendingUp, Calendar, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+// HIER WURDE "Hash" HINZUGEFÜGT:
+import { X, Globe, Info, ChevronDown, ChevronUp, Facebook, Instagram, CheckCircle2, FileText, User, Layers, Play, Monitor, LayoutGrid, Eye, Sparkles, Building2, BarChart3, MapPin, Zap, Download, Save, ShieldCheck, Clock, TrendingUp, Calendar, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Hash } from 'lucide-react';
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -35,7 +36,6 @@ const AIAnalysisSection = () => {
 
 const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false }: { title: string, icon: any, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
-    // Auto-open if children exist effectively? logic handled by parent usually, but simple toggle here
     return (
         <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
             <button 
@@ -68,51 +68,40 @@ const formatFollowerCount = (num?: number) => {
 };
 
 // --- Helper: Data Normalization (The Fix) ---
-// Diese Funktion extrahiert Daten egal ob sie "clean" oder "raw" sind
 const normalizeAdData = (ad: any) => {
-    // 1. Snapshot & Basics
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // 2. Targeting & Demographics Extraction
-    // Wir suchen in dieser Reihenfolge: ad.demographics (clean), aaa_info (raw), transparency (raw)
     let demographics = ad.demographics || [];
     let locations: string[] = ad.targeting?.locations || [];
     let reach = ad.reach || ad.eu_total_reach || 0;
     
-    // Raw Data Sources
     const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
 
     if (rawInfo) {
-        // Wenn wir noch keine Demografie haben, holen wir sie aus den Rohdaten
         if (!demographics || demographics.length === 0) {
             demographics = rawInfo.age_country_gender_reach_breakdown || [];
         }
         
-        // Wenn wir noch keine Locations haben
         if (locations.length === 0 && rawInfo.location_audience) {
             locations = rawInfo.location_audience.map((l: any) => l.name);
         }
 
-        // Wenn wir noch keine Reichweite haben
         if (!reach) {
             reach = rawInfo.eu_total_reach || 0;
         }
     }
 
-    // 3. Regionen für Tabs
-    // Wir erstellen künstliche "Regionen" Daten wenn wir Rohdaten haben aber keine transparency_regions
     let regions = ad.transparency_regions || [];
     if (regions.length === 0 && rawInfo) {
         regions = [{
             region: "European Union",
             description: "Data from EU Transparency records.",
             breakdown: demographics.flatMap((d: any) => {
-                 // Flatten the breakdown for the table view
                  return d.age_gender_breakdowns.map((b: any) => ({
                      location: d.country,
                      age_range: b.age_range,
-                     gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'), // Simple heuristic
+                     gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
                      reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
                  }));
             })
@@ -127,14 +116,13 @@ const normalizeAdData = (ad: any) => {
         derived_locations: locations,
         derived_reach: reach,
         derived_regions: regions,
-        // Fallback for genders/ages if not in targeting
         derived_ages: ad.targeting?.ages || (rawInfo?.age_audience ? [`${rawInfo.age_audience.min}-${rawInfo.age_audience.max}`] : ['18-65+']),
         derived_genders: ad.targeting?.genders || (rawInfo?.gender_audience ? [rawInfo.gender_audience] : ['All'])
     };
 };
 
 interface MetaAdDetailViewProps {
-    ad: any; // Using any to handle raw + clean mix safely inside
+    ad: any;
     group: any[];
     isActiveView: boolean;
     openTabs: string[];
@@ -148,12 +136,9 @@ interface MetaAdDetailViewProps {
 const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({ 
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
-    // Normalize Data on the fly
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
-    
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
 
-    // Sorted Siblings Logic
     const sortedSiblings = useMemo(() => {
         return [...group].sort((a, b) => {
             const aOpen = openTabs.includes(a.id);
@@ -168,18 +153,15 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const mediaUrl = hasVideo ? snapshot?.videos[0].video_hd_url : (snapshot?.images?.length > 0 ? snapshot?.images[0].resized_image_url : null);
     const platforms = ad.publisher_platform || [];
     
-    // Use derived data
     const regions = ad.derived_regions;
     const hasMultipleRegions = regions.length > 0;
     
-    // Determine what to show in the targeting table
     const activeBreakdown = hasMultipleRegions && regions[activeRegionIndex]?.breakdown 
         ? regions[activeRegionIndex].breakdown 
         : [];
 
     return (
         <div className={isActiveView ? "flex flex-col md:flex-row h-full" : "hidden h-full"}>
-            {/* Left Column: Creative */}
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-gray-50 border-r border-gray-200 p-6">
                 <div className="space-y-6 max-w-lg mx-auto">
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
@@ -245,12 +227,10 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                 </div>
             </div>
 
-            {/* Right Column: Metadata */}
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Ad Details</h2>
                 <AIAnalysisSection />
 
-                {/* Info Grid */}
                 <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
                         <div className="flex items-center gap-2 text-indigo-600 mb-1"><BarChart3 className="w-4 h-4" /><span className="text-xs font-bold uppercase">Reach</span></div>
@@ -264,11 +244,9 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                     </div>
                 </div>
 
-                {/* Targeting & Demographics Section - FIXED LOGIC */}
                 <CollapsibleSection title="Targeting & Demographics" icon={Globe} defaultOpen={true}>
                      <div className="space-y-6">
                          
-                         {/* Region Switcher */}
                          {hasMultipleRegions && (
                              <div className="flex gap-2 overflow-x-auto pb-2 border-b border-gray-100 mb-4">
                                  {regions.map((regionData: any, idx: number) => (
@@ -279,7 +257,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </div>
                          )}
 
-                         {/* Basic Targeting Info */}
                          <div className="grid grid-cols-2 gap-4">
                              <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
                                  <div className="text-xs text-gray-500 font-medium mb-1">Ages</div>
@@ -291,7 +268,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </div>
                          </div>
 
-                         {/* Locations List */}
                          {ad.derived_locations.length > 0 && (
                              <div>
                                  <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Locations ({ad.derived_locations.length})</h4>
@@ -304,7 +280,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </div>
                          )}
 
-                         {/* Visual Demographics (Charts) */}
                          {ad.demographics.length > 0 && (
                              <div>
                                  <h4 className="text-sm font-bold text-gray-800 mb-3 mt-4">Audience Breakdown</h4>
@@ -337,7 +312,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </div>
                          )}
                          
-                         {/* Detailed Reach Table (Fallback/Complement) */}
                          {activeBreakdown.length > 0 && (
                             <div className="mt-4">
                                 <h4 className="text-sm font-bold text-gray-800 mb-2">Detailed Reach Data</h4>
@@ -368,19 +342,55 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                      </div>
                 </CollapsibleSection>
 
-                {/* Advertiser & Disclaimer (Standard) */}
+                {about_disclaimer && (
+                    <CollapsibleSection title="About the disclaimer" icon={FileText} defaultOpen={false}>
+                        <p className="text-sm text-gray-600 leading-relaxed mb-6">{about_disclaimer.text}</p>
+                        <div className="space-y-4">
+                            {about_disclaimer.location && (
+                                <div className="flex items-start gap-3">
+                                    <Globe className="w-5 h-5 text-gray-400 mt-0.5" />
+                                    <div><div className="text-sm font-bold text-gray-900">Location</div><div className="text-sm text-gray-600">{about_disclaimer.location}</div></div>
+                                </div>
+                            )}
+                            {about_disclaimer.payer && (
+                                <div className="flex items-start gap-3">
+                                    <User className="w-5 h-5 text-gray-400 mt-0.5" />
+                                    <div><div className="text-sm font-bold text-gray-900">Payer</div><div className="text-sm text-gray-600 uppercase">{about_disclaimer.payer}</div></div>
+                                </div>
+                            )}
+                        </div>
+                    </CollapsibleSection>
+                )}
+
                 <CollapsibleSection title="About the advertiser" icon={ShieldCheck} defaultOpen={false}>
-                    <div className="flex items-center gap-4 mb-4">
-                         <div className="w-12 h-12 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-lg border border-gray-100 flex-shrink-0">
+                    <div className="flex items-center gap-4 mb-5">
+                         <div className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-xl border border-gray-100 flex-shrink-0">
                             {ad.page_name.charAt(0)}
                          </div>
-                         <div className="font-bold text-gray-900">{ad.page_name}</div>
+                         <div className="font-bold text-gray-900 text-lg">{ad.page_name}</div>
                     </div>
-                    {advertiser_info?.about_text && <div className="text-sm text-gray-600 leading-relaxed">{advertiser_info.about_text}</div>}
+                    
+                    <div className="space-y-4 mb-5">
+                        {(advertiser_info?.facebook_handle || !advertiser_info) && (
+                            <div className="flex items-start gap-3">
+                                <div className="mt-0.5"><Facebook className="w-5 h-5 text-[#1877F2]" /></div>
+                                <div>
+                                    <div className="text-sm font-semibold text-gray-900">{advertiser_info?.facebook_handle || `@${ad.page_name.replace(/\s/g, '').toLowerCase()}`}</div>
+                                    <div className="text-sm text-gray-500">{advertiser_info?.facebook_followers && <span>{formatFollowerCount(advertiser_info.facebook_followers)} followers</span>}</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    {advertiser_info?.about_text && (
+                        <>
+                            <div className="h-px bg-gray-100 w-full my-4"></div>
+                            <div className="mb-2 font-bold text-gray-900 text-sm">More info</div>
+                            <div className="text-sm text-gray-600 leading-relaxed">{advertiser_info.about_text}</div>
+                        </>
+                    )}
                 </CollapsibleSection>
 
-                {/* Footer */}
-                <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100">
+                <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-gray-100">
                     <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"><Download className="w-4 h-4" /> Download</button>
                     <button onClick={() => isSaved ? onRemove() : onSave(rawAd)} className={`flex-1 flex items-center justify-center gap-2 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm ${isSaved ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-brand-600 hover:bg-brand-700 text-white'}`}>
                         {isSaved ? <><X className="w-4 h-4" /> Remove</> : <><Save className="w-4 h-4" /> Save</>}
@@ -394,18 +404,16 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, onRemove, isSaved, group, type }) => {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('overview');
-
-  // Key to force re-render when group changes significantly
+  const [lastOpenedIds, setLastOpenedIds] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<{ key: 'reach' | 'score' | 'date' | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'desc' });
   const groupKey = group && group.length > 0 ? group[0].id || group[0].ad_archive_id : '';
 
   useEffect(() => {
       if (isOpen && group && group.length > 0) {
-           // Direct logic: If 1 ad, open it. If >1, open overview.
            if (group.length > 1 && type === 'meta') {
                setOpenTabs(['overview']);
                setActiveTabId('overview');
            } else {
-               // Safe ID access for raw or clean data
                const firstId = group[0].id || group[0].ad_archive_id;
                setOpenTabs([firstId]);
                setActiveTabId(firstId);
@@ -413,21 +421,63 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
       } else {
           setOpenTabs([]);
           setActiveTabId('overview');
+          setLastOpenedIds([]);
       }
   }, [isOpen, groupKey, type]);
 
+  const sortedGroup = React.useMemo(() => {
+      if (!group) return [];
+      let ads = [...group];
+      if (!sortConfig.key && lastOpenedIds.length > 0) {
+         ads.sort((a, b) => {
+             const idxA = lastOpenedIds.indexOf(a.id);
+             const idxB = lastOpenedIds.indexOf(b.id);
+             if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+             if (idxA !== -1) return -1;
+             if (idxB !== -1) return 1;
+             return 0;
+         });
+         return ads;
+      }
+      if (!sortConfig.key) return ads;
+      return ads.sort((a, b) => {
+          let aValue = 0;
+          let bValue = 0;
+          if (sortConfig.key === 'reach') {
+              aValue = a.targeting?.reach_estimate || 0;
+              bValue = b.targeting?.reach_estimate || 0;
+          } else if (sortConfig.key === 'score') {
+              aValue = a.efficiency_score || 0;
+              bValue = b.efficiency_score || 0;
+          } else if (sortConfig.key === 'date') {
+              aValue = new Date(a.start_date).getTime();
+              bValue = new Date(b.start_date).getTime();
+          }
+          if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+          if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+          return 0;
+      });
+  }, [group, sortConfig, lastOpenedIds]);
+
   if (!isOpen || !group || group.length === 0 || !type) return null;
 
+  const handleContentClick = (e: React.MouseEvent) => { e.stopPropagation(); };
   const handleOpenAd = (adId: string) => {
       if (!openTabs.includes(adId)) setOpenTabs(prev => [...prev, adId]);
+      setLastOpenedIds(prev => [adId, ...prev.filter(id => id !== adId)]);
       setActiveTabId(adId);
   };
-
+  const handleClearOpenAds = () => { setOpenTabs(['overview']); setActiveTabId('overview'); };
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
       e.stopPropagation();
       const newTabs = openTabs.filter(t => t !== tabId);
       setOpenTabs(newTabs);
       if (activeTabId === tabId) setActiveTabId(newTabs[newTabs.length - 1] || 'overview');
+  };
+  const handleSort = (key: 'reach' | 'score' | 'date') => { setSortConfig(current => ({ key, direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc' })); };
+  const renderSortIcon = (key: 'reach' | 'score' | 'date') => {
+      if (sortConfig.key !== key) return <ArrowUpDown className="w-3 h-3 text-gray-300 ml-1" />;
+      return sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-brand-600 ml-1" /> : <ArrowDown className="w-3 h-3 text-brand-600 ml-1" />;
   };
 
   if (type === 'meta') {
@@ -435,60 +485,70 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
     return (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                {/* Header & Tabs */}
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200" onClick={handleContentClick}>
                 <div className="flex flex-col border-b border-gray-200 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center justify-between px-6 py-4">
                         <div className="flex items-center gap-3">
                              <div className="p-2 bg-brand-100 text-brand-700 rounded-lg"><Layers className="w-5 h-5" /></div>
                              <div>
                                 <h2 className="text-lg font-bold text-gray-900">{group.length > 1 ? `${group.length} Ad Versions` : 'Ad Details'}</h2>
-                                <p className="text-xs text-gray-500">Detailed Analysis</p>
+                                <p className="text-xs text-gray-500">{group.length > 1 ? 'Shared creative text • Different targeting/dates' : 'Detailed Analysis'}</p>
                              </div>
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"><X className="w-5 h-5" /></button>
+                        <div className="flex items-center gap-2">
+                            {openTabs.length > 1 && (<button onClick={handleClearOpenAds} className="text-xs font-medium text-gray-500 hover:text-gray-800 underline decoration-gray-300 hover:decoration-gray-600 underline-offset-2 transition-all mr-2">Clear open ads</button>)}
+                            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"><X className="w-5 h-5" /></button>
+                        </div>
                     </div>
                     {showTabs && (
                         <div className="flex items-end px-6 gap-2 overflow-x-auto no-scrollbar">
-                            {openTabs.map(tabId => (
-                                <button key={tabId} onClick={() => setActiveTabId(tabId)} className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 flex-shrink-0 ${activeTabId === tabId ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`} style={{ marginBottom: -1 }}>
-                                    {tabId === 'overview' ? <LayoutGrid className="w-4 h-4" /> : <Hash className="w-4 h-4" />}
-                                    {tabId === 'overview' ? 'Overview' : `ID: ${tabId.split('_')[1] || tabId}`}
-                                    {tabId !== 'overview' && <span onClick={(e) => handleCloseTab(e, tabId)} className="ml-2 hover:text-red-500"><X className="w-3 h-3" /></span>}
-                                </button>
-                            ))}
+                            {openTabs.map(tabId => {
+                                if (tabId === 'overview') {
+                                    return (<button key="overview" onClick={() => setActiveTabId('overview')} className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 flex-shrink-0 ${activeTabId === 'overview' ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`} style={{ marginBottom: -1 }}><LayoutGrid className="w-4 h-4" />Overview</button>);
+                                }
+                                const isTabActive = activeTabId === tabId;
+                                return (<button key={tabId} onClick={() => setActiveTabId(tabId)} className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 relative pr-9 flex-shrink-0 ${isTabActive ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`}><div className="flex items-center gap-2"><span className="font-bold">ID: {tabId.split('_')[1]}</span></div><div onClick={(e) => handleCloseTab(e, tabId)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><X className="w-3 h-3" /></div></button>);
+                            })}
                         </div>
                     )}
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-hidden bg-white relative">
-                    <div className={activeTabId === 'overview' ? "h-full overflow-y-auto p-6 bg-gray-50/50" : "hidden h-full"}>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
-                            {group.map((rawAd: any) => {
-                                const ad = normalizeAdData(rawAd); // Normalize for Overview too
-                                return (
-                                <div key={ad.id} onClick={() => handleOpenAd(ad.id)} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-brand-300 transition-all cursor-pointer flex flex-col group relative overflow-hidden">
-                                    <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                                        <span className={`w-2 h-2 rounded-full ${ad.is_active !== false ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                                        <span className="text-xs text-gray-500">{new Date(ad.start_date || ad.start_date_formatted).toLocaleDateString()}</span>
-                                    </div>
-                                    <div className="p-5 flex-1 flex flex-col gap-4">
-                                        <div className="flex gap-3">
-                                            <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
-                                                {ad.snapshot?.images?.[0] ? <img src={ad.snapshot.images[0].resized_image_url} className="w-full h-full object-cover" /> : (ad.snapshot?.videos?.[0] ? <video src={ad.snapshot.videos[0].video_preview_image_url} className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full text-xs text-gray-400">No Img</div>)}
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="text-[10px] text-gray-500 font-semibold uppercase">Reach</div>
-                                                <div className="text-xl font-bold text-indigo-600 flex items-center gap-1"><BarChart3 className="w-4 h-4" /> {formatReach(ad.derived_reach)}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )})}
+                <div className="flex-1 overflow-hidden relative bg-white">
+                    {activeTabId === 'overview' && (
+                        <div className="h-full overflow-y-auto p-6 animate-in fade-in duration-300">
+                             <div className="max-w-5xl mx-auto">
+                                 <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-gray-900">Version History & Performance</h3><div className="flex gap-2"><button className="text-sm text-gray-600 bg-white border border-gray-300 px-3 py-1.5 rounded-lg shadow-sm hover:bg-gray-50">Export CSV</button></div></div>
+                                 <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                                     <table className="w-full text-sm text-left">
+                                         <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                                             <tr>
+                                                 <th className="px-6 py-4">Ad Version</th>
+                                                 <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors select-none group" onClick={() => handleSort('date')}><div className="flex items-center gap-1">Start Date{renderSortIcon('date')}</div></th>
+                                                 <th className="px-6 py-4">Targeting</th>
+                                                 <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors select-none group" onClick={() => handleSort('reach')}><div className="flex items-center justify-end gap-1">Reach Est.{renderSortIcon('reach')}</div></th>
+                                                 <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors select-none group" onClick={() => handleSort('score')}><div className="flex items-center justify-end gap-1">Viral Score{renderSortIcon('score')}</div></th>
+                                                 <th className="px-6 py-4 text-right">Action</th>
+                                             </tr>
+                                         </thead>
+                                         <tbody className="divide-y divide-gray-100">
+                                             {sortedGroup.map((rawAd: any) => {
+                                                 const ad = normalizeAdData(rawAd);
+                                                 return (
+                                                 <tr key={ad.id} onClick={() => handleOpenAd(ad.id)} className="hover:bg-gray-50 transition-colors group/row cursor-pointer">
+                                                     <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 overflow-hidden flex-shrink-0">{ad.snapshot.images?.[0] ? <img src={ad.snapshot.images[0].resized_image_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Play className="w-4 h-4 text-gray-300" /></div>}</div><div><div className="font-bold text-gray-900">ID: {ad.id.split('_')[1]}</div><div className="text-xs text-gray-500">{ad.isActive ? 'Active' : 'Inactive'}</div></div></div></td>
+                                                     <td className="px-6 py-4 text-gray-600">{new Date(ad.start_date || ad.start_date_formatted).toLocaleDateString()}</td>
+                                                     <td className="px-6 py-4 text-gray-600">{ad.derived_locations.length ? (ad.derived_locations.length > 3 ? `${ad.derived_locations.length} Countries` : ad.derived_locations.join(', ')) : 'Global'}</td>
+                                                     <td className="px-6 py-4 text-gray-900 font-medium text-right">{formatReach(ad.derived_reach)}</td>
+                                                     <td className="px-6 py-4 text-right">{ad.efficiency_score && <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ad.efficiency_score >= 80 ? 'bg-green-100 text-green-800' : ad.efficiency_score >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>{ad.efficiency_score}</span>}</td>
+                                                     <td className="px-6 py-4 text-right"><button onClick={(e) => { e.stopPropagation(); handleOpenAd(ad.id); }} className="text-brand-600 hover:text-brand-700 font-semibold text-sm hover:underline">Analyze</button></td>
+                                                 </tr>
+                                             )})}
+                                         </tbody>
+                                     </table>
+                                 </div>
+                             </div>
                         </div>
-                    </div>
-
+                    )}
                     {openTabs.filter(id => id !== 'overview').map((tabId) => {
                          const rawAd = group.find((g: any) => (g.id || g.ad_archive_id) === tabId);
                          if (!rawAd) return null;
@@ -500,7 +560,47 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
     );
   }
 
-  return null; 
+  // --- TIKTOK AD RENDER LOGIC ---
+  const ad = group[0] as TikTokAd;
+  return (
+    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
+        <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200" onClick={handleContentClick}>
+            <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 bg-black/10 hover:bg-black/20 rounded-full text-white backdrop-blur-md transition-colors"><X className="w-5 h-5" /></button>
+            <div className="w-full md:w-[400px] bg-black flex items-center justify-center relative flex-shrink-0">
+                 <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-xl" style={{ backgroundImage: `url(${ad.videoMeta.coverUrl})` }}></div>
+                 <div className="relative w-full h-full max-h-full flex items-center justify-center p-4">
+                     <img src={ad.videoMeta.coverUrl} className="max-w-full max-h-full rounded-lg shadow-2xl" alt="" />
+                     <div className="absolute inset-0 flex items-center justify-center"><a href={ad.webVideoUrl} target="_blank" rel="noreferrer" className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:scale-110 transition-transform cursor-pointer border border-white/40"><Play className="w-6 h-6 text-white fill-white ml-1" /></a></div>
+                 </div>
+                 <div className="absolute bottom-6 left-6 right-6 flex justify-between text-white text-center">
+                     <div><div className="text-lg font-bold">{formatFollowerCount(ad.playCount)}</div><div className="text-xs opacity-70">Views</div></div>
+                     <div><div className="text-lg font-bold">{formatFollowerCount(ad.diggCount)}</div><div className="text-xs opacity-70">Likes</div></div>
+                     <div><div className="text-lg font-bold">{formatFollowerCount(ad.shareCount)}</div><div className="text-xs opacity-70">Shares</div></div>
+                 </div>
+            </div>
+            <div className="flex-1 bg-white flex flex-col h-full overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-8">
+                     <div className="flex items-center gap-4 mb-6">
+                         <img src={ad.authorMeta.avatarUrl} className="w-14 h-14 rounded-full border border-gray-100 bg-gray-50" alt="" />
+                         <div><h2 className="text-xl font-bold text-gray-900">{ad.authorMeta.nickName}</h2><a href={ad.authorMeta.profileUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">View Profile <ExternalLink className="w-3 h-3" /></a></div>
+                         <div className="ml-auto flex items-center gap-2"><div className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold text-gray-600">TikTok Ad</div><div className="bg-green-100 px-3 py-1 rounded-full text-xs font-semibold text-green-700 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Viral</div></div>
+                     </div>
+                     <div className="text-gray-800 text-lg leading-relaxed mb-8">{ad.text}</div>
+                     <AIAnalysisSection />
+                     <div className="grid grid-cols-2 gap-4 mb-8">
+                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><div className="flex items-center gap-2 text-gray-500 mb-1"><Calendar className="w-4 h-4" /><span className="text-xs font-medium uppercase">Posted Date</span></div><div className="text-lg font-semibold text-gray-900">{new Date(ad.createTimeISO).toLocaleDateString()}</div></div>
+                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100"><div className="flex items-center gap-2 text-gray-500 mb-1"><Clock className="w-4 h-4" /><span className="text-xs font-medium uppercase">Duration</span></div><div className="text-lg font-semibold text-gray-900">{ad.videoMeta.duration}s</div></div>
+                     </div>
+                </div>
+                <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-4">
+                    <a href={ad.webVideoUrl} target="_blank" rel="noreferrer" className="flex-1 bg-white border border-gray-300 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-50 transition-colors shadow-sm flex items-center justify-center gap-2"><ExternalLink className="w-4 h-4" /> Open on TikTok</a>
+                    {isSaved ? (<button onClick={onRemove} className="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition-colors shadow-sm flex items-center justify-center gap-2"><X className="w-4 h-4" /> Remove Ad</button>) : (<button onClick={() => onSave?.(ad, 'tiktok')} className="flex-1 bg-brand-600 text-white font-bold py-3 rounded-xl hover:bg-brand-700 transition-colors shadow-sm flex items-center justify-center gap-2"><Save className="w-4 h-4" /> Save Ad</button>)}
+                </div>
+            </div>
+        </div>
+    </div>
+  );
 };
 
 export default AdDetailModal;

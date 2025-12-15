@@ -2,15 +2,16 @@ export const cleanAndTransformData = (dbRows) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
+    // Manchmal kommt 'row' direkt als Objekt, manchmal in 'data' verpackt
     const item = row.data || row;
     if (!item) return null;
 
     const snap = item.snapshot || {};
 
-    // 1. Platform
+    // 1. Platform & Identifiers
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
-
+    
     // 2. Media Extraction
     let mediaType = 'image';
     let mediaUrl = null;
@@ -22,107 +23,131 @@ export const cleanAndTransformData = (dbRows) => {
 
     if (videos.length > 0) {
       mediaType = 'video';
-      mediaUrl = videos[0].video_hd_url || videos[0].video_sd_url || videos[0].videoHdUrl;
-      poster = videos[0].video_preview_image_url || videos[0].videoPreviewImageUrl;
+      mediaUrl = videos[0].video_hd_url || videos[0].video_sd_url;
+      poster = videos[0].video_preview_image_url;
     } else if (cards.length > 0) {
       mediaType = 'carousel';
-      mediaUrl = cards[0].original_image_url || cards[0].resized_image_url || cards[0].originalImageUrl;
+      mediaUrl = cards[0].original_image_url || cards[0].resized_image_url;
     } else if (images.length > 0) {
       mediaType = 'image';
-      mediaUrl = images[0].original_image_url || images[0].resized_image_url || images[0].originalImageUrl;
+      mediaUrl = images[0].original_image_url || images[0].resized_image_url;
     }
 
-    // 3. Text
+    // 3. Text & Info
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
-    if (safeBody) safeBody = safeBody.replace(/\{\{.*?\}\}/g, '').trim();
+    const pageName = snap.page_name || item.page_name || "Unknown Page";
+    const safeAvatar = snap.page_profile_picture_url || (item.advertiser && item.advertiser.profile_photo_url) || null;
 
-    const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
-    const safeAvatar = snap.page_profile_picture_url || item.page_profile_picture_url || item.pageProfilePictureUrl || null;
+    // --- INTELLIGENTE DATEN-EXTRAKTION (Der Fix) ---
+    let demographics = [];
+    let reach = 0;
+    let targetLocations = [];
+    let targetAges = [];
+    let targetGender = 'All';
+    let transparencyRegions = [];
 
-    // 4. Date
-    let isoDate = new Date().toISOString();
-    const rawDate = item.start_date || item.startDate;
-    if (rawDate) {
-        try {
-            const dateVal = typeof rawDate === 'number' ? rawDate * 1000 : rawDate;
-            isoDate = new Date(dateVal).toISOString();
-        } catch (e) {}
+    // Funktion um Daten aus den verschachtelten Facebook-Strukturen zu holen
+    const extractTransparencyData = (infoSource) => {
+        if (!infoSource) return;
+
+        // Reichweite
+        if (infoSource.eu_total_reach) reach = infoSource.eu_total_reach;
+        
+        // Demografie (Alter/Geschlecht Breakdown)
+        if (infoSource.age_country_gender_reach_breakdown) {
+            demographics = infoSource.age_country_gender_reach_breakdown;
+        }
+
+        // Zielorte
+        if (infoSource.location_audience && Array.isArray(infoSource.location_audience)) {
+            targetLocations = infoSource.location_audience.map(l => l.name);
+        }
+
+        // Geschlecht
+        if (infoSource.gender_audience) targetGender = infoSource.gender_audience;
+
+        // Alter
+        if (infoSource.age_audience) {
+             const min = infoSource.age_audience.min || 18;
+             const max = infoSource.age_audience.max || 65;
+             targetAges = [`${min}-${max}`];
+        }
+    };
+
+    // Priorität 1: 'aaa_info' (Active Ads)
+    if (item.aaa_info) {
+        extractTransparencyData(item.aaa_info);
+    } 
+    // Priorität 2: 'transparency_by_location' (Archivierte Ads)
+    else if (item.transparency_by_location && item.transparency_by_location.eu_transparency) {
+        extractTransparencyData(item.transparency_by_location.eu_transparency);
+        
+        // Regionen für das Modal vorbereiten
+        transparencyRegions.push({
+            region: "European Union",
+            description: "Targeting data from EU Transparency.",
+            ...item.transparency_by_location.eu_transparency
+        });
     }
 
-    // 5. METRIKEN & INTELLIGENTE REPARATUR
-    let reach = item.reach_estimate || item.reachEstimate || item.impressions || 0;
-    let likes = item.likes || item.page_like_count || 0;
-    let pageSize = item.page_size || (likes > 0 ? likes : 1000);
+    // Fallbacks falls oben nichts gefunden wurde
+    if (!reach) reach = item.reach_estimate || item.impressions || 0;
     
-    let efficiencyScore = item.efficiency_score;
-    let viralFactor = item.viral_factor;
+    // Targeting Objekt zusammenbauen
+    const targeting = {
+        ages: targetAges.length > 0 ? targetAges : ['18-65+'],
+        genders: [targetGender],
+        locations: targetLocations.length > 0 ? targetLocations : ['Global'],
+        reach_estimate: Number(reach),
+        breakdown: [] 
+    };
 
-    // WICHTIG: Wenn Score fehlt ODER unplausibel hoch ist (> 100), rechnen wir neu!
+    // 4. Metrics Calculation (Viral Score)
+    let likes = item.likes || item.page_like_count || 0;
+    // Wenn keine Likes im Hauptobjekt, suche im Advertiser/Page Info
+    if (!likes && item.advertiser && item.advertiser.ad_library_page_info && item.advertiser.ad_library_page_info.page_info) {
+        likes = item.advertiser.ad_library_page_info.page_info.likes || 0;
+    }
+
+    let efficiencyScore = item.efficiency_score;
+    
+    // Score berechnen wenn nicht vorhanden
     if (efficiencyScore === undefined || efficiencyScore === null || efficiencyScore > 100) {
         const safeReach = Number(reach) || 0;
-        const safeAudience = Math.max(Number(pageSize), 1000);
-        const ratio = safeReach / safeAudience;
+        const safeLikes = Math.max(Number(likes), 1000); // Basisgröße
         
-        // Live-Berechnung: 15 * log2(1 + ratio), max 100
-        efficiencyScore = Math.round(Math.min(15 * Math.log2(1 + ratio), 100) * 10) / 10;
+        // Einfache Heuristik: Verhältnis von Reichweite zu Seitengröße
+        const ratio = safeReach / safeLikes;
         
-        // Faktor schätzen, falls er fehlt
-        if (viralFactor === undefined || viralFactor === null) {
-             viralFactor = ratio > 0 ? Math.round((ratio / 3.0) * 10) / 10 : 0;
-        }
+        // Logarithmische Skala 0-100
+        efficiencyScore = Math.min(Math.round(15 * Math.log2(1 + ratio)), 100);
     }
 
-    const spend = item.spend || item.spendEstimate || null;
-    const locations = item.targeted_or_reached_countries || item.targetedOrReachedCountries || item.countries || [];
-    const ages = item.target_ages ? [item.target_ages] : (item.targetAges ? [item.targetAges] : []);
-    const genders = item.gender ? [item.gender] : (item.genders || []);
-    const breakdown = item.demographics || item.demographic_distribution || [];
-
-    const targeting = {
-        ages,
-        genders,
-        locations, 
-        reach_estimate: Number(reach),
-        breakdown
-    };
-
-    const backendInfo = item.advertiser_info || {};
-    const advertiser_info = {
-        category: (snap.page_categories && snap.page_categories.length > 0) ? snap.page_categories[0] : null,
-        facebook_handle: backendInfo.facebook_handle,
-        facebook_followers: backendInfo.facebook_followers,
-        instagram_handle: backendInfo.instagram_handle,
-        instagram_followers: backendInfo.instagram_followers,
-        about_text: backendInfo.about_text,
-        ...backendInfo
-    };
-
+    // --- OUTPUT ---
     return {
-      id: item.ad_archive_id || item.adArchiveID || item.id || Math.random().toString(),
-      isActive: item.is_active !== false && item.isActive !== false,
+      id: item.ad_archive_id || item.id || Math.random().toString(),
+      isActive: item.is_active !== false,
       publisher_platform: platforms,
-      start_date: isoDate,
+      start_date: item.start_date_formatted || item.start_date || new Date().toISOString(),
       page_name: pageName,
-      page_profile_uri: item.page_profile_uri || item.pageProfileUri || "#",
-      ad_library_url: item.ad_library_url || item.adLibraryUrl || "#",
+      page_profile_uri: item.page_profile_uri || "#",
+      ad_library_url: item.ad_library_url || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
       
-      likes,
+      // Metriken
+      likes: Number(likes),
       reach: Number(reach), 
       impressions: Number(reach),
-      spend,
-      
-      // Jetzt garantiert sauberer 0-100 Score
       efficiency_score: Number(efficiencyScore),
-      viral_factor: Number(viralFactor), 
-      page_size: Number(pageSize),
+      
+      // WICHTIG: Hier werden die extrahierten Daten übergeben
+      demographics: demographics, // Das füllt die Diagramme
+      targeting: targeting,       // Das füllt die Listen (Alter, Ort)
+      transparency_regions: transparencyRegions,
 
-      targeting,
-      demographics: item.demographics || [],
-      target_locations: item.target_locations || [],
-      page_categories: snap.page_categories || item.categories || [],
-      disclaimer: item.disclaimer_label || item.disclaimerLabel || item.byline || null,
-      advertiser_info,
+      // Meta Infos
+      disclaimer: item.disclaimer_label || null,
+      advertiser_info: item.advertiser ? item.advertiser.page : {},
       avatar: safeAvatar
     };
   });

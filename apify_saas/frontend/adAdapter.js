@@ -36,9 +36,9 @@ export const cleanAndTransformData = (dbRows) => {
     // 3. Text & Info
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
     const pageName = snap.page_name || item.page_name || "Unknown Page";
-    const safeAvatar = snap.page_profile_picture_url || (item.advertiser && item.advertiser.profile_photo_url) || null;
+    const safeAvatar = snap.page_profile_picture_url || (item.advertiser && item.advertiser.page_info && item.advertiser.page_info.profile_photo) || null;
 
-    // --- INTELLIGENTE DATEN-EXTRAKTION (Der Fix) ---
+    // --- INTELLIGENTE DATEN-EXTRAKTION ---
     let demographics = [];
     let reach = 0;
     let targetLocations = [];
@@ -74,13 +74,14 @@ export const cleanAndTransformData = (dbRows) => {
         }
     };
 
-    // Priorität 1: 'aaa_info' (Active Ads)
+    // Wir schauen ÜBERALL nach Daten
     if (item.aaa_info) {
         extractTransparencyData(item.aaa_info);
     } 
-    // Priorität 2: 'transparency_by_location' (Archivierte Ads)
-    else if (item.transparency_by_location && item.transparency_by_location.eu_transparency) {
-        extractTransparencyData(item.transparency_by_location.eu_transparency);
+    
+    if (item.transparency_by_location && item.transparency_by_location.eu_transparency) {
+        // Falls aaa_info leer war oder wir mehr Daten wollen
+        if (demographics.length === 0) extractTransparencyData(item.transparency_by_location.eu_transparency);
         
         // Regionen für das Modal vorbereiten
         transparencyRegions.push({

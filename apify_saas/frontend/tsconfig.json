@@ -6,16 +6,19 @@
     "module": "ESNext",
     "skipLibCheck": true,
 
-    /* Bundler mode */
-    "moduleResolution": "bundler",
+    /* FIX: Wir stellen auf 'node' um - das ist am sichersten */
+    "moduleResolution": "node",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "esModuleInterop": true,
 
-    /* Linting - HIER HABEN WIR GELOCKERT */
-    "strict": false, 
+    /* FIX: DIESE ZEILE MUSS DRIN SEIN! */
+    "types": ["vite/client", "react", "react-dom"],
+
+    "strict": false,
     "strictNullChecks": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-// FIX: Hier wurden Calendar, ArrowUp und ArrowDown hinzugefügt
+// HIER SIND ALLE ICONS DRIN
 import { X, Globe, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, FileText, User, Layers, ExternalLink, Play, Monitor, Hash, LayoutGrid, Eye, Building2, Sparkles, TrendingUp, Clock, ArrowUpDown, ArrowUp, ArrowDown, Calendar, BarChart3, MapPin, Zap } from 'lucide-react';
 
 interface AdDetailModalProps {
@@ -18,12 +18,11 @@ const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // Daten laden
+    // Daten laden (entweder schon da oder aus targeting)
     let demographics = ad.demographics || [];
     let locations: string[] = ad.targeting?.locations || [];
     let reach = ad.reach || ad.eu_total_reach || 0;
     
-    // Rohdatenquellen prüfen
     const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
     let breakdown = ad.targeting?.breakdown || [];
 
@@ -32,15 +31,17 @@ const normalizeAdData = (ad: any) => {
             demographics = rawInfo.age_country_gender_reach_breakdown || [];
         }
         
-        // Breakdown Tabelle generieren wenn sie fehlt
         if (breakdown.length === 0 && demographics.length > 0) {
             breakdown = demographics.flatMap((d: any) => {
-                 return d.age_gender_breakdowns.map((b: any) => ({
-                     location: d.country,
-                     age_range: b.age_range,
-                     gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
-                     reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
-                 }));
+                 if (d.age_gender_breakdowns) {
+                     return d.age_gender_breakdowns.map((b: any) => ({
+                         location: d.country,
+                         age_range: b.age_range,
+                         gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
+                         reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
+                     }));
+                 }
+                 return [];
             });
         }
 
@@ -52,7 +53,6 @@ const normalizeAdData = (ad: any) => {
         }
     }
 
-    // Regionen für Tabs bauen
     let regions = ad.transparency_regions || [];
     if (regions.length === 0 && demographics.length > 0) {
         regions = [{
@@ -119,14 +119,14 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false }
     );
 };
 
-const formatFollowerCount = (num?: number) => {
-    if (!num) return '';
-    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
-};
-
 const formatReach = (num?: number | null) => {
     if (num === undefined || num === null) return 'N/A';
     return new Intl.NumberFormat('en-US').format(num);
+};
+
+const formatFollowerCount = (num?: number) => {
+    if (!num) return '';
+    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
 };
 
 interface MetaAdDetailViewProps {
@@ -144,7 +144,6 @@ interface MetaAdDetailViewProps {
 const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({ 
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
-    // 1. Daten normalisieren (Damit Breakdown verfügbar ist)
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
 
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
@@ -166,14 +165,12 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const hasMultipleRegions = regions.length > 0;
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
 
-    // Daten für Anzeige
     const score = ad.efficiency_score || 0;
     const demoData = ad.demographics || [];
     const breakdownData = activeTargeting?.breakdown || [];
 
     return (
         <div className={isActiveView ? "flex flex-col md:flex-row h-full" : "hidden h-full"}>
-            {/* Left Column: Creative */}
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-gray-50 border-r border-gray-200 p-6">
                 <div className="space-y-6 max-w-lg mx-auto">
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
@@ -233,14 +230,10 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                 </div>
             </div>
 
-            {/* Right Column: Metadata */}
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Ad Details</h2>
-                
-                {/* AI Analysis Section */}
                 <AIAnalysisSection />
 
-                {/* Info Cards */}
                 <div className="mb-6 space-y-4">
                     <div className="flex items-start gap-4">
                          <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Info className="w-5 h-5" /></div>
@@ -250,7 +243,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              <p className="text-xs text-gray-500 mt-1">Started running on {new Date(ad.start_date).toLocaleDateString()}</p>
                          </div>
                     </div>
-                    
                     <div className="flex items-start gap-4">
                          <div className="p-2 bg-purple-50 rounded-lg text-purple-600"><Monitor className="w-5 h-5" /></div>
                          <div>
@@ -262,7 +254,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                     </div>
                 </div>
 
-                {/* Transparency Section */}
                 {(beneficiary_payer || about_disclaimer) && (
                      <CollapsibleSection title="Transparency & Beneficiary" icon={Building2} defaultOpen={false}>
                          <div className="space-y-4">
@@ -272,7 +263,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                      </CollapsibleSection>
                 )}
 
-                {/* --- AUFSCHLÜSSELUNG --- */}
                 <CollapsibleSection title="Transparency by regions" icon={Globe} defaultOpen={true}>
                      <div className="space-y-6">
                          {hasMultipleRegions && (
@@ -291,7 +281,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                  <div className="text-xs text-gray-500">Accounts Center accounts in the EU that saw this ad at least once.</div>
                              </div>
 
-                             {/* GRAFISCHE AUFSCHLÜSSELUNG */}
                              {demoData.length > 0 && (
                                  <div className="mb-6">
                                      <h4 className="text-sm font-bold text-gray-800 mb-3">Audience Breakdown</h4>
@@ -317,7 +306,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                  </div>
                              )}
 
-                             {/* TABELLARISCHE AUFSCHLÜSSELUNG */}
                              {breakdownData.length > 0 && (
                                  <div className="border border-gray-200 rounded-lg overflow-hidden">
                                      <div className="max-h-60 overflow-y-auto">
@@ -364,7 +352,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                     )}
                 </CollapsibleSection>
 
-                {/* Footer Actions */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-gray-100">
                     <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm">
                         <Download className="w-4 h-4" /> Download Media
@@ -471,8 +458,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
     return (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                {/* Header & Tabs */}
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200" onClick={handleContentClick}>
                 <div className="flex flex-col border-b border-gray-200 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center justify-between px-6 py-4">
                         <div className="flex items-center gap-3">

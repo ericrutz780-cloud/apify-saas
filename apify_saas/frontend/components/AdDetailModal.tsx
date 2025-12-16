@@ -12,6 +12,42 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
+// --- HELPER: DATEN-BRÜCKE (Der Fix für fehlende Daten) ---
+// Holt Daten aus 'aaa_info' (Facebook Rohdaten) wenn sie im Standard-Format fehlen
+const normalizeAdData = (ad: any) => {
+    // Wenn Daten schon da sind, nutze sie. Sonst suche in Rohdaten.
+    const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
+
+    let reach = ad.reach;
+    if (!reach && rawInfo?.eu_total_reach) {
+        reach = rawInfo.eu_total_reach;
+    }
+
+    let demographics = ad.demographics || [];
+    if (demographics.length === 0 && rawInfo?.age_country_gender_reach_breakdown) {
+        demographics = rawInfo.age_country_gender_reach_breakdown;
+    }
+
+    let locations = ad.targeting?.locations || [];
+    if (locations.length === 0 && rawInfo?.location_audience) {
+        locations = rawInfo.location_audience.map((l: any) => l.name);
+    }
+    
+    // Wir geben ein Objekt zurück, das genau so aussieht, wie dein altes Design es erwartet
+    return {
+        ...ad,
+        reach: Number(reach || 0),
+        demographics: demographics,
+        targeting: {
+            ...ad.targeting,
+            locations: locations,
+            // Fallback für Alter/Geschlecht aus Rohdaten
+            ages: ad.targeting?.ages || (rawInfo?.age_audience ? [`${rawInfo.age_audience.min}-${rawInfo.age_audience.max}`] : []),
+            genders: ad.targeting?.genders || (rawInfo?.gender_audience ? [rawInfo.gender_audience] : [])
+        }
+    };
+};
+
 const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = false }: { title: string, icon: any, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
@@ -45,66 +81,9 @@ const formatFollowerCount = (num?: number) => {
     return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
 };
 
-// --- HELPER: DATEN NORMALISIERUNG (NEU EINGEFÜGT) ---
-// Diese Funktion repariert die Daten im Hintergrund, ohne das Design zu ändern
-const normalizeAdData = (ad: any) => {
-    const snapshot = ad.snapshot || {};
-    const pageName = ad.page_name || snapshot.page_name || "Unknown";
-    
-    // Datenquellen prüfen
-    let demographics = ad.demographics || [];
-    let locations: string[] = ad.targeting?.locations || [];
-    let reach = ad.reach || ad.eu_total_reach || 0;
-    
-    // Rohdatenquellen (aaa_info oder transparency)
-    const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
-
-    if (rawInfo) {
-        if (!demographics || demographics.length === 0) {
-            demographics = rawInfo.age_country_gender_reach_breakdown || [];
-        }
-        if (locations.length === 0 && rawInfo.location_audience) {
-            locations = rawInfo.location_audience.map((l: any) => l.name);
-        }
-        if (!reach) {
-            reach = rawInfo.eu_total_reach || 0;
-        }
-    }
-
-    // Regionen für das Dropdown bauen (falls nötig)
-    let regions = ad.transparency_regions || [];
-    if (regions.length === 0 && rawInfo && demographics.length > 0) {
-        regions = [{
-            region: "European Union",
-            description: "Data from EU Transparency records.",
-            breakdown: demographics.flatMap((d: any) => {
-                 return d.age_gender_breakdowns.map((b: any) => ({
-                     location: d.country,
-                     age_range: b.age_range,
-                     gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
-                     reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
-                 }));
-            })
-        }];
-    }
-
-    return {
-        ...ad,
-        page_name: pageName,
-        snapshot,
-        demographics,     // Jetzt korrekt gefüllt
-        targeting: {      // Targeting Objekt reparieren
-            ...ad.targeting,
-            locations: locations
-        },
-        reach: reach,     // Jetzt korrekt gefüllt
-        transparency_regions: regions
-    };
-};
-
 interface MetaAdDetailViewProps {
-    ad: any;
-    group: any[];
+    ad: MetaAd;
+    group: MetaAd[];
     isActiveView: boolean;
     openTabs: string[];
     activeTabId: string;
@@ -117,22 +96,19 @@ interface MetaAdDetailViewProps {
 const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({ 
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
-    // HIER WIRD DIE MAGIE ANGEWENDET: Daten werden "on the fly" repariert
+    // HIER WENDEN WIR DEN FIX AN:
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
 
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const { snapshot, targeting, advertiser_info, transparency_regions, about_disclaimer } = ad;
     const hasVideo = snapshot?.videos && snapshot.videos.length > 0;
-    const mediaUrl = hasVideo ? snapshot?.videos[0].video_hd_url : (snapshot?.images?.length > 0 ? snapshot?.images[0].resized_image_url : null);
+    const mediaUrl = hasVideo ? snapshot?.videos[0].video_hd_url : (snapshot?.images.length > 0 ? snapshot?.images[0].resized_image_url : null);
     const platforms = ad.publisher_platform || [];
-    
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
-    
-    // Fallback: Nutze Regions-Breakdown wenn keine Targeting-Daten da sind
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
 
-    // Viralitätsdaten
+    // Viralitätsdaten & Demografie (jetzt gefüllt durch normalizeAdData)
     const score = ad.efficiency_score || 0;
     const demoData = ad.demographics || [];
 
@@ -143,8 +119,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                 <div className="space-y-6 max-w-lg mx-auto">
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
                         <div className="p-4 flex items-center gap-3 border-b border-gray-100">
-                             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold overflow-hidden">
-                                {ad.avatar ? <img src={ad.avatar} className="w-full h-full object-cover" alt="" /> : ad.page_name.charAt(0)}
+                             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
+                                {ad.page_name.charAt(0)}
                              </div>
                              <div>
                                  <h4 className="font-semibold text-gray-900 text-sm">{ad.page_name}</h4>
@@ -152,31 +128,25 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </div>
                         </div>
 
-                        <div className="p-4 text-sm text-gray-900 whitespace-pre-wrap">{snapshot.body?.text}</div>
+                        <div className="p-4 text-sm text-gray-900 whitespace-pre-wrap">{snapshot.body.text}</div>
 
-                        <div className="w-full bg-black flex justify-center items-center bg-gray-100 min-h-[200px]">
-                            {mediaUrl ? (
-                                hasVideo ? (
-                                    <video src={mediaUrl} controls className="w-full max-h-[500px] object-contain" />
-                                ) : (
-                                    <img src={mediaUrl} alt="Ad" className="w-full h-auto object-cover" />
-                                )
+                        <div className="w-full bg-black">
+                            {hasVideo ? (
+                                <video src={mediaUrl} controls className="w-full max-h-[500px] object-contain" />
                             ) : (
-                                <div className="text-gray-400 flex flex-col items-center"><Play className="w-8 h-8 mb-2"/><span className="text-xs">No Preview</span></div>
+                                <img src={mediaUrl} alt="Ad" className="w-full h-auto object-cover" />
                             )}
                         </div>
 
                         <div className="bg-gray-50 p-3 flex justify-between items-center border-t border-gray-100">
-                             <span className="text-xs text-gray-500 uppercase font-medium ml-2 truncate max-w-[150px]">{snapshot.link_url ? new URL(snapshot.link_url).hostname : ''}</span>
-                             <a href={snapshot.link_url} target="_blank" rel="noreferrer" className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold px-4 py-2 rounded transition-colors">
-                                 {snapshot.cta_text || 'Learn More'}
-                             </a>
+                             <span className="text-xs text-gray-500 uppercase font-medium ml-2">{new URL(snapshot.link_url || 'https://example.com').hostname}</span>
+                             <a href={snapshot.link_url} target="_blank" rel="noreferrer" className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold px-4 py-2 rounded transition-colors">{snapshot.cta_text || 'Learn More'}</a>
                         </div>
                     </div>
 
                     <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-sm flex items-center justify-between">
                         <span className="text-sm font-medium opacity-90">Library ID</span>
-                        <span className="font-mono font-bold tracking-wide">{ad.id.split('_')[1] || ad.id}</span>
+                        <span className="font-mono font-bold tracking-wide">{ad.id.split('_')[1] || '12345'}</span>
                     </div>
                 </div>
             </div>
@@ -192,6 +162,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                         <div className="text-2xl font-bold text-indigo-900">{formatReach(ad.reach)}</div>
                     </div>
 
+                    {/* VIRAL SCORE CARD */}
                     <div className={`p-4 border rounded-xl ${score > 1 ? 'bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
                         <div className={`flex items-center gap-2 mb-1 ${score > 1 ? 'text-amber-600' : 'text-gray-500'}`}>
                             <Zap className="w-4 h-4" />
@@ -205,25 +176,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                 {/* Detail Sections */}
                 <CollapsibleSection title="Targeting & Demographics" icon={Globe} defaultOpen={true}>
                      <div className="space-y-6">
-                         {/* Region Switcher */}
-                         {hasMultipleRegions && (
-                             <div className="flex gap-2 overflow-x-auto pb-2 border-b border-gray-100 mb-4">
-                                 {regions.map((regionData: any, idx: number) => (
-                                     <button
-                                        key={idx}
-                                        onClick={() => setActiveRegionIndex(idx)}
-                                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
-                                            activeRegionIndex === idx 
-                                            ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                                            : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
-                                        }`}
-                                     >
-                                         {regionData.region || `Region ${idx + 1}`}
-                                     </button>
-                                 ))}
-                             </div>
-                         )}
-
                          {/* DEMOGRAFIE VISUALISIERUNG */}
                          {demoData.length > 0 ? (
                              <div>
@@ -235,51 +187,34 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                             <p className="text-xs font-bold text-gray-700 mb-2 uppercase flex items-center gap-2"><MapPin className="w-3 h-3"/> {countryData.country}</p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {/* @ts-ignore */}
-                                                {countryData.age_gender_breakdowns.slice(0, 4).map((d: any, j: number) => {
-                                                    const total = (d.male || 0) + (d.female || 0) + (d.unknown || 0);
-                                                    if (total === 0) return null;
-                                                    const femalePct = Math.round(((d.female || 0) / total) * 100);
-
-                                                    return (
-                                                        <div key={j} className="flex flex-col text-xs bg-white p-1.5 rounded border border-gray-100 shadow-sm">
-                                                            <div className="flex justify-between mb-1">
-                                                                <span className="text-gray-500 font-medium">{d.age_range}</span>
-                                                                <span className="text-gray-900 font-bold">{total}</span>
-                                                            </div>
-                                                            {/* Simple Bar Chart */}
-                                                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden flex">
-                                                                <div style={{width: `${femalePct}%`}} className="bg-pink-400 h-full" />
-                                                                <div style={{width: `${100-femalePct}%`}} className="bg-blue-400 h-full" />
-                                                            </div>
-                                                            <div className="flex justify-between mt-1 text-[9px] text-gray-400">
-                                                                <span>{femalePct}% F</span>
-                                                                <span>{100-femalePct}% M</span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                {countryData.age_gender_breakdowns.slice(0, 4).map((d: any, j: number) => (
+                                                    <div key={j} className="flex justify-between text-xs bg-white p-1.5 rounded border border-gray-100 shadow-sm">
+                                                        <span className="text-gray-500">{d.age_range}</span>
+                                                        <span className="font-medium">
+                                                            {((d.female || 0) > (d.male || 0)) ? `👩 ${(d.female || 0)}` : `👨 ${(d.male || 0)}`}
+                                                        </span>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                      ))}
                                  </div>
                              </div>
                          ) : (
-                            <div className="text-sm text-gray-500 italic">No detailed demographics available for this ad.</div>
+                             <div className="text-sm text-gray-500 italic">No demographics data available.</div>
                          )}
                          
-                          {/* Locations List (Fallback) */}
-                          {targeting?.locations?.length > 0 && (
+                         {/* Locations List */}
+                         {activeTargeting?.locations?.length > 0 && (
                              <div className="mt-4">
-                                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Targeted Locations</h4>
+                                 <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Locations</h4>
                                  <div className="flex flex-wrap gap-1.5">
-                                     {targeting.locations.slice(0, 10).map((loc: string, i: number) => (
+                                     {activeTargeting.locations.slice(0, 10).map((loc: string, i: number) => (
                                          <span key={i} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded border border-gray-200">{loc}</span>
                                      ))}
-                                     {targeting.locations.length > 10 && <span className="px-2 py-1 text-gray-500 text-xs">+{targeting.locations.length - 10} more</span>}
                                  </div>
                              </div>
                          )}
-
                      </div>
                 </CollapsibleSection>
 
@@ -345,7 +280,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                setOpenTabs(['overview']);
                setActiveTabId('overview');
            } else {
-               const firstId = group[0].id || group[0].ad_archive_id;
+               const firstId = group[0].id;
                setOpenTabs([firstId]);
                setActiveTabId(firstId);
            }
@@ -392,7 +327,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                             {openTabs.map(tabId => (
                                 <button key={tabId} onClick={() => setActiveTabId(tabId)} className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 flex-shrink-0 ${activeTabId === tabId ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`} style={{ marginBottom: -1 }}>
                                     {tabId === 'overview' ? <LayoutGrid className="w-4 h-4" /> : <Hash className="w-4 h-4" />}
-                                    {tabId === 'overview' ? 'Overview' : `ID: ${tabId.split('_')[1] || tabId}`}
+                                    {tabId === 'overview' ? 'Overview' : `ID: ${tabId.split('_')[1]}`}
                                     {tabId !== 'overview' && <span onClick={(e) => handleCloseTab(e, tabId)} className="ml-2 hover:text-red-500"><X className="w-3 h-3" /></span>}
                                 </button>
                             ))}
@@ -419,7 +354,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                             </div>
                                             <div className="flex-1">
                                                 <div className="text-[10px] text-gray-500 font-semibold uppercase">Viral Score</div>
-                                                <div className="text-xl font-bold text-amber-600 flex items-center gap-1"><Zap className="w-4 h-4" /> {ad.efficiency_score}</div>
+                                                <div className="text-xl font-bold text-amber-600 flex items-center gap-1"><Zap className="w-4 h-4" /> {ad.efficiency_score || 0}</div>
                                             </div>
                                         </div>
                                     </div>

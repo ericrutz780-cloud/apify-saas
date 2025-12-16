@@ -2,13 +2,12 @@ export const cleanAndTransformData = (dbRows) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // Manchmal kommt 'row' direkt als Objekt, manchmal in 'data' verpackt
     const item = row.data || row;
     if (!item) return null;
 
     const snap = item.snapshot || {};
 
-    // 1. Platform & Identifiers
+    // 1. Platform
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
     
@@ -33,33 +32,29 @@ export const cleanAndTransformData = (dbRows) => {
       mediaUrl = images[0].original_image_url || images[0].resized_image_url;
     }
 
-    // 3. Text & Info
+    // 3. Text
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
     const pageName = snap.page_name || item.page_name || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || (item.advertiser && item.advertiser.page_info && item.advertiser.page_info.profile_photo) || null;
 
-    // --- INTELLIGENTE DATEN-EXTRAKTION ---
+    // --- DATEN EXTRAKTION ---
     let demographics = [];
     let reach = 0;
     let targetLocations = [];
     let targetAges = [];
     let targetGender = 'All';
     let transparencyRegions = [];
-    let detailedBreakdown = []; // NEU: Für die flache Liste
+    let detailedBreakdown = [];
 
-    // Funktion um Daten aus den verschachtelten Facebook-Strukturen zu holen
-    const extractTransparencyData = (infoSource) => {
-        if (!infoSource) return;
+    // Daten aus 'aaa_info' oder 'transparency' holen
+    const infoSource = item.aaa_info || (item.transparency_by_location && item.transparency_by_location.eu_transparency);
 
-        // Reichweite
+    if (infoSource) {
         if (infoSource.eu_total_reach) reach = infoSource.eu_total_reach;
         
-        // Demografie (Alter/Geschlecht Breakdown)
         if (infoSource.age_country_gender_reach_breakdown) {
             demographics = infoSource.age_country_gender_reach_breakdown;
-            
-            // NEU: Flattening für die Tabelle
-            // Wir wandeln die verschachtelte Struktur in eine flache Liste um
+            // Tabelle bauen
             detailedBreakdown = demographics.flatMap(d => {
                 return d.age_gender_breakdowns.map(b => ({
                     location: d.country,
@@ -69,75 +64,45 @@ export const cleanAndTransformData = (dbRows) => {
                 }));
             });
         }
-
-        // Zielorte
-        if (infoSource.location_audience && Array.isArray(infoSource.location_audience)) {
-            targetLocations = infoSource.location_audience.map(l => l.name);
-        }
-
-        // Geschlecht
+        if (infoSource.location_audience) targetLocations = infoSource.location_audience.map(l => l.name);
         if (infoSource.gender_audience) targetGender = infoSource.gender_audience;
+        if (infoSource.age_audience) targetAges = [`${infoSource.age_audience.min || 18}-${infoSource.age_audience.max || 65}+`];
+    }
 
-        // Alter
-        if (infoSource.age_audience) {
-             const min = infoSource.age_audience.min || 18;
-             const max = infoSource.age_audience.max || 65;
-             targetAges = [`${min}-${max}`];
-        }
-    };
-
-    // Wir schauen ÜBERALL nach Daten (Priorität: aaa_info > transparency)
-    if (item.aaa_info) {
-        extractTransparencyData(item.aaa_info);
-    } 
+    // Fallbacks
+    if (!reach) reach = item.reach_estimate || item.impressions || 0;
     
-    // Fallback: Wenn in aaa_info nichts gefunden wurde, versuche transparency_by_location
-    if ((!demographics.length) && item.transparency_by_location && item.transparency_by_location.eu_transparency) {
-        extractTransparencyData(item.transparency_by_location.eu_transparency);
-        
-        // Regionen für das Modal vorbereiten (Legacy Support)
+    // Regionen für Tabs
+    if (detailedBreakdown.length > 0) {
         transparencyRegions.push({
             region: "European Union",
-            description: "Targeting data from EU Transparency.",
-            ...item.transparency_by_location.eu_transparency
+            description: "Data from Transparency records.",
+            breakdown: detailedBreakdown
         });
     }
 
-    // Fallbacks falls oben nichts gefunden wurde
-    if (!reach) reach = item.reach_estimate || item.impressions || 0;
-    
-    // Targeting Objekt zusammenbauen
     const targeting = {
         ages: targetAges.length > 0 ? targetAges : ['18-65+'],
         genders: [targetGender],
         locations: targetLocations.length > 0 ? targetLocations : ['Global'],
         reach_estimate: Number(reach),
-        // WICHTIG: Hier füllen wir jetzt das breakdown Feld!
         breakdown: detailedBreakdown 
     };
 
-    // 4. Metrics Calculation (Viral Score)
+    // 4. Metrics & Score
     let likes = item.likes || item.page_like_count || 0;
-    // Wenn keine Likes im Hauptobjekt, suche im Advertiser/Page Info
-    if (!likes && item.advertiser && item.advertiser.ad_library_page_info && item.advertiser.ad_library_page_info.page_info) {
+    if (!likes && item.advertiser?.ad_library_page_info?.page_info) {
         likes = item.advertiser.ad_library_page_info.page_info.likes || 0;
     }
 
     let efficiencyScore = item.efficiency_score;
-    
-    // Score berechnen wenn nicht vorhanden
     if (efficiencyScore === undefined || efficiencyScore === null || efficiencyScore > 100) {
         const safeReach = Number(reach) || 0;
-        const safeLikes = Math.max(Number(likes), 1000); // Basisgröße
-        
-        // Einfache Heuristik: Verhältnis von Reichweite zu Seitengröße
+        const safeLikes = Math.max(Number(likes), 1000);
         const ratio = safeReach / safeLikes;
-        
-        // Logarithmische Skala 0-100
         efficiencyScore = Math.min(Math.round(15 * Math.log2(1 + ratio)), 100);
     }
 
-    // --- OUTPUT ---
     return {
       id: item.ad_archive_id || item.id || Math.random().toString(),
       isActive: item.is_active !== false,
@@ -148,18 +113,15 @@ export const cleanAndTransformData = (dbRows) => {
       ad_library_url: item.ad_library_url || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
       
-      // Metriken
       likes: Number(likes),
       reach: Number(reach), 
       impressions: Number(reach),
       efficiency_score: Number(efficiencyScore),
       
-      // WICHTIG: Hier werden die extrahierten Daten übergeben
-      demographics: demographics, // Das füllt die Diagramme
-      targeting: targeting,       // Das füllt die Listen (Alter, Ort) und die Tabelle
+      demographics, 
+      targeting,
       transparency_regions: transparencyRegions,
-
-      // Meta Infos
+      
       disclaimer: item.disclaimer_label || null,
       advertiser_info: item.advertiser ? item.advertiser.page : {},
       avatar: safeAvatar

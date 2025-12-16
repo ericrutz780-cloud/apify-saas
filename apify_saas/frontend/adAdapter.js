@@ -45,6 +45,7 @@ export const cleanAndTransformData = (dbRows) => {
     let targetAges = [];
     let targetGender = 'All';
     let transparencyRegions = [];
+    let detailedBreakdown = []; // NEU: Für die flache Liste
 
     // Funktion um Daten aus den verschachtelten Facebook-Strukturen zu holen
     const extractTransparencyData = (infoSource) => {
@@ -56,6 +57,17 @@ export const cleanAndTransformData = (dbRows) => {
         // Demografie (Alter/Geschlecht Breakdown)
         if (infoSource.age_country_gender_reach_breakdown) {
             demographics = infoSource.age_country_gender_reach_breakdown;
+            
+            // NEU: Flattening für die Tabelle
+            // Wir wandeln die verschachtelte Struktur in eine flache Liste um
+            detailedBreakdown = demographics.flatMap(d => {
+                return d.age_gender_breakdowns.map(b => ({
+                    location: d.country,
+                    age_range: b.age_range,
+                    gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
+                    reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
+                }));
+            });
         }
 
         // Zielorte
@@ -74,16 +86,16 @@ export const cleanAndTransformData = (dbRows) => {
         }
     };
 
-    // Wir schauen ÜBERALL nach Daten
+    // Wir schauen ÜBERALL nach Daten (Priorität: aaa_info > transparency)
     if (item.aaa_info) {
         extractTransparencyData(item.aaa_info);
     } 
     
-    if (item.transparency_by_location && item.transparency_by_location.eu_transparency) {
-        // Falls aaa_info leer war oder wir mehr Daten wollen
-        if (demographics.length === 0) extractTransparencyData(item.transparency_by_location.eu_transparency);
+    // Fallback: Wenn in aaa_info nichts gefunden wurde, versuche transparency_by_location
+    if ((!demographics.length) && item.transparency_by_location && item.transparency_by_location.eu_transparency) {
+        extractTransparencyData(item.transparency_by_location.eu_transparency);
         
-        // Regionen für das Modal vorbereiten
+        // Regionen für das Modal vorbereiten (Legacy Support)
         transparencyRegions.push({
             region: "European Union",
             description: "Targeting data from EU Transparency.",
@@ -100,7 +112,8 @@ export const cleanAndTransformData = (dbRows) => {
         genders: [targetGender],
         locations: targetLocations.length > 0 ? targetLocations : ['Global'],
         reach_estimate: Number(reach),
-        breakdown: [] 
+        // WICHTIG: Hier füllen wir jetzt das breakdown Feld!
+        breakdown: detailedBreakdown 
     };
 
     // 4. Metrics Calculation (Viral Score)
@@ -143,7 +156,7 @@ export const cleanAndTransformData = (dbRows) => {
       
       // WICHTIG: Hier werden die extrahierten Daten übergeben
       demographics: demographics, // Das füllt die Diagramme
-      targeting: targeting,       // Das füllt die Listen (Alter, Ort)
+      targeting: targeting,       // Das füllt die Listen (Alter, Ort) und die Tabelle
       transparency_regions: transparencyRegions,
 
       // Meta Infos

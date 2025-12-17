@@ -1,20 +1,21 @@
 /**
  * adAdapter.js
  * Transformiert Rohdaten aus der DB in das Format für die UI.
- * FIX: Priorisiert den vom Backend berechneten Score!
+ * FIX: Robustere Score-Berechnung, damit keine 0-Werte entstehen.
  */
 
 // --- Konfiguration für Segment-Vergleich ---
+// WICHTIG: Ich habe die Werte gesenkt, damit auch kleine Ads Punkte bekommen!
 const SEGMENT_BASELINES = {
     CTA: {
-        'SHOP_NOW': 50,
-        'LEARN_MORE': 100,
-        'SIGN_UP': 60,
-        'DEFAULT': 80
+        'SHOP_NOW': 15,    // Vorher 50 -> Jetzt 15€ Daily Value als Basis
+        'LEARN_MORE': 25,  // Vorher 100 -> Jetzt 25€
+        'SIGN_UP': 20,
+        'DEFAULT': 20
     }
 };
 
-// --- Fallback Benchmarks & Preis-Finder ---
+// --- Fallback Benchmarks ---
 const FALLBACK_BENCHMARKS = {
     "GLOBAL_All_All": 4.50, 
     "DE_All_All": 6.00,
@@ -41,15 +42,13 @@ const getBenchmarkPrice = (country, gender, ageRange, priorityMap) => {
     return 5.00; 
 };
 
-// --- HAUPTFUNKTION ---
 export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // WICHTIG: row.data enthält oft die Raw-Daten, row selbst enthält die DB-Spalten (wie calculated_viral_score)
-    // Wir mergen beide, damit wir Zugriff auf alles haben.
+    // Daten zusammenführen (DB-Spalten + Raw-Daten)
     const itemRaw = row.data || {};
-    const item = { ...itemRaw, ...row }; // Flachklopfen für einfachen Zugriff
+    const item = { ...itemRaw, ...row };
     
     if (!itemRaw && !row.id) return null;
 
@@ -80,7 +79,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
       mediaUrl = images[0].original_image_url || images[0].resized_image_url;
     }
 
-    // 3. Text
+    // 3. Text & Info
     let safeBody = (snap.body && snap.body.text) ? snap.body.text : (item.body || "");
     const pageName = snap.page_name || item.page_name || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || (item.advertiser && item.advertiser.page_info && item.advertiser.page_info.profile_photo) || null;
@@ -88,7 +87,6 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     // --- DATUM FIX ---
     let isoDate = new Date().toISOString(); 
     const rawDate = item.start_date || item.startDate || item.creation_time;
-    
     if (rawDate) {
         try {
             const dateVal = (typeof rawDate === 'number' && rawDate < 10000000000) ? rawDate * 1000 : rawDate;
@@ -113,7 +111,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
 
     if (infoSource) {
         if (!reach && infoSource.eu_total_reach) reach = infoSource.eu_total_reach;
-        if (demographics.length === 0 && infoSource.age_country_gender_reach_breakdown) {
+        if ((!demographics || demographics.length === 0) && infoSource.age_country_gender_reach_breakdown) {
             demographics = infoSource.age_country_gender_reach_breakdown;
         }
         if (infoSource.location_audience) targetLocations = infoSource.location_audience.map(l => l.name);
@@ -125,16 +123,17 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         }
     }
 
-    // --- WERT-BERECHNUNG (Für Frontend-Fallback) ---
+    // --- VALUE CALCULATION ---
     let totalEstimatedSpend = 0;
 
-    if (demographics.length > 0) {
+    if (demographics && demographics.length > 0) {
         detailedBreakdown = demographics.flatMap(d => {
             if (d.age_gender_breakdowns) {
                 return d.age_gender_breakdowns.map(b => {
                     const segReach = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
                     const genderLabel = b.female ? 'Female' : (b.male ? 'Male' : 'All');
                     const segmentCPR = getBenchmarkPrice(d.country, genderLabel, b.age_range, benchmarkMap);
+                    
                     totalEstimatedSpend += (segReach / 1000) * segmentCPR;
 
                     return {
@@ -145,16 +144,12 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
                     };
                 });
             }
-            return [{
-                location: d.country || 'Unknown',
-                age_range: 'All',
-                gender: 'All',
-                reach: d.reach || 0
-            }];
+            return [];
         });
     }
     
     const safeReach = Number(reach) || 0;
+    // Fallback Berechnung, falls keine Details da sind
     if (totalEstimatedSpend === 0 && safeReach > 0) {
         let mainCountry = 'GLOBAL';
         if (item.target_locations && item.target_locations.length > 0) mainCountry = item.target_locations[0].name;
@@ -178,21 +173,20 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         breakdown: detailedBreakdown 
     };
 
-    // 4. Metrics & Score
+    // 4. Metrics & Likes
     let likes = item.likes || item.page_like_count || 0;
     if (!likes && item.advertiser?.ad_library_page_info?.page_info) {
         likes = item.advertiser.ad_library_page_info.page_info.likes || 0;
     }
 
-    // --- SCORE ENTSCHEIDUNG ---
-    // 1. Priorität: Hat das Backend (Datenbank) bereits einen Score geliefert?
+    // --- SCORE BERECHNUNG (ROBUST) ---
     let viralScore = 0;
     
+    // Fallback: Nimm Backend Score, falls vorhanden und > 0
     if (item.calculated_viral_score && item.calculated_viral_score > 0) {
-        // JA: Nimm den Backend-Wert (Das ist der sicherste Weg)
         viralScore = item.calculated_viral_score;
     } else {
-        // NEIN: Berechne Fallback im Frontend
+        // Frontend Berechnung
         let daysActive = 1;
         try {
             const d = new Date(isoDate);
@@ -203,13 +197,30 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         daysActive = Math.max(daysActive, 1);
 
         const dailyMediaValue = totalEstimatedSpend / daysActive;
+        
         const ctaKey = (item.cta_text || snap.cta_text || "DEFAULT").toUpperCase().replace(/\s+/g, '_');
+        // Baseline holen (defaultet auf 20€)
         const baseExpectation = SEGMENT_BASELINES.CTA[ctaKey] || SEGMENT_BASELINES.CTA.DEFAULT;
+        
         const performanceRatio = dailyMediaValue / baseExpectation;
 
         if (performanceRatio > 0) {
-            viralScore = 50 + (Math.log2(performanceRatio) * 20);
+            // Neue Formel: Auch kleine Ratios geben Punkte
+            if (performanceRatio < 0.2) {
+                // Linearer Anstieg für sehr kleine Ads (verhindert 0)
+                viralScore = performanceRatio * 100; 
+            } else {
+                // Logarithmisch für normale bis große Ads
+                viralScore = 50 + (Math.log2(performanceRatio) * 15);
+            }
         }
+        
+        // Bonus für Video (fairer Bonus, da Video teurer zu produzieren)
+        if (mediaType === 'video') viralScore += 5;
+
+        // Sicherheitsnetz: Wenn Reach > 1000 da ist, gib mindestens Score 10
+        if (safeReach > 1000 && viralScore < 10) viralScore = 10;
+        
         viralScore = Math.max(0, Math.min(100, Math.round(viralScore)));
     }
 
@@ -222,21 +233,15 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
       page_profile_uri: item.page_profile_uri || "#",
       ad_library_url: item.ad_library_url || "#",
       snapshot: { ...snap, body: { text: safeBody } }, 
-      
       likes: Number(likes),
-      reach: Number(reach), 
-      impressions: Number(reach),
-      
-      // HIER WIRD DER SCORE ZUGEWIESEN
+      reach: safeReach, 
+      impressions: safeReach,
       efficiency_score: Number(viralScore),
-      
       demographics, 
       targeting,
       transparency_regions: transparencyRegions,
-      
       aaa_info: item.aaa_info || null, 
       transparency_by_location: item.transparency_by_location || null,
-
       disclaimer: item.disclaimer_label || null,
       advertiser_info: item.advertiser ? item.advertiser.page : {},
       avatar: safeAvatar

@@ -8,23 +8,22 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# --- CORS KONFIGURATION (FIX) ---
-# Wichtig: Bei allow_credentials=True darf "*" oft nicht verwendet werden.
-# Wir müssen die exakten Domains auflisten.
+# --- CORS KONFIGURATION (PERMANENTER FIX) ---
 origins = [
-    "http://localhost:5173",          # Lokale Entwicklung
-    "http://127.0.0.1:5173",          # Lokale Entwicklung Alternative
-    "https://apify-saas.vercel.app",  # Haupt-Domain
-    # Hier ist die Domain aus deiner Fehlermeldung:
-    "https://apify-saas-pnvaal3o4-ericrutz780-clouds-projects.vercel.app" 
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://apify-saas.vercel.app", # Deine Haupt-Domain
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,    # Exakte Liste statt "*"
-    allow_credentials=True,   # Erlaubt Cookies/Auth-Header
-    allow_methods=["*"],      # Erlaubt alle Methoden (GET, POST, etc.)
-    allow_headers=["*"],      # Erlaubt alle Header
+    allow_origins=origins,
+    # WICHTIG: Dieser Regex erlaubt ALLE deine Vercel Preview URLs automatisch!
+    # Egal welche ID Vercel generiert (z.B. f6yt1svdr oder pnvaal3o4), es wird funktionieren.
+    allow_origin_regex=r"https://apify-saas.*\.vercel\.app", 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/")

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-// HIER SIND ALLE ICONS DRIN
 import { X, Globe, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, FileText, User, Layers, ExternalLink, Play, Monitor, Hash, LayoutGrid, Eye, Building2, Sparkles, TrendingUp, Clock, ArrowUpDown, ArrowUp, ArrowDown, Calendar, BarChart3, MapPin, Zap } from 'lucide-react';
 
 interface AdDetailModalProps {
@@ -18,7 +17,6 @@ const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // Daten laden (entweder schon da oder aus targeting)
     let demographics = ad.demographics || [];
     let locations: string[] = ad.targeting?.locations || [];
     let reach = ad.reach || ad.eu_total_reach || 0;
@@ -129,6 +127,15 @@ const formatFollowerCount = (num?: number) => {
     return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
 };
 
+// FIX: Helper Funktion für saubere ID Anzeige
+const getDisplayId = (id: string) => {
+    if (!id) return '';
+    // Wenn ID einen Unterstrich hat (Meta Format), nimm den Teil danach
+    if (id.includes('_')) return id.split('_')[1];
+    // Sonst nimm die ganze ID
+    return id;
+};
+
 interface MetaAdDetailViewProps {
     ad: any;
     group: any[];
@@ -202,7 +209,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 
                     <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-sm flex items-center justify-between">
                         <span className="text-sm font-medium opacity-90">Library ID</span>
-                        <span className="font-mono font-bold tracking-wide">{ad.id.split('_')[1] || '12345'}</span>
+                        {/* HIER WURDE DER FIX ANGEWENDET: getDisplayId statt hartcodiertem '12345' */}
+                        <span className="font-mono font-bold tracking-wide">{getDisplayId(ad.id)}</span>
                     </div>
 
                     {group.length > 1 && (
@@ -218,7 +226,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                                 {sibling.snapshot?.images?.[0] ? <img src={sibling.snapshot.images[0].resized_image_url} className="w-full h-full object-cover rounded"/> : <Play className="w-4 h-4 text-gray-400"/>}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between"><span className="text-xs font-bold">ID: {sibling.id.split('_')[1]}</span>{isActive && <CheckCircle2 className="w-3 h-3 text-brand-600"/>}</div>
+                                                <div className="flex justify-between"><span className="text-xs font-bold">ID: {getDisplayId(sibling.id)}</span>{isActive && <CheckCircle2 className="w-3 h-3 text-brand-600"/>}</div>
                                                 <div className="text-[10px] text-gray-500">{new Date(sibling.start_date).toLocaleDateString()}</div>
                                             </div>
                                         </div>
@@ -294,8 +302,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                                     {countryData.age_gender_breakdowns.slice(0, 4).map((d: any, j: number) => (
                                                         <div key={j} className="flex justify-between text-xs bg-white p-1.5 rounded border border-gray-100 shadow-sm">
                                                             <span className="text-gray-500">{d.age_range}</span>
-                                                            <span className="font-medium">
-                                                                {((d.female || 0) > (d.male || 0)) ? `👩 ${(d.female || 0)}` : `👨 ${(d.male || 0)}`}
+                                                            <span className="font-medium text-[10px]">
+                                                                {((d.female || 0) > (d.male || 0)) ? `FEMALE ${formatReach(d.female || 0)}` : `MALE ${formatReach(d.male || 0)}`}
                                                             </span>
                                                         </div>
                                                     ))}
@@ -459,6 +467,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
             <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
             <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200" onClick={handleContentClick}>
+                {/* Header & Tabs */}
                 <div className="flex flex-col border-b border-gray-200 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center justify-between px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -480,7 +489,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                     return (<button key="overview" onClick={() => setActiveTabId('overview')} className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 flex-shrink-0 ${activeTabId === 'overview' ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`} style={{ marginBottom: -1 }}><LayoutGrid className="w-4 h-4" />Overview</button>);
                                 }
                                 const isTabActive = activeTabId === tabId;
-                                return (<button key={tabId} onClick={() => setActiveTabId(tabId)} className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 relative pr-9 flex-shrink-0 ${isTabActive ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`}><div className="flex items-center gap-2"><span className="font-bold">ID: {tabId.split('_')[1]}</span></div><div onClick={(e) => handleCloseTab(e, tabId)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><X className="w-3 h-3" /></div></button>);
+                                return (<button key={tabId} onClick={() => setActiveTabId(tabId)} className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-t border-x border-b-0 relative pr-9 flex-shrink-0 ${isTabActive ? 'bg-white border-gray-200 text-brand-600 shadow-[0_2px_0_0_#fff]' : 'bg-gray-100 border-transparent text-gray-600 hover:bg-gray-200'}`}><div className="flex items-center gap-2"><span className="font-bold">ID: {getDisplayId(tabId)}</span></div><div onClick={(e) => handleCloseTab(e, tabId)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><X className="w-3 h-3" /></div></button>);
                             })}
                         </div>
                     )}
@@ -508,7 +517,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                                  const ad = normalizeAdData(rawAd);
                                                  return (
                                                  <tr key={ad.id} onClick={() => handleOpenAd(ad.id)} className="hover:bg-gray-50 transition-colors group/row cursor-pointer">
-                                                     <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 overflow-hidden flex-shrink-0">{ad.snapshot.images?.[0] ? <img src={ad.snapshot.images[0].resized_image_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Play className="w-4 h-4 text-gray-300" /></div>}</div><div><div className="font-bold text-gray-900">ID: {ad.id.split('_')[1]}</div><div className="text-xs text-gray-500">{ad.isActive ? 'Active' : 'Inactive'}</div></div></div></td>
+                                                     <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 overflow-hidden flex-shrink-0">{ad.snapshot.images?.[0] ? <img src={ad.snapshot.images[0].resized_image_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Play className="w-4 h-4 text-gray-300" /></div>}</div><div><div className="font-bold text-gray-900">ID: {getDisplayId(ad.id)}</div><div className="text-xs text-gray-500">{ad.isActive ? 'Active' : 'Inactive'}</div></div></div></td>
                                                      <td className="px-6 py-4 text-gray-600">{new Date(ad.start_date).toLocaleDateString()}</td>
                                                      <td className="px-6 py-4 text-gray-600">{ad.targeting?.locations?.length ? (ad.targeting.locations.length > 3 ? `${ad.targeting.locations.length} Countries` : ad.targeting.locations.join(', ')) : 'Global'}</td>
                                                      <td className="px-6 py-4 text-gray-900 font-medium text-right">{formatReach(ad.reach)}</td>
@@ -534,12 +543,12 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
     );
   }
 
-  // --- TIKTOK AD RENDER LOGIC ---
+  // --- TIKTOK AD RENDER LOGIC (Minimal angepasst) ---
   const ad = group[0] as TikTokAd;
   return (
     <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
         <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" />
-        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200" onClick={handleContentClick}>
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 bg-black/10 hover:bg-black/20 rounded-full text-white backdrop-blur-md transition-colors"><X className="w-5 h-5" /></button>
             <div className="w-full md:w-[400px] bg-black flex items-center justify-center relative flex-shrink-0">
                  <div className="relative w-full h-full max-h-full flex items-center justify-center p-4">

@@ -11,7 +11,7 @@ export const cleanAndTransformData = (dbRows) => {
     const rawPlatforms = item.publisher_platform || item.publisherPlatform || [];
     const platforms = rawPlatforms.map(p => p.toLowerCase());
     
-    // 2. Media Extraction
+    // 2. Media
     let mediaType = 'image';
     let mediaUrl = null;
     let poster = null;
@@ -37,8 +37,29 @@ export const cleanAndTransformData = (dbRows) => {
     const pageName = snap.page_name || item.page_name || "Unknown Page";
     const safeAvatar = snap.page_profile_picture_url || (item.advertiser && item.advertiser.page_info && item.advertiser.page_info.profile_photo) || null;
 
-    // --- DATEN EXTRAKTION (FIX: Altes Feld + Neues Feld prüfen) ---
-    // 1. Versuche Daten direkt zu laden (wie im alten Frontend)
+    // --- DATUM FIX (HIER GEÄNDERT) ---
+    let isoDate = new Date().toISOString(); // Fallback auf Heute
+    
+    // Wir prüfen alle möglichen Felder für das Startdatum
+    const rawDate = item.start_date || item.startDate || item.creation_time;
+    
+    if (rawDate) {
+        try {
+            // Facebook liefert oft Unix Timestamp (Sekunden) -> x 1000 für Millisekunden
+            // Oder ISO String (dann passt new Date)
+            const dateVal = (typeof rawDate === 'number' && rawDate < 10000000000) ? rawDate * 1000 : rawDate;
+            const parsedDate = new Date(dateVal);
+            
+            // Nur übernehmen wenn gültig
+            if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() > 1971) {
+                isoDate = parsedDate.toISOString();
+            }
+        } catch (e) {
+            console.warn("Date parsing error for ad:", item.id, e);
+        }
+    }
+
+    // --- DATEN EXTRAKTION ---
     let demographics = item.demographics || []; 
     let reach = item.reach_estimate || item.impressions || 0;
     
@@ -48,13 +69,11 @@ export const cleanAndTransformData = (dbRows) => {
     let transparencyRegions = [];
     let detailedBreakdown = []; 
 
-    // 2. Wenn keine direkten Demografics da sind, suche in aaa_info (Neu)
     const infoSource = item.aaa_info || (item.transparency_by_location && item.transparency_by_location.eu_transparency);
 
     if (infoSource) {
         if (!reach && infoSource.eu_total_reach) reach = infoSource.eu_total_reach;
         
-        // Wenn wir noch keine Demografie haben, nimm die aus aaa_info
         if (demographics.length === 0 && infoSource.age_country_gender_reach_breakdown) {
             demographics = infoSource.age_country_gender_reach_breakdown;
         }
@@ -68,10 +87,8 @@ export const cleanAndTransformData = (dbRows) => {
         }
     }
 
-    // 3. Breakdown Tabelle erstellen (aus egal welcher Quelle wir demographics haben)
     if (demographics.length > 0) {
         detailedBreakdown = demographics.flatMap(d => {
-            // Check ob die Struktur 'age_gender_breakdowns' existiert (Facebook Standard)
             if (d.age_gender_breakdowns) {
                 return d.age_gender_breakdowns.map(b => ({
                     location: d.country || 'Unknown',
@@ -80,7 +97,6 @@ export const cleanAndTransformData = (dbRows) => {
                     reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
                 }));
             }
-            // Fallback für einfache Struktur (falls Backend anders liefert)
             return [{
                 location: d.country || 'Unknown',
                 age_range: 'All',
@@ -90,7 +106,6 @@ export const cleanAndTransformData = (dbRows) => {
         });
     }
     
-    // Regionen für Tabs
     if (detailedBreakdown.length > 0) {
         transparencyRegions.push({
             region: "European Union",
@@ -104,7 +119,7 @@ export const cleanAndTransformData = (dbRows) => {
         genders: [targetGender],
         locations: targetLocations.length > 0 ? targetLocations : ['Global'],
         reach_estimate: Number(reach),
-        breakdown: detailedBreakdown // Das füllt die Tabelle!
+        breakdown: detailedBreakdown 
     };
 
     // 4. Metrics
@@ -125,7 +140,8 @@ export const cleanAndTransformData = (dbRows) => {
       id: item.ad_archive_id || item.id || Math.random().toString(),
       isActive: item.is_active !== false,
       publisher_platform: platforms,
-      start_date: item.start_date_formatted || item.start_date || new Date().toISOString(),
+      // WICHTIG: Hier nutzen wir das reparierte Datum
+      start_date: isoDate,
       page_name: pageName,
       page_profile_uri: item.page_profile_uri || "#",
       ad_library_url: item.ad_library_url || "#",
@@ -140,7 +156,6 @@ export const cleanAndTransformData = (dbRows) => {
       targeting,
       transparency_regions: transparencyRegions,
       
-      // WICHTIG: Rohdaten weitergeben für den Notfall
       aaa_info: item.aaa_info || null, 
       transparency_by_location: item.transparency_by_location || null,
 

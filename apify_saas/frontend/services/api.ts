@@ -3,6 +3,8 @@ import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd, SearchHist
 import { MOCK_USER } from './mockData'; // Nur als Fallback für User-Struktur
 // @ts-ignore
 import { cleanAndTransformData } from '../adAdapter';
+// @ts-ignore
+import { supabase } from './supabaseClient';
 
 // Verbindung zum echten Backend herstellen
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -100,7 +102,7 @@ class ApiService {
         platform: params.platform === 'both' ? 'meta' : params.platform,
         limit: params.limit,
         country: cleanCountry,
-        start_date_min: params.startDateMin, // Hier wird das Datum übergeben!
+        start_date_min: params.startDateMin, 
         start_date_max: params.startDateMax,
         sort_by: 'newest',
         active_status: 'active'
@@ -108,11 +110,25 @@ class ApiService {
 
     console.log("🚀 Sende echte Anfrage an Backend:", payload);
 
-    const response = await fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
+    // --- NEU: Benchmarks laden (Parallel zum Search-Request) ---
+    // Wir holen die Search-Results UND die Benchmarks gleichzeitig
+    const [response, benchmarkResult] = await Promise.all([
+        fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }),
+        supabase.from('benchmark_cpr_cache').select('*')
+    ]);
+
+    // Benchmark Map erstellen
+    const benchmarkMap: Record<string, number> = {};
+    if (benchmarkResult.data) {
+        benchmarkResult.data.forEach((row: any) => {
+            const key = `${row.country}_${row.gender}_${row.age_group}`;
+            benchmarkMap[key] = row.cpr_value;
+        });
+    }
 
     if (!response.ok) {
         const err = await response.json();
@@ -130,7 +146,8 @@ class ApiService {
         const metaRaw = rawAdList.filter((ad: any) => !ad.platform || ad.platform === 'meta' || ad.publisher_platform);
         if (metaRaw.length > 0) {
              const rowsToTransform = metaRaw.map((item: any) => ({ data: item }));
-             cleanedMetaAds = cleanAndTransformData(rowsToTransform);
+             // --- HIER: Map übergeben! ---
+             cleanedMetaAds = cleanAndTransformData(rowsToTransform, benchmarkMap);
         }
     }
 

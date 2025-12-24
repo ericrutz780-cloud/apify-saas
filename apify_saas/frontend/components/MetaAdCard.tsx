@@ -1,7 +1,6 @@
-
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, Bookmark, Zap, Flame, Users, TrendingUp } from 'lucide-react';
+import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, Bookmark, Zap, Flame, Users, TrendingUp, Images } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -41,8 +40,25 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
 }) => {
   const { snapshot, targeting } = ad;
 
+  // --- FIX START: Intelligente Medien-Auswahl für Carousel Ads ---
   const hasVideo = snapshot.videos && snapshot.videos.length > 0;
-  const mediaUrl = hasVideo ? snapshot.videos[0].video_hd_url : (snapshot.images.length > 0 ? snapshot.images[0].resized_image_url : null);
+  const hasImages = snapshot.images && snapshot.images.length > 0;
+  // Prüfen, ob es Cards (Carousel) gibt
+  const hasCards = snapshot.cards && snapshot.cards.length > 0;
+
+  let mediaUrl = null;
+  let isCarousel = false;
+
+  if (hasVideo) {
+      mediaUrl = snapshot.videos[0].video_hd_url;
+  } else if (hasImages) {
+      mediaUrl = snapshot.images[0].resized_image_url;
+  } else if (hasCards) {
+      // FALLBACK: Wenn keine Haupt-Bilder da sind, nimm das Bild der ersten Karte
+      mediaUrl = snapshot.cards[0].resized_image_url || snapshot.cards[0].original_image_url;
+      isCarousel = true;
+  }
+  // --- FIX END ---
   
   const handleCardClick = (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('button')) {
@@ -69,7 +85,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
   };
 
   const { content, hashtags } = useMemo(() => {
-      const text = snapshot.body.text || '';
+      const text = snapshot.body?.text || '';
       const words = text.replace(/\n/g, ' ').split(/\s+/);
       const tags: string[] = [];
       const contentWords: string[] = [];
@@ -78,7 +94,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
           else contentWords.push(w);
       });
       return { content: contentWords.join(' '), hashtags: tags };
-  }, [snapshot.body.text]);
+  }, [snapshot.body?.text]);
 
   const platforms = ad.publisher_platform || [];
   const hasFB = platforms.includes('facebook');
@@ -96,8 +112,6 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
   const reachVal = targeting?.reach_estimate || 0;
   const formatCompact = (num: number) => new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
   
-  // Factor Logic: Arbitrary calculation for demo purposes if not provided by backend
-  // We simulate a 'factor' based on the viral score. e.g. Score 90 = ~4.5x
   const factor = (viralScore / 20).toFixed(1);
   const showFactor = parseFloat(factor) > 1.5;
 
@@ -127,16 +141,15 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
       {/* 2. IDENTITY ROW WITH METRIC TAGS */}
       <div className="p-3 flex items-start gap-3 relative">
           <div className="w-9 h-9 flex-shrink-0 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center font-bold text-brand-600 text-sm mt-0.5">
-                {ad.page_name.charAt(0)}
+                {ad.page_name ? ad.page_name.charAt(0) : '?'}
           </div>
           <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-semibold text-gray-900 truncate leading-tight hover:underline mb-1.5">
                     {ad.page_name}
                 </h3>
                 
-                {/* Metric Tags Area (Replaces ID) */}
+                {/* Metric Tags Area */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                    {/* Viral Score Tag */}
                     <MetricTag 
                         icon={Zap} 
                         value={viralScore} 
@@ -145,7 +158,6 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
                         textColor="text-indigo-700" 
                     />
                     
-                    {/* Reach Tag */}
                     <MetricTag 
                         icon={Users} 
                         value={formatCompact(reachVal)} 
@@ -154,7 +166,6 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
                         textColor="text-emerald-700" 
                     />
 
-                    {/* Conditional Factor Tag */}
                     {showFactor && (
                         <MetricTag 
                             icon={Flame} 
@@ -189,7 +200,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
                  <video 
                     src={mediaUrl} 
                     className="w-full h-full object-cover bg-black"
-                    poster={snapshot.images[0]?.resized_image_url} 
+                    poster={snapshot.images?.[0]?.resized_image_url} 
                     muted
                  />
                  <div className="absolute inset-0 flex items-center justify-center bg-black/10">
@@ -199,7 +210,16 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
                  </div>
              </div>
           ) : (
-            <img src={mediaUrl} alt="Ad Creative" className="w-full h-full object-cover" />
+            <>
+                <img src={mediaUrl} alt="Ad Creative" className="w-full h-full object-cover" />
+                {/* Carousel Indicator */}
+                {isCarousel && (
+                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded text-white text-[10px] font-medium flex items-center gap-1">
+                        <Images className="w-3 h-3" />
+                        <span>Carousel</span>
+                    </div>
+                )}
+            </>
           )
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">

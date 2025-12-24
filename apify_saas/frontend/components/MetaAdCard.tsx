@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, Bookmark, Zap, Flame, Users, TrendingUp, Images } from 'lucide-react';
+import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, Bookmark, Zap, Flame, Users, TrendingUp, Image } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -40,20 +40,20 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
 }) => {
   const { snapshot, targeting } = ad;
 
-  // --- FIX START: Intelligente Medien-Auswahl für Carousel Ads ---
+  // --- FIX: Intelligente Medien-Auswahl für Carousel Ads ---
   const hasVideo = snapshot.videos && snapshot.videos.length > 0;
   const hasImages = snapshot.images && snapshot.images.length > 0;
-  // Prüfen, ob es Cards (Carousel) gibt
+  // Prüfen, ob es Cards (Carousel) gibt (Optional chaining nutzen)
   const hasCards = snapshot.cards && snapshot.cards.length > 0;
 
-  let mediaUrl = null;
+  let mediaUrl: string | null | undefined = null;
   let isCarousel = false;
 
   if (hasVideo) {
       mediaUrl = snapshot.videos[0].video_hd_url;
   } else if (hasImages) {
       mediaUrl = snapshot.images[0].resized_image_url;
-  } else if (hasCards) {
+  } else if (hasCards && snapshot.cards) {
       // FALLBACK: Wenn keine Haupt-Bilder da sind, nimm das Bild der ersten Karte
       mediaUrl = snapshot.cards[0].resized_image_url || snapshot.cards[0].original_image_url;
       isCarousel = true;
@@ -215,7 +215,7 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
                 {/* Carousel Indicator */}
                 {isCarousel && (
                     <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded text-white text-[10px] font-medium flex items-center gap-1">
-                        <Images className="w-3 h-3" />
+                        <Image className="w-3 h-3" />
                         <span>Carousel</span>
                     </div>
                 )}

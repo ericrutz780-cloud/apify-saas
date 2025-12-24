@@ -1,5 +1,3 @@
-
-
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -47,8 +45,15 @@ export interface MetaAdSnapshot {
   body: {
     text: string;
   };
-  images: Array<{ resized_image_url: string }>;
-  videos: Array<{ video_hd_url: string }>;
+  images: Array<{ resized_image_url: string; original_image_url?: string }>;
+  videos: Array<{ video_hd_url: string; video_preview_image_url?: string }>;
+  // --- FIX: Cards Array hinzugefügt für Carousels ---
+  cards?: Array<{
+    original_image_url?: string;
+    resized_image_url?: string;
+    video_preview_image_url?: string;
+    title?: string;
+  }>;
 }
 
 export interface MetaAdTargetingBreakdown {

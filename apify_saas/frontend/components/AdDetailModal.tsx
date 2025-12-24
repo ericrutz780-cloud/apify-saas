@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-import { X, Globe, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, FileText, User, Layers, ExternalLink, Play, Monitor, Hash, LayoutGrid, Eye, Building2, Sparkles, TrendingUp, Clock, ArrowUpDown, ArrowUp, ArrowDown, Calendar, BarChart3, MapPin, Zap } from 'lucide-react';
+import { 
+    X, Globe, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, 
+    Facebook, Instagram, CheckCircle2, FileText, User, Layers, ExternalLink, Play, 
+    Monitor, Hash, LayoutGrid, Eye, Building2, Sparkles, TrendingUp, Clock, 
+    ArrowUpDown, ArrowUp, ArrowDown, Calendar, BarChart3, MapPin, Zap, 
+    ChevronLeft, ChevronRight, Image as ImageIcon 
+} from 'lucide-react';
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -122,17 +128,9 @@ const formatReach = (num?: number | null) => {
     return new Intl.NumberFormat('en-US').format(num);
 };
 
-const formatFollowerCount = (num?: number) => {
-    if (!num) return '';
-    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
-};
-
-// FIX: Helper Funktion für saubere ID Anzeige
 const getDisplayId = (id: string) => {
     if (!id) return '';
-    // Wenn ID einen Unterstrich hat (Meta Format), nimm den Teil danach
     if (id.includes('_')) return id.split('_')[1];
-    // Sonst nimm die ganze ID
     return id;
 };
 
@@ -152,8 +150,16 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
-
+    
+    // --- CAROUSEL STATE ---
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
+    const [cardIndex, setCardIndex] = useState(0);
+
+    // Wenn sich die Ad ändert, Index resetten
+    useEffect(() => {
+        setCardIndex(0);
+    }, [ad.id]);
+
     const sortedSiblings = React.useMemo(() => {
         return [...group].sort((a, b) => {
             const aOpen = openTabs.includes(a.id);
@@ -164,17 +170,53 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     }, [group, openTabs]);
 
     const { snapshot, targeting, advertiser_info, transparency_regions, about_disclaimer, beneficiary_payer } = ad;
-    const hasVideo = snapshot?.videos && snapshot.videos.length > 0;
-    const mediaUrl = hasVideo ? snapshot?.videos[0].video_hd_url : (snapshot?.images?.length > 0 ? snapshot?.images[0].resized_image_url : null);
-    const platforms = ad.publisher_platform || [];
     
+    // --- MEDIA LOGIK (CAROUSEL AWARE) ---
+    const cards = snapshot?.cards || [];
+    const isCarousel = cards.length > 0;
+    
+    let mediaUrl = null;
+    let isVideo = false;
+    let currentTitle = snapshot.title;
+    let currentBody = snapshot.body?.text;
+    let currentLink = snapshot.link_url;
+    let currentCTA = snapshot.cta_text;
+
+    if (isCarousel) {
+        const card = cards[cardIndex] || cards[0];
+        mediaUrl = card.original_image_url || card.resized_image_url;
+        // Video in Cards?
+        if (card.video_hd_url || card.video_sd_url) {
+            mediaUrl = card.video_hd_url || card.video_sd_url;
+            isVideo = true;
+        }
+        
+        // Texte von der Karte übernehmen falls vorhanden
+        if (card.title) currentTitle = card.title;
+        if (card.body) currentBody = card.body;
+        if (card.link_url) currentLink = card.link_url;
+        if (card.cta_text) currentCTA = card.cta_text;
+
+    } else {
+        // Standard (Single Image/Video)
+        const hasVideo = snapshot?.videos && snapshot.videos.length > 0;
+        if (hasVideo) {
+            mediaUrl = snapshot?.videos[0].video_hd_url;
+            isVideo = true;
+        } else if (snapshot?.images?.length > 0) {
+            mediaUrl = snapshot?.images[0].resized_image_url || snapshot?.images[0].original_image_url;
+        }
+    }
+
+    const platforms = ad.publisher_platform || [];
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
-
-    const score = ad.efficiency_score || 0;
     const demoData = ad.demographics || [];
     const breakdownData = activeTargeting?.breakdown || [];
+
+    const nextCard = () => setCardIndex((prev) => (prev + 1) % cards.length);
+    const prevCard = () => setCardIndex((prev) => (prev - 1 + cards.length) % cards.length);
 
     return (
         <div className={isActiveView ? "flex flex-col md:flex-row h-full" : "hidden h-full"}>
@@ -182,8 +224,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                 <div className="space-y-6 max-w-lg mx-auto">
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden w-full">
                         <div className="p-4 flex items-center gap-3 border-b border-gray-100">
-                             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
-                                {ad.page_name.charAt(0)}
+                             <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold overflow-hidden">
+                                {ad.avatar ? <img src={ad.avatar} alt="" className="w-full h-full object-cover"/> : ad.page_name.charAt(0)}
                              </div>
                              <div>
                                  <h4 className="font-semibold text-gray-900 text-sm">{ad.page_name}</h4>
@@ -191,25 +233,55 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </div>
                         </div>
 
-                        <div className="p-4 text-sm text-gray-900 whitespace-pre-wrap">{snapshot.body?.text}</div>
+                        <div className="p-4 text-sm text-gray-900 whitespace-pre-wrap">{currentBody}</div>
 
-                        <div className="w-full bg-black">
-                            {hasVideo ? (
-                                <video src={mediaUrl} controls className="w-full max-h-[500px] object-contain" />
+                        {/* --- MEDIA PLAYER / CAROUSEL --- */}
+                        <div className="w-full bg-black relative group/media min-h-[300px] flex items-center justify-center">
+                            {mediaUrl ? (
+                                isVideo ? (
+                                    <video src={mediaUrl} controls className="w-full max-h-[500px] object-contain" />
+                                ) : (
+                                    <img src={mediaUrl} alt="Ad" className="w-full h-auto max-h-[500px] object-contain" />
+                                )
                             ) : (
-                                <img src={mediaUrl} alt="Ad" className="w-full h-auto object-cover" />
+                                <div className="text-white/50 flex flex-col items-center p-10">
+                                    <Info className="w-8 h-8 mb-2"/>
+                                    <span>No Media Available</span>
+                                </div>
+                            )}
+
+                            {/* Carousel Controls */}
+                            {isCarousel && cards.length > 1 && (
+                                <>
+                                    <button onClick={(e) => { e.stopPropagation(); prevCard(); }} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-opacity opacity-0 group-hover/media:opacity-100">
+                                        <ChevronLeft className="w-6 h-6" />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); nextCard(); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-opacity opacity-0 group-hover/media:opacity-100">
+                                        <ChevronRight className="w-6 h-6" />
+                                    </button>
+                                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 px-3 py-1 rounded-full text-xs text-white backdrop-blur-sm flex items-center gap-1.5">
+                                        <ImageIcon className="w-3 h-3" />
+                                        <span>{cardIndex + 1} / {cards.length}</span>
+                                    </div>
+                                    {/* Card Title if different */}
+                                    {currentTitle && currentTitle !== ad.page_name && (
+                                        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 to-transparent p-3 text-white text-xs font-medium">
+                                            {currentTitle}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
+                        {/* -------------------------------- */}
 
                         <div className="bg-gray-50 p-3 flex justify-between items-center border-t border-gray-100">
-                             <span className="text-xs text-gray-500 uppercase font-medium ml-2">{new URL(snapshot.link_url || 'https://example.com').hostname}</span>
-                             <a href={snapshot.link_url} target="_blank" rel="noreferrer" className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold px-4 py-2 rounded transition-colors">{snapshot.cta_text || 'Learn More'}</a>
+                             <span className="text-xs text-gray-500 uppercase font-medium ml-2">{new URL(currentLink || 'https://example.com').hostname.replace('www.','')}</span>
+                             <a href={currentLink} target="_blank" rel="noreferrer" className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold px-4 py-2 rounded transition-colors">{currentCTA || 'Learn More'}</a>
                         </div>
                     </div>
 
                     <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-sm flex items-center justify-between">
                         <span className="text-sm font-medium opacity-90">Library ID</span>
-                        {/* HIER WURDE DER FIX ANGEWENDET: getDisplayId statt hartcodiertem '12345' */}
                         <span className="font-mono font-bold tracking-wide">{getDisplayId(ad.id)}</span>
                     </div>
 
@@ -219,11 +291,17 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                             <div className="space-y-3">
                                 {sortedSiblings.map((sibling: any) => {
                                     const isActive = sibling.id === activeTabId;
-                                    const isOpened = openTabs.includes(sibling.id);
+                                    
+                                    // Thumbnail Logik inkl. Carousel Check
+                                    let thumb = null;
+                                    if (sibling.snapshot?.images?.length > 0) thumb = sibling.snapshot.images[0].resized_image_url;
+                                    else if (sibling.snapshot?.cards?.length > 0) thumb = sibling.snapshot.cards[0].resized_image_url || sibling.snapshot.cards[0].original_image_url;
+                                    else if (sibling.snapshot?.videos?.length > 0) thumb = sibling.snapshot.videos[0].video_preview_image_url;
+
                                     return (
                                         <div key={sibling.id} onClick={() => onOpenAd(sibling.id)} className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center gap-3 ${isActive ? 'bg-brand-50 border-brand-300 ring-1 ring-brand-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                                            <div className="w-10 h-10 rounded border bg-gray-100 flex-shrink-0 flex items-center justify-center">
-                                                {sibling.snapshot?.images?.[0] ? <img src={sibling.snapshot.images[0].resized_image_url} className="w-full h-full object-cover rounded"/> : <Play className="w-4 h-4 text-gray-400"/>}
+                                            <div className="w-10 h-10 rounded border bg-gray-100 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                                                {thumb ? <img src={thumb} className="w-full h-full object-cover" /> : <Play className="w-4 h-4 text-gray-400"/>}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between"><span className="text-xs font-bold">ID: {getDisplayId(sibling.id)}</span>{isActive && <CheckCircle2 className="w-3 h-3 text-brand-600"/>}</div>
@@ -346,8 +424,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 
                 <CollapsibleSection title="About the advertiser" icon={ShieldCheck} defaultOpen={false}>
                     <div className="flex items-center gap-4 mb-5">
-                         <div className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-xl border border-gray-100 flex-shrink-0">
-                            {ad.page_name.charAt(0)}
+                         <div className="w-14 h-14 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-xl border border-gray-100 flex-shrink-0 overflow-hidden">
+                            {ad.avatar ? <img src={ad.avatar} className="w-full h-full object-cover"/> : ad.page_name.charAt(0)}
                          </div>
                          <div className="font-bold text-gray-900 text-lg">{ad.page_name}</div>
                     </div>
@@ -515,9 +593,15 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                          <tbody className="divide-y divide-gray-100">
                                              {sortedGroup.map((rawAd: any) => {
                                                  const ad = normalizeAdData(rawAd);
+                                                 // Thumbnail Logic inkl. Carousel Check
+                                                 let thumbUrl = null;
+                                                 if (ad.snapshot?.images?.length > 0) thumbUrl = ad.snapshot.images[0].resized_image_url;
+                                                 else if (ad.snapshot?.cards?.length > 0) thumbUrl = ad.snapshot.cards[0].resized_image_url || ad.snapshot.cards[0].original_image_url;
+                                                 else if (ad.snapshot?.videos?.length > 0) thumbUrl = ad.snapshot.videos[0].video_preview_image_url;
+
                                                  return (
                                                  <tr key={ad.id} onClick={() => handleOpenAd(ad.id)} className="hover:bg-gray-50 transition-colors group/row cursor-pointer">
-                                                     <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 overflow-hidden flex-shrink-0">{ad.snapshot.images?.[0] ? <img src={ad.snapshot.images[0].resized_image_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Play className="w-4 h-4 text-gray-300" /></div>}</div><div><div className="font-bold text-gray-900">ID: {getDisplayId(ad.id)}</div><div className="text-xs text-gray-500">{ad.isActive ? 'Active' : 'Inactive'}</div></div></div></td>
+                                                     <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 overflow-hidden flex-shrink-0">{thumbUrl ? <img src={thumbUrl} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Play className="w-4 h-4 text-gray-300" /></div>}</div><div><div className="font-bold text-gray-900">ID: {getDisplayId(ad.id)}</div><div className="text-xs text-gray-500">{ad.isActive ? 'Active' : 'Inactive'}</div></div></div></td>
                                                      <td className="px-6 py-4 text-gray-600">{new Date(ad.start_date).toLocaleDateString()}</td>
                                                      <td className="px-6 py-4 text-gray-600">{ad.targeting?.locations?.length ? (ad.targeting.locations.length > 3 ? `${ad.targeting.locations.length} Countries` : ad.targeting.locations.join(', ')) : 'Global'}</td>
                                                      <td className="px-6 py-4 text-gray-900 font-medium text-right">{formatReach(ad.reach)}</td>
@@ -543,7 +627,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
     );
   }
 
-  // --- TIKTOK AD RENDER LOGIC (Minimal angepasst) ---
+  // --- TIKTOK AD RENDER LOGIC ---
   const ad = group[0] as TikTokAd;
   return (
     <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>

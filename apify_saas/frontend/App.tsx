@@ -150,10 +150,21 @@ const Dashboard = ({ user }: { user: User }) => {
     }, {} as Record<string, number>);
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
+    // --- FIX START: Caching Logik ---
     const handleRerun = (item: SearchHistoryItem) => {
-        const countryParam = item.country ? `&country=${item.country}` : '';
-        navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}${countryParam}`);
+        // Zuerst im Cache schauen
+        const cachedResult = localStorage.getItem(`search_${item.id}`);
+
+        if (cachedResult) {
+            console.log("♻️ Lade aus Cache:", item.id);
+            navigate(`/results/${item.id}`);
+        } else {
+            // Fallback: Neue Suche
+            const countryParam = item.country ? `&country=${item.country}` : '';
+            navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}${countryParam}`);
+        }
     };
+    // --- FIX END ---
 
     return (
         <div className="space-y-8">

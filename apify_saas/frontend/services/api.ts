@@ -96,6 +96,10 @@ class ApiService {
 
     const cleanCountry = (!params.country || params.country === 'ALL') ? 'US' : params.country;
 
+    // --- FIX START: Gemeinsame ID generieren ---
+    const sharedSearchId = Math.random().toString(36).substring(7);
+    // --- FIX END ---
+
     // Mapping: Frontend (camelCase) -> Backend (snake_case)
     const payload = {
         keyword: params.query,
@@ -160,7 +164,7 @@ class ApiService {
         this.user.credits -= params.limit;
         
         const newHistoryItem: SearchHistoryItem = {
-            id: Math.random().toString(36).substring(7),
+            id: sharedSearchId, // <--- HIER: Nutzen der shared ID
             query: params.query,
             platform: params.platform,
             timestamp: new Date().toISOString(),
@@ -173,7 +177,7 @@ class ApiService {
     }
 
     return {
-      id: Math.random().toString(36).substring(7),
+      id: sharedSearchId, // <--- HIER: Nutzen der shared ID
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',

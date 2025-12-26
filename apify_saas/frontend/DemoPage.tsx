@@ -3,9 +3,8 @@ import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ChevronDown, RefreshCw
 import MetaAdCard from './components/MetaAdCard';
 import CountrySelector from './components/CountrySelector';
 import { LeadCaptureModal } from './components/LeadCaptureModal';
-// @ts-ignore
-import { cleanAndTransformData } from './adAdapter';
 
+// --- CONFIG ---
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 const DEMO_API_URL = `${CLEAN_BASE_URL}/api/v1/demo`;
@@ -27,7 +26,7 @@ export const DemoPage = () => {
     
     // States
     const [loading, setLoading] = useState(false);
-    const [foundCount, setFoundCount] = useState(0); // Simulierter Counter
+    const [progress, setProgress] = useState(0); // 0 bis 100
     
     const [results, setResults] = useState<any[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
@@ -35,19 +34,20 @@ export const DemoPage = () => {
     const [sortBy, setSortBy] = useState<SortOption>('viral_score');
     const [errorMsg, setErrorMsg] = useState('');
 
-    // --- SIMULATED COUNTER LOGIC ---
+    // --- PROGRESS BAR LOGIC (Counter Style in %) ---
     useEffect(() => {
         let interval: any;
         if (loading) {
-            setFoundCount(0);
+            setProgress(0);
             interval = setInterval(() => {
-                setFoundCount(prev => {
-                    // Simuliert das Finden von Ads bis ca. 28/30
-                    if (prev >= 28) return prev; 
-                    // Zufällige Schritte (1 oder 3 Ads auf einmal)
-                    return prev + Math.floor(Math.random() * 2) + 1;
+                setProgress(old => {
+                    // Simuliert Fortschritt bis ca. 90%
+                    if (old >= 90) return old;
+                    return old + Math.floor(Math.random() * 5) + 1;
                 });
             }, 800);
+        } else {
+            setProgress(0);
         }
         return () => clearInterval(interval);
     }, [loading]);
@@ -64,7 +64,7 @@ export const DemoPage = () => {
         const payload = {
             keyword: query,
             country: country,
-            limit: 30
+            limit: 30 // Backend Limit
         };
 
         try {
@@ -79,23 +79,23 @@ export const DemoPage = () => {
             const responseBody = await response.json();
             const rawAds = responseBody.data || [];
             
-            const rowsToTransform = rawAds.map((item: any) => ({ data: item }));
-            const cleaned = cleanAndTransformData(rowsToTransform, {});
+            // WICHTIG: KEIN cleanAndTransformData mehr! 
+            // Das Backend liefert die Daten jetzt schon perfekt.
             
-            // Safety Filter
-            const validAds = cleaned.filter((ad: any) => 
+            // Safety Filter (nur Ads mit Bild/Video)
+            const validAds = rawAds.filter((ad: any) => 
                 ad && ad.snapshot && (ad.snapshot.images?.length > 0 || ad.snapshot.videos?.length > 0)
             );
 
-            // Hard Cut Client Side
+            // HARD CUT Client Side (zur Sicherheit)
             const finalAds = validAds.slice(0, 30);
 
-            setFoundCount(finalAds.length); // Echte Anzahl setzen
+            setProgress(100);
             
             setTimeout(() => {
                 setResults(finalAds);
                 setLoading(false);
-            }, 500);
+            }, 300);
 
         } catch (error: any) {
             console.error("Demo Search Error:", error);
@@ -124,7 +124,7 @@ export const DemoPage = () => {
         <div className="min-h-screen bg-gray-50 font-sans pb-20">
             <LeadCaptureModal isOpen={showModal} onClose={() => setShowModal(false)} />
             
-            {/* Header */}
+            {/* Sticky Header */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
                 <div className="max-w-5xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between mb-4">
@@ -133,10 +133,11 @@ export const DemoPage = () => {
                         </h1>
                     </div>
 
-                    {/* MOBILE OPTIMIZED FORM: flex-col on mobile, flex-row on md+ */}
+                    {/* MOBILE OPTIMIZED FORM */}
+                    {/* flex-col auf Mobile (Input oben, Rest unten) */}
                     <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
                         
-                        {/* Input */}
+                        {/* Input Field */}
                         <div className="relative flex-1 w-full">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input 
@@ -144,42 +145,41 @@ export const DemoPage = () => {
                                 value={query} 
                                 onChange={(e) => setQuery(e.target.value)} 
                                 placeholder="Brand or Niche (e.g. Huel)" 
-                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all text-base" 
+                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all text-base shadow-sm" 
                             />
                         </div>
                         
-                        {/* Controls (Country + Button) */}
-                        <div className="flex gap-2 w-full md:w-auto">
-                            <div className="flex-1 md:w-[140px] md:flex-none">
+                        {/* Controls Group (Country + Button) - IMMER nebeneinander */}
+                        <div className="flex flex-row gap-2 shrink-0 h-12 w-full md:w-auto">
+                            <div className="w-[40%] md:w-[140px] h-full">
                                 <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
                             </div>
                             <button 
                                 type="submit" 
                                 disabled={loading || !query} 
-                                className="flex-1 md:flex-none md:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 py-3.5 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                                className="w-[60%] md:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
                             >
                                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-6 h-6" />}
                             </button>
                         </div>
                     </form>
 
-                    {/* PROGRESS BAR (Counter Style) */}
+                    {/* PROGRESS BAR (Generic %) */}
                     {loading && (
                         <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex justify-between items-end mb-1.5">
                                 <span className="text-xs font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    Scraping Ad Library...
+                                    Processing...
                                 </span>
                                 <span className="text-sm font-bold text-gray-900">
-                                    {foundCount} <span className="text-gray-400 font-normal">/ 30 Ads</span>
+                                    {Math.min(100, Math.round(progress))}%
                                 </span>
                             </div>
-                            {/* Visual Bar based on count (max 30) */}
                             <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
                                 <div 
                                     className="h-full bg-brand-600 rounded-full transition-all duration-300 ease-out" 
-                                    style={{ width: `${(foundCount / 30) * 100}%` }}
+                                    style={{ width: `${progress}%` }}
                                 ></div>
                             </div>
                         </div>
@@ -215,6 +215,7 @@ export const DemoPage = () => {
                         <h3 className="text-lg font-medium text-gray-400">Enter a brand name to start spying.</h3>
                     </div>
                 )}
+                
                 {sortedResults.length > 0 && !loading && (
                     <>
                         <div className="mb-4 text-sm text-gray-500 font-medium px-1 flex items-center gap-2">
@@ -224,7 +225,9 @@ export const DemoPage = () => {
                             {sortedResults.map((item: any, idx) => (
                                 <div key={idx} className="relative group transition-transform hover:-translate-y-1 duration-300" onClick={() => setShowModal(true)}>
                                     <div className="absolute inset-0 z-20 cursor-pointer bg-transparent" />
-                                    <div className="pointer-events-none"><MetaAdCard ad={item.data || item} onClick={() => {}} viewMode="details" /></div>
+                                    <div className="pointer-events-none">
+                                        <MetaAdCard ad={item} onClick={() => {}} viewMode="details" />
+                                    </div>
                                 </div>
                             ))}
                         </div>

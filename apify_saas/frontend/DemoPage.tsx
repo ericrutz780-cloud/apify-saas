@@ -26,7 +26,8 @@ export const DemoPage = () => {
     
     // States
     const [loading, setLoading] = useState(false);
-    const [progress, setProgress] = useState(0); // 0 bis 100
+    const [itemsFound, setItemsFound] = useState(0); // Zähler für "X / 30"
+    const [progressPercent, setProgressPercent] = useState(0);
     
     const [results, setResults] = useState<any[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
@@ -34,20 +35,20 @@ export const DemoPage = () => {
     const [sortBy, setSortBy] = useState<SortOption>('viral_score');
     const [errorMsg, setErrorMsg] = useState('');
 
-    // --- PROGRESS BAR LOGIC (Counter Style in %) ---
+    // --- PROGRESS LOGIC (Counter 1/30) ---
     useEffect(() => {
         let interval: any;
         if (loading) {
-            setProgress(0);
+            setItemsFound(0);
+            setProgressPercent(0);
             interval = setInterval(() => {
-                setProgress(old => {
-                    // Simuliert Fortschritt bis ca. 90%
-                    if (old >= 90) return old;
-                    return old + Math.floor(Math.random() * 5) + 1;
+                setItemsFound(prev => {
+                    // Simuliere das Finden von Items bis ca. 28
+                    const next = prev + Math.floor(Math.random() * 3); 
+                    return next > 28 ? 28 : next;
                 });
-            }, 800);
-        } else {
-            setProgress(0);
+                setProgressPercent(old => (old >= 95 ? 95 : old + 4));
+            }, 600);
         }
         return () => clearInterval(interval);
     }, [loading]);
@@ -64,7 +65,7 @@ export const DemoPage = () => {
         const payload = {
             keyword: query,
             country: country,
-            limit: 30 // Backend Limit
+            limit: 30
         };
 
         try {
@@ -79,23 +80,23 @@ export const DemoPage = () => {
             const responseBody = await response.json();
             const rawAds = responseBody.data || [];
             
-            // WICHTIG: KEIN cleanAndTransformData mehr! 
-            // Das Backend liefert die Daten jetzt schon perfekt.
-            
-            // Safety Filter (nur Ads mit Bild/Video)
+            // KEIN cleanAndTransformData - Daten kommen sauber vom Backend
+            // Filtern leere Ads raus
             const validAds = rawAds.filter((ad: any) => 
                 ad && ad.snapshot && (ad.snapshot.images?.length > 0 || ad.snapshot.videos?.length > 0)
             );
 
-            // HARD CUT Client Side (zur Sicherheit)
+            // Hard Cut
             const finalAds = validAds.slice(0, 30);
 
-            setProgress(100);
+            // Update UI auf 100% / 30 Items
+            setItemsFound(finalAds.length); 
+            setProgressPercent(100);
             
             setTimeout(() => {
                 setResults(finalAds);
                 setLoading(false);
-            }, 300);
+            }, 500);
 
         } catch (error: any) {
             console.error("Demo Search Error:", error);
@@ -124,7 +125,7 @@ export const DemoPage = () => {
         <div className="min-h-screen bg-gray-50 font-sans pb-20">
             <LeadCaptureModal isOpen={showModal} onClose={() => setShowModal(false)} />
             
-            {/* Sticky Header */}
+            {/* Header */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
                 <div className="max-w-5xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between mb-4">
@@ -133,53 +134,50 @@ export const DemoPage = () => {
                         </h1>
                     </div>
 
-                    {/* MOBILE OPTIMIZED FORM */}
-                    {/* flex-col auf Mobile (Input oben, Rest unten) */}
+                    {/* MOBILE OPTIMIZED FORM: flex-col on mobile */}
                     <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
-                        
-                        {/* Input Field */}
                         <div className="relative flex-1 w-full">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input 
                                 type="text" 
                                 value={query} 
                                 onChange={(e) => setQuery(e.target.value)} 
-                                placeholder="Brand or Niche (e.g. Huel)" 
-                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all text-base shadow-sm" 
+                                placeholder="Brand or Niche (e.g. Huel, Skincare)" 
+                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
                             />
                         </div>
                         
-                        {/* Controls Group (Country + Button) - IMMER nebeneinander */}
+                        {/* Controls Group: IMMER nebeneinander */}
                         <div className="flex flex-row gap-2 shrink-0 h-12 w-full md:w-auto">
-                            <div className="w-[40%] md:w-[140px] h-full">
+                            <div className="w-[120px] sm:w-[140px] h-full flex-shrink-0">
                                 <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
                             </div>
                             <button 
                                 type="submit" 
                                 disabled={loading || !query} 
-                                className="w-[60%] md:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                                className="flex-1 md:flex-none md:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
                             >
                                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-6 h-6" />}
                             </button>
                         </div>
                     </form>
 
-                    {/* PROGRESS BAR (Generic %) */}
+                    {/* PROGRESS BAR (Counter 1/30) */}
                     {loading && (
                         <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex justify-between items-end mb-1.5">
                                 <span className="text-xs font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    Processing...
+                                    Scraping...
                                 </span>
                                 <span className="text-sm font-bold text-gray-900">
-                                    {Math.min(100, Math.round(progress))}%
+                                    {itemsFound} <span className="text-gray-400 font-normal">/ 30 Ads</span>
                                 </span>
                             </div>
                             <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
                                 <div 
-                                    className="h-full bg-brand-600 rounded-full transition-all duration-300 ease-out" 
-                                    style={{ width: `${progress}%` }}
+                                    className="h-full bg-brand-600 rounded-full transition-all duration-300 ease-out shadow-[0_0_12px_rgba(37,99,235,0.4)]" 
+                                    style={{ width: `${progressPercent}%` }}
                                 ></div>
                             </div>
                         </div>
@@ -207,7 +205,7 @@ export const DemoPage = () => {
                 </div>
             </div>
 
-            {/* Results */}
+            {/* Results Grid */}
             <div className="max-w-5xl mx-auto px-4 mt-6">
                 {!hasSearched && !loading && (
                     <div className="text-center py-20 opacity-60">
@@ -215,7 +213,6 @@ export const DemoPage = () => {
                         <h3 className="text-lg font-medium text-gray-400">Enter a brand name to start spying.</h3>
                     </div>
                 )}
-                
                 {sortedResults.length > 0 && !loading && (
                     <>
                         <div className="mb-4 text-sm text-gray-500 font-medium px-1 flex items-center gap-2">

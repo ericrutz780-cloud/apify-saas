@@ -11,7 +11,7 @@ logger = logging.getLogger("demo_service")
 
 client = ApifyClient(settings.APIFY_TOKEN)
 
-# --- Hilfsfunktionen (Kopie aus meta, damit wir keine Abhängigkeiten haben) ---
+# --- Hilfsfunktionen ---
 def get_nested_value(ad, path_list):
     current = ad
     for key in path_list:
@@ -22,7 +22,7 @@ def get_nested_value(ad, path_list):
     return current
 
 def calculate_simple_score(reach, days_active):
-    # Vereinfachtes Scoring für die Demo (schneller)
+    # Vereinfachtes Scoring für die Demo
     if days_active < 1: days_active = 1
     velocity = reach / days_active
     if velocity <= 0: return 0
@@ -32,7 +32,7 @@ def calculate_simple_score(reach, days_active):
 async def search_demo_ads(query: str, country: str = "US", limit: int = 30):
     """
     Spezielle Suchfunktion für die Demo.
-    Respektiert STRIKT das Limit, um Kosten zu sparen.
+    Setzt 'maxItems' hart auf das Limit (z.B. 30), um Kosten zu sparen.
     """
     target_country = country.upper() if country and country != "ALL" else "US"
     
@@ -48,11 +48,10 @@ async def search_demo_ads(query: str, country: str = "US", limit: int = 30):
     )
 
     # 2. Apify Input Konfiguration
-    # HIER IST DER FIX: Wir nutzen das 'limit' Argument direkt für 'count' und 'maxItems'
+    # WICHTIG: 'maxItems' ist der Parameter, der die Kosten begrenzt!
     run_input = {
         "urls": [{"url": search_url}],
-        "count": limit,      # <--- LIMIT WIRD HIER GENUTZT
-        "maxItems": limit,   # <--- HARD LIMIT
+        "maxItems": limit,   # <--- HARD LIMIT (z.B. 30)
         "pageTimeoutSecs": 45,
         "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
         "scrapeAdDetails": True, 
@@ -68,7 +67,7 @@ async def search_demo_ads(query: str, country: str = "US", limit: int = 30):
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
             memory_mbytes=512,
-            timeout_secs=180 # Kürzerer Timeout für Demo
+            timeout_secs=180 
         ))
         
         if not run:
@@ -81,18 +80,15 @@ async def search_demo_ads(query: str, country: str = "US", limit: int = 30):
         # 4. Daten holen
         dataset_items = await loop.run_in_executor(None, lambda: client.dataset(dataset_id).list_items(clean=True).items)
         
-        # 5. Minimale Aufbereitung für Demo
+        # 5. Aufbereitung
         results = []
         for item in dataset_items:
-            # Quick & Dirty Normalisierung für die Demo-Anzeige
             snapshot = item.get("snapshot") or {}
             start_date = item.get("start_date", "")
             
-            # Reach berechnen (Fallback Kette)
             reach = get_nested_value(item, ['eu_transparency', 'eu_total_reach'])
             if not reach: reach = item.get('reach_estimate', {}).get('reach_upper_bound') if isinstance(item.get('reach_estimate'), dict) else 0
             
-            # Days Active
             try:
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d") if len(start_date) == 10 else datetime.now()
                 days_active = max(1, (datetime.now() - start_dt).days)
@@ -103,7 +99,7 @@ async def search_demo_ads(query: str, country: str = "US", limit: int = 30):
                 "id": str(item.get("ad_archive_id") or item.get("ad_id")),
                 "page_name": item.get("page_name", "Unknown Brand"),
                 "start_date": start_date,
-                "efficiency_score": calculate_simple_score(reach or 0, days_active), # Simple Score
+                "efficiency_score": calculate_simple_score(reach or 0, days_active),
                 "snapshot": {
                     "images": snapshot.get("images") or [],
                     "videos": snapshot.get("videos") or [],
@@ -115,14 +111,12 @@ async def search_demo_ads(query: str, country: str = "US", limit: int = 30):
                 "targeting": {"reach_estimate": reach}
             }
             
-            # Nur Ads mit Bild/Video aufnehmen
+            # Sicherheits-Check: Nur Ads mit Inhalt speichern
             if ad_obj["snapshot"]["images"] or ad_obj["snapshot"]["videos"] or ad_obj["snapshot"]["cards"]:
                 results.append(ad_obj)
 
-        # Sortieren nach Score
         results.sort(key=lambda x: x['efficiency_score'], reverse=True)
         
-        # Zur Sicherheit nochmal abschneiden
         return results[:limit]
 
     except Exception as e:

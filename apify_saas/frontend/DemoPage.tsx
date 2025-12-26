@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ChevronDown } from 'lucide-react';
+import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ChevronDown, RefreshCw } from 'lucide-react';
 import MetaAdCard from './components/MetaAdCard';
 import CountrySelector from './components/CountrySelector';
 import { LeadCaptureModal } from './components/LeadCaptureModal';
 // @ts-ignore
 import { cleanAndTransformData } from './adAdapter';
 
+// --- CONFIG ---
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 const API_URL = `${CLEAN_BASE_URL}/api/v1`;
@@ -29,6 +30,7 @@ export const DemoPage = () => {
     const [hasSearched, setHasSearched] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>('viral_score');
+    const [errorMsg, setErrorMsg] = useState('');
 
     const handleSearch = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -36,16 +38,19 @@ export const DemoPage = () => {
 
         setLoading(true);
         setHasSearched(true);
+        setErrorMsg('');
         setResults([]);
 
+        // Datum: Letzte 30 Tage
         const today = new Date();
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(today.getDate() - 30);
 
+        // Payload mit HARD LIMIT 30
         const payload = {
             keyword: query,
             platform: 'meta',
-            limit: 30,
+            limit: 30, // <--- HIER IST DAS LIMIT
             country: country,
             start_date_min: thirtyDaysAgo.toISOString().split('T')[0],
             start_date_max: today.toISOString().split('T')[0],
@@ -54,23 +59,28 @@ export const DemoPage = () => {
         };
 
         try {
+            // Direkter Fetch zum Backend (Umgeht api.ts Login-Zwang)
             const response = await fetch(`${API_URL}/search/?user_id=demo-user`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error("Search failed");
+            if (!response.ok) {
+                // Versuche Fehlertext zu lesen
+                const errText = await response.text();
+                throw new Error(`Server Error: ${response.status} - ${errText}`);
+            }
 
             const responseBody = await response.json();
             const rawAds = responseBody.data || [];
             
-            // CLEAN AND TRANSFORM
+            // Transformiere Daten
             const rowsToTransform = rawAds.map((item: any) => ({ data: item }));
-            // Pass empty map for benchmarks to avoid complexity in demo
+            // Leeres Objekt für Benchmarks übergeben (reicht für Demo)
             const cleaned = cleanAndTransformData(rowsToTransform, {});
             
-            // SAFETY FILTER: Entferne Ads ohne Snapshot, um Fehler zu vermeiden
+            // SAFETY FILTER: Verhindert MutationObserver Fehler durch kaputte Daten
             const validAds = cleaned.filter((ad: any) => 
                 ad && 
                 ad.snapshot && 
@@ -79,13 +89,15 @@ export const DemoPage = () => {
             
             setResults(validAds);
 
-        } catch (error) {
-            console.error("Demo Search Error", error);
+        } catch (error: any) {
+            console.error("Demo Search Error:", error);
+            setErrorMsg("Search failed. Please try again (Backend might be sleeping).");
         } finally {
             setLoading(false);
         }
     };
 
+    // Client-Side Sorting
     const sortedResults = useMemo(() => {
         if (!results.length) return [];
         const sorted = [...results];
@@ -107,40 +119,58 @@ export const DemoPage = () => {
         <div className="min-h-screen bg-gray-50 font-sans pb-20">
             <LeadCaptureModal isOpen={showModal} onClose={() => setShowModal(false)} />
             
+            {/* Sticky Header */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-                <div className="max-w-5xl mx-auto px-4 py-4 sm:py-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="max-w-5xl mx-auto px-4 py-4">
+                    
+                    {/* Brand Title */}
+                    <div className="flex items-center justify-between mb-4">
                         <h1 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
                             StellaAds <span className="text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-100 text-xs font-bold uppercase tracking-wider">Demo</span>
                         </h1>
                     </div>
 
-                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 w-full">
+                    {/* Search Form - Optimiertes Layout */}
+                    <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
+                        
+                        {/* 1. Input Field (Volle Breite oben auf Mobile, Flex auf Desktop) */}
                         <div className="relative flex-1 w-full">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input 
                                 type="text" 
                                 value={query} 
                                 onChange={(e) => setQuery(e.target.value)} 
-                                placeholder="Brand or Niche (e.g. Nike, Skincare)" 
-                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
+                                placeholder="Brand or Niche (e.g. Huel, Skincare)" 
+                                className="w-full pl-11 pr-4 py-3 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
                             />
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                            <div className="w-full sm:w-[160px]">
+
+                        {/* 2. Controls Group (Country + Button) - IMMER IN EINER ZEILE (flex-row) */}
+                        <div className="flex flex-row gap-2 shrink-0">
+                            {/* Country Selector - Feste Breite */}
+                            <div className="w-[140px] shrink-0">
                                 <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
                             </div>
+                            
+                            {/* Search Button */}
                             <button 
                                 type="submit" 
                                 disabled={loading || !query} 
-                                className="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 py-3.5 rounded-xl flex items-center justify-center min-w-[60px] shadow-lg shadow-brand-600/20 active:scale-95 transition-all"
+                                className="bg-brand-600 hover:bg-brand-700 text-white font-bold px-5 rounded-xl flex items-center justify-center shadow-lg shadow-brand-600/20 active:scale-95 transition-all flex-1 md:flex-none md:w-auto"
                             >
-                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
+                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-6 h-6" />}
                             </button>
                         </div>
                     </form>
 
-                    {hasSearched && (
+                    {/* Filters & Error Message */}
+                    {errorMsg && (
+                        <div className="mt-3 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4" /> {errorMsg}
+                        </div>
+                    )}
+
+                    {hasSearched && !errorMsg && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex items-center gap-2 text-xs text-gray-500 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
                                 <span className="flex items-center bg-gray-100 px-2.5 py-1.5 rounded-lg border border-gray-200 font-medium">
@@ -171,6 +201,7 @@ export const DemoPage = () => {
                 </div>
             </div>
 
+            {/* Results Grid */}
             <div className="max-w-5xl mx-auto px-4 mt-6">
                 {!hasSearched ? (
                     <div className="text-center py-20 opacity-60">
@@ -187,19 +218,22 @@ export const DemoPage = () => {
                             </div>
                         ))}
                     </div>
-                ) : sortedResults.length === 0 ? (
+                ) : sortedResults.length === 0 && !errorMsg ? (
                     <div className="text-center py-20 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
                         <p className="font-medium">No active ads found.</p>
-                        <p className="text-sm mt-1">Try searching for a bigger brand.</p>
+                        <p className="text-sm mt-1">Try searching for a bigger brand (e.g. "Huel", "Gymshark").</p>
                     </div>
                 ) : (
                     <>
-                         <div className="mb-4 text-sm text-gray-500 font-medium px-1">
-                            Found <span className="text-gray-900 font-bold">{sortedResults.length}</span> active ads
-                        </div>
+                         {!errorMsg && (
+                             <div className="mb-4 text-sm text-gray-500 font-medium px-1">
+                                Found <span className="text-gray-900 font-bold">{sortedResults.length}</span> active ads
+                            </div>
+                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                             {sortedResults.map((item: any, idx) => (
                                 <div key={idx} className="relative group transition-transform hover:-translate-y-1 duration-300" onClick={() => setShowModal(true)}>
+                                    {/* Overlay traps click */}
                                     <div className="absolute inset-0 z-20 cursor-pointer bg-transparent" />
                                     <div className="pointer-events-none">
                                         <MetaAdCard ad={item.data || item} onClick={() => {}} viewMode="details" />

@@ -26,7 +26,7 @@ export const DemoPage = () => {
     
     // States
     const [loading, setLoading] = useState(false);
-    const [progressPercent, setProgressPercent] = useState(0); // Rein Prozentual
+    const [percent, setPercent] = useState(0); // Rein Prozentual
     
     const [results, setResults] = useState<any[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
@@ -38,16 +38,14 @@ export const DemoPage = () => {
     useEffect(() => {
         let interval: any;
         if (loading) {
-            setProgressPercent(0);
+            setPercent(0);
             interval = setInterval(() => {
-                setProgressPercent(old => {
+                setPercent(old => {
                     // Simuliere langsamen Anstieg bis 90%
-                    if (old >= 90) return old;
-                    return old + Math.floor(Math.random() * 5) + 2;
+                    if (old >= 95) return old;
+                    return old + Math.floor(Math.random() * 3) + 1;
                 });
-            }, 800);
-        } else {
-            setProgressPercent(0);
+            }, 600);
         }
         return () => clearInterval(interval);
     }, [loading]);
@@ -79,7 +77,7 @@ export const DemoPage = () => {
             const responseBody = await response.json();
             const rawAds = responseBody.data || [];
             
-            // Filtern leere Ads raus
+            // Filtern
             const validAds = rawAds.filter((ad: any) => 
                 ad && ad.snapshot && (ad.snapshot.images?.length > 0 || ad.snapshot.videos?.length > 0)
             );
@@ -88,7 +86,7 @@ export const DemoPage = () => {
             const finalAds = validAds.slice(0, 30);
 
             // Sprung auf 100%
-            setProgressPercent(100);
+            setPercent(100);
             
             setTimeout(() => {
                 setResults(finalAds);
@@ -167,13 +165,13 @@ export const DemoPage = () => {
                                     Processing...
                                 </span>
                                 <span className="text-sm font-bold text-gray-900">
-                                    {Math.min(100, Math.round(progressPercent))}%
+                                    {Math.min(100, Math.round(percent))}%
                                 </span>
                             </div>
                             <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
                                 <div 
                                     className="h-full bg-brand-600 rounded-full transition-all duration-300 ease-out shadow-[0_0_12px_rgba(37,99,235,0.4)]" 
-                                    style={{ width: `${progressPercent}%` }}
+                                    style={{ width: `${percent}%` }}
                                 ></div>
                             </div>
                         </div>

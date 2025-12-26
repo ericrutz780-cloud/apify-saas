@@ -1,12 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 from app.services import apify_demo_service
-# Importiere Supabase Client direkt hier für den Lead-Speicher
-from app.services.supabase_service import supabase 
+# FIX: Importiere die Funktion get_supabase statt der Variable supabase
+from app.services.supabase_service import get_supabase
 
 router = APIRouter()
 
-# --- MODELS ---
 class DemoSearchRequest(BaseModel):
     keyword: str
     country: str = "US"
@@ -17,11 +16,8 @@ class LeadRequest(BaseModel):
     industry: str
     goal: str
 
-# --- ENDPOINTS ---
-
 @router.post("/search")
 async def demo_search_ads(request: DemoSearchRequest):
-    # (Dieser Teil bleibt unverändert wie vorher)
     print(f"DEMO ROUTER: Searching for '{request.keyword}'")
     try:
         results = await apify_demo_service.search_demo_ads(
@@ -43,7 +39,9 @@ async def save_lead(lead: LeadRequest):
     print(f"NEW LEAD: {lead.email} | {lead.industry}")
     
     try:
-        # Versuch, in Tabelle 'leads' zu speichern
+        # FIX: Client hier initialisieren
+        supabase = get_supabase()
+        
         data = {
             "email": lead.email,
             "industry": lead.industry,
@@ -59,6 +57,4 @@ async def save_lead(lead: LeadRequest):
         
     except Exception as e:
         print(f"ERROR SAVING LEAD: {e}")
-        # Wir geben trotzdem Success zurück, damit der User im Frontend nicht frustriert ist,
-        # aber loggen den Fehler im Backend.
         return {"status": "success", "message": "Received (Fallback)"}

@@ -3,13 +3,13 @@ import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ChevronDown, RefreshCw
 import MetaAdCard from './components/MetaAdCard';
 import CountrySelector from './components/CountrySelector';
 import { LeadCaptureModal } from './components/LeadCaptureModal';
-// @ts-ignore
-import { cleanAndTransformData } from './adAdapter';
 
 // --- CONFIG ---
+// Wir nutzen hier direkt die API URL
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
-const API_URL = `${CLEAN_BASE_URL}/api/v1`;
+// WICHTIG: Neuer Pfad für Demo
+const DEMO_API_URL = `${CLEAN_BASE_URL}/api/v1/demo`;
 
 const COUNTRIES = [
     { code: 'US', name: 'United States' },
@@ -22,13 +22,13 @@ const COUNTRIES = [
 
 type SortOption = 'viral_score' | 'reach' | 'recency';
 
-// Loading Phases (English)
+// Englische Phasen für den Balken
 const LOADING_PHASES = [
     { progress: 10, text: "Connecting to Ad Library..." },
     { progress: 30, text: "Scraping active creatives..." },
-    { progress: 50, text: "Analyzing engagement metrics..." },
-    { progress: 75, text: "Calculating viral scores..." },
-    { progress: 90, text: "Finalizing report..." }
+    { progress: 60, text: "Analyzing engagement metrics..." },
+    { progress: 85, text: "Calculating viral scores..." },
+    { progress: 95, text: "Finalizing report..." }
 ];
 
 export const DemoPage = () => {
@@ -48,24 +48,23 @@ export const DemoPage = () => {
 
     // --- PROGRESS BAR LOGIC ---
     useEffect(() => {
-        let interval: any; // FIX: 'any' statt 'NodeJS.Timeout' um TypeScript Fehler zu vermeiden
+        let interval: any;
         if (loading) {
             setProgress(5);
             setPhaseText(LOADING_PHASES[0].text);
             
             interval = setInterval(() => {
                 setPhaseText(prev => {
-                    // Update text based on progress
                     const currentPhase = LOADING_PHASES.find(p => p.progress >= (progress + 5));
                     return currentPhase ? currentPhase.text : prev;
                 });
 
                 setProgress(old => {
-                    // Slow down as we approach 90%
-                    const increment = old < 50 ? 5 : old < 80 ? 2 : 0.5;
-                    return old >= 95 ? 95 : old + increment;
+                    // Verlangsamen gegen Ende
+                    const increment = old < 50 ? 4 : old < 80 ? 2 : 0.2;
+                    return old >= 98 ? 98 : old + increment;
                 });
-            }, 600);
+            }, 500);
         } else {
             setProgress(0);
         }
@@ -81,67 +80,41 @@ export const DemoPage = () => {
         setErrorMsg('');
         setResults([]);
 
-        const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-
-        // Payload
+        // Payload für den NEUEN Demo-Router
         const payload = {
             keyword: query,
-            platform: 'meta',
-            limit: 30,  // Request Limit
-            count: 30,  // Safety Limit
             country: country,
-            start_date_min: thirtyDaysAgo.toISOString().split('T')[0],
-            start_date_max: today.toISOString().split('T')[0],
-            sort_by: 'newest',
-            active_status: 'active'
+            limit: 30 // <--- Dies wird jetzt vom Backend respektiert!
         };
 
         try {
-            // DIRECT FETCH (Bypass api.ts auth check)
-            const response = await fetch(`${API_URL}/search/?user_id=demo-user`, {
+            // Fetch an den neuen Demo-Endpunkt
+            const response = await fetch(`${DEMO_API_URL}/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
-                const errText = await response.text();
                 throw new Error(`Server Error: ${response.status}`);
             }
 
             const responseBody = await response.json();
             const rawAds = responseBody.data || [];
             
-            // Transform Data
-            const rowsToTransform = rawAds.map((item: any) => ({ data: item }));
-            // Pass empty map for benchmarks (faster for demo)
-            const cleaned = cleanAndTransformData(rowsToTransform, {});
-            
-            // 1. SAFETY FILTER (Remove broken ads to prevent crashes)
-            const validAds = cleaned.filter((ad: any) => 
-                ad && 
-                ad.snapshot && 
-                (ad.snapshot.images?.length > 0 || ad.snapshot.videos?.length > 0)
-            );
-
-            // 2. HARD LIMIT (Cut off after 30 items)
-            const limitedAds = validAds.slice(0, 30);
-            
-            // Complete Progress
+            // 100% Progress setzen
             setProgress(100);
             setPhaseText("Done!");
             
-            // Slight delay to show 100% bar before rendering results
+            // Kurze Verzögerung für UX
             setTimeout(() => {
-                setResults(limitedAds);
+                setResults(rawAds);
                 setLoading(false);
-            }, 500);
+            }, 400);
 
         } catch (error: any) {
             console.error("Demo Search Error:", error);
-            setErrorMsg("Search failed. Please ensure the backend is running and try again.");
+            setErrorMsg("Search failed. Please try again later.");
             setLoading(false);
         }
     };
@@ -177,6 +150,7 @@ export const DemoPage = () => {
                     </div>
 
                     <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
+                        {/* Search Input */}
                         <div className="relative flex-1 w-full">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input 
@@ -187,6 +161,8 @@ export const DemoPage = () => {
                                 className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
                             />
                         </div>
+                        
+                        {/* Controls Group */}
                         <div className="flex flex-row gap-2 shrink-0">
                             <div className="w-[140px] shrink-0">
                                 <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
@@ -204,16 +180,16 @@ export const DemoPage = () => {
                     {/* PROGRESS BAR */}
                     {loading && (
                         <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div className="flex justify-between items-end mb-1">
+                            <div className="flex justify-between items-end mb-1.5">
                                 <span className="text-xs font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
                                     <Loader2 className="w-3 h-3 animate-spin" />
                                     {phaseText}
                                 </span>
                                 <span className="text-xs font-medium text-gray-500">{Math.round(progress)}%</span>
                             </div>
-                            <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
                                 <div 
-                                    className="h-full bg-brand-600 rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(37,99,235,0.3)]" 
+                                    className="h-full bg-brand-600 rounded-full transition-all duration-500 ease-out shadow-[0_0_12px_rgba(37,99,235,0.4)]" 
                                     style={{ width: `${progress}%` }}
                                 ></div>
                             </div>
@@ -267,7 +243,6 @@ export const DemoPage = () => {
                         <h3 className="text-lg font-medium text-gray-400">Enter a brand name to start spying.</h3>
                     </div>
                 ) : loading ? (
-                    // LOADING SKELETONS
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                         {[1, 2, 3].map(i => (
                             <div key={i} className="bg-white rounded-xl h-96 animate-pulse border border-gray-100 shadow-sm p-4 space-y-4">
@@ -295,7 +270,7 @@ export const DemoPage = () => {
                                 <div key={idx} className="relative group transition-transform hover:-translate-y-1 duration-300" onClick={() => setShowModal(true)}>
                                     <div className="absolute inset-0 z-20 cursor-pointer bg-transparent" />
                                     <div className="pointer-events-none">
-                                        <MetaAdCard ad={item.data || item} onClick={() => {}} viewMode="details" />
+                                        <MetaAdCard ad={item} onClick={() => {}} viewMode="details" />
                                     </div>
                                 </div>
                             ))}

@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import auth, user, search
+# HIER: 'demo' Router importieren
+from app.routers import auth, user, search, demo
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -34,3 +35,5 @@ def root():
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(user.router, prefix="/api/v1/user", tags=["User"])
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
+# HIER: Demo Router einbinden
+app.include_router(demo.router, prefix="/api/v1/demo", tags=["Demo"])

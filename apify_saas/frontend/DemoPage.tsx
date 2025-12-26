@@ -26,8 +26,7 @@ export const DemoPage = () => {
     
     // States
     const [loading, setLoading] = useState(false);
-    const [itemsFound, setItemsFound] = useState(0); // Zähler für "X / 30"
-    const [progressPercent, setProgressPercent] = useState(0);
+    const [progressPercent, setProgressPercent] = useState(0); // Rein Prozentual
     
     const [results, setResults] = useState<any[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
@@ -35,20 +34,20 @@ export const DemoPage = () => {
     const [sortBy, setSortBy] = useState<SortOption>('viral_score');
     const [errorMsg, setErrorMsg] = useState('');
 
-    // --- PROGRESS LOGIC (Counter 1/30) ---
+    // --- PROGRESS LOGIC (Nur %) ---
     useEffect(() => {
         let interval: any;
         if (loading) {
-            setItemsFound(0);
             setProgressPercent(0);
             interval = setInterval(() => {
-                setItemsFound(prev => {
-                    // Simuliere das Finden von Items bis ca. 28
-                    const next = prev + Math.floor(Math.random() * 3); 
-                    return next > 28 ? 28 : next;
+                setProgressPercent(old => {
+                    // Simuliere langsamen Anstieg bis 90%
+                    if (old >= 90) return old;
+                    return old + Math.floor(Math.random() * 5) + 2;
                 });
-                setProgressPercent(old => (old >= 95 ? 95 : old + 4));
-            }, 600);
+            }, 800);
+        } else {
+            setProgressPercent(0);
         }
         return () => clearInterval(interval);
     }, [loading]);
@@ -80,23 +79,21 @@ export const DemoPage = () => {
             const responseBody = await response.json();
             const rawAds = responseBody.data || [];
             
-            // KEIN cleanAndTransformData - Daten kommen sauber vom Backend
             // Filtern leere Ads raus
             const validAds = rawAds.filter((ad: any) => 
                 ad && ad.snapshot && (ad.snapshot.images?.length > 0 || ad.snapshot.videos?.length > 0)
             );
 
-            // Hard Cut
+            // Hard Cut Client Side
             const finalAds = validAds.slice(0, 30);
 
-            // Update UI auf 100% / 30 Items
-            setItemsFound(finalAds.length); 
+            // Sprung auf 100%
             setProgressPercent(100);
             
             setTimeout(() => {
                 setResults(finalAds);
                 setLoading(false);
-            }, 500);
+            }, 400);
 
         } catch (error: any) {
             console.error("Demo Search Error:", error);
@@ -134,7 +131,7 @@ export const DemoPage = () => {
                         </h1>
                     </div>
 
-                    {/* MOBILE OPTIMIZED FORM: flex-col on mobile */}
+                    {/* MOBILE OPTIMIZED FORM */}
                     <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
                         <div className="relative flex-1 w-full">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -142,36 +139,35 @@ export const DemoPage = () => {
                                 type="text" 
                                 value={query} 
                                 onChange={(e) => setQuery(e.target.value)} 
-                                placeholder="Brand or Niche (e.g. Huel, Skincare)" 
-                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
+                                placeholder="Brand or Niche (e.g. Huel)" 
+                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all text-base shadow-sm" 
                             />
                         </div>
                         
-                        {/* Controls Group: IMMER nebeneinander */}
                         <div className="flex flex-row gap-2 shrink-0 h-12 w-full md:w-auto">
-                            <div className="w-[120px] sm:w-[140px] h-full flex-shrink-0">
+                            <div className="w-[40%] md:w-[140px] h-full flex-shrink-0">
                                 <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
                             </div>
                             <button 
                                 type="submit" 
                                 disabled={loading || !query} 
-                                className="flex-1 md:flex-none md:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                                className="w-[60%] md:w-auto bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
                             >
                                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-6 h-6" />}
                             </button>
                         </div>
                     </form>
 
-                    {/* PROGRESS BAR (Counter 1/30) */}
+                    {/* PROGRESS BAR (%) */}
                     {loading && (
                         <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex justify-between items-end mb-1.5">
                                 <span className="text-xs font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    Scraping...
+                                    Processing...
                                 </span>
                                 <span className="text-sm font-bold text-gray-900">
-                                    {itemsFound} <span className="text-gray-400 font-normal">/ 30 Ads</span>
+                                    {Math.min(100, Math.round(progressPercent))}%
                                 </span>
                             </div>
                             <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
@@ -219,8 +215,8 @@ export const DemoPage = () => {
                             <CheckCircle2 className="w-4 h-4 text-green-600" /> Found <span className="text-gray-900 font-bold">{sortedResults.length}</span> active ads
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                            {sortedResults.map((item: any, idx) => (
-                                <div key={idx} className="relative group transition-transform hover:-translate-y-1 duration-300" onClick={() => setShowModal(true)}>
+                            {sortedResults.map((item: any) => (
+                                <div key={item.id} className="relative group transition-transform hover:-translate-y-1 duration-300" onClick={() => setShowModal(true)}>
                                     <div className="absolute inset-0 z-20 cursor-pointer bg-transparent" />
                                     <div className="pointer-events-none">
                                         <MetaAdCard ad={item} onClick={() => {}} viewMode="details" />

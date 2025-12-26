@@ -3,3 +3,5 @@ uvicorn
 pydantic-settings
 apify-client
 supabase
+pydantic[email]  # <--- WICHTIG: Das fehlte für EmailStr
+email-validator

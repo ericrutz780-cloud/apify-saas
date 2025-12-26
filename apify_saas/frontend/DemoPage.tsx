@@ -1,24 +1,56 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ArrowUpDown, ChevronDown } from 'lucide-react';
+import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ChevronDown, ArrowUpDown } from 'lucide-react';
 import MetaAdCard from './components/MetaAdCard';
 import CountrySelector from './components/CountrySelector';
-import { api } from './services/api';
 import { LeadCaptureModal } from './components/LeadCaptureModal';
+// @ts-ignore
+import { cleanAndTransformData } from './adAdapter';
 
+// --- CONFIG ---
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
+const API_URL = `${CLEAN_BASE_URL}/api/v1`;
+
+// --- FULL COUNTRY LIST (RESTORED) ---
 const COUNTRIES = [
-    { code: 'US', name: 'United States' },
-    { code: 'DE', name: 'Germany' },
-    { code: 'GB', name: 'United Kingdom' },
-    { code: 'FR', name: 'France' },
     { code: 'AT', name: 'Austria' },
+    { code: 'BE', name: 'Belgium' },
+    { code: 'BG', name: 'Bulgaria' },
+    { code: 'HR', name: 'Croatia' },
+    { code: 'CY', name: 'Cyprus' },
+    { code: 'CZ', name: 'Czech Republic' },
+    { code: 'DK', name: 'Denmark' },
+    { code: 'EE', name: 'Estonia' },
+    { code: 'FI', name: 'Finland' },
+    { code: 'FR', name: 'France' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'GR', name: 'Greece' },
+    { code: 'HU', name: 'Hungary' },
+    { code: 'IE', name: 'Ireland' },
+    { code: 'IT', name: 'Italy' },
+    { code: 'LV', name: 'Latvia' },
+    { code: 'LT', name: 'Lithuania' },
+    { code: 'LU', name: 'Luxembourg' },
+    { code: 'MT', name: 'Malta' },
+    { code: 'NL', name: 'Netherlands' },
+    { code: 'NO', name: 'Norway' },
+    { code: 'PL', name: 'Poland' },
+    { code: 'PT', name: 'Portugal' },
+    { code: 'RO', name: 'Romania' },
+    { code: 'SK', name: 'Slovakia' },
+    { code: 'SI', name: 'Slovenia' },
+    { code: 'ES', name: 'Spain' },
+    { code: 'SE', name: 'Sweden' },
     { code: 'CH', name: 'Switzerland' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'US', name: 'United States' }
 ];
 
 type SortOption = 'viral_score' | 'reach' | 'recency';
 
 export const DemoPage = () => {
     const [query, setQuery] = useState('');
-    const [country, setCountry] = useState('US');
+    const [country, setCountry] = useState('DE');
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<any[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
@@ -33,21 +65,46 @@ export const DemoPage = () => {
         setHasSearched(true);
         setResults([]);
 
-        // Hardcoded: Last 30 Days
+        // Calculate Last 30 Days
         const today = new Date();
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(today.getDate() - 30);
 
+        // API Payload
+        const payload = {
+            keyword: query,
+            platform: 'meta', // Force Meta
+            limit: 30,        // Force Limit
+            country: country,
+            start_date_min: thirtyDaysAgo.toISOString().split('T')[0],
+            start_date_max: today.toISOString().split('T')[0],
+            sort_by: 'newest',
+            active_status: 'active'
+        };
+
         try {
-            const response = await api.runSearch({
-                query: query,
-                platform: 'meta',
-                country: country,
-                limit: 30, // Demo limit
-                startDateMin: thirtyDaysAgo.toISOString().split('T')[0],
-                startDateMax: today.toISOString().split('T')[0]
+            // DIRECT FETCH to bypass 'api.ts' user check
+            // We use 'demo-user' as ID to satisfy backend requirements if needed
+            const response = await fetch(`${API_URL}/search/?user_id=demo-user`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
-            setResults(response.metaAds || []);
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Search failed");
+            }
+
+            const responseBody = await response.json();
+            const rawAds = responseBody.data || [];
+
+            // Clean data (pass empty map for benchmarks as we skip fetching them for speed in demo)
+            const rowsToTransform = rawAds.map((item: any) => ({ data: item }));
+            const cleaned = cleanAndTransformData(rowsToTransform, {});
+            
+            setResults(cleaned);
+
         } catch (error) {
             console.error("Demo Search Error", error);
         } finally {
@@ -55,26 +112,21 @@ export const DemoPage = () => {
         }
     };
 
-    // Client-side sorting for the demo results
+    // Client-Side Sorting
     const sortedResults = useMemo(() => {
         if (!results.length) return [];
         const sorted = [...results];
         
         return sorted.sort((a, b) => {
-            // Helper to get nested data safely
             const getScore = (item: any) => item.data?.efficiency_score || item.efficiency_score || 0;
             const getReach = (item: any) => item.data?.targeting?.reach_estimate || item.targeting?.reach_estimate || 0;
             const getDate = (item: any) => new Date(item.data?.start_date || item.start_date).getTime();
 
             switch (sortBy) {
-                case 'viral_score':
-                    return getScore(b) - getScore(a);
-                case 'reach':
-                    return getReach(b) - getReach(a);
-                case 'recency':
-                    return getDate(b) - getDate(a);
-                default:
-                    return 0;
+                case 'viral_score': return getScore(b) - getScore(a);
+                case 'reach': return getReach(b) - getReach(a);
+                case 'recency': return getDate(b) - getDate(a);
+                default: return 0;
             }
         });
     }, [results, sortBy]);
@@ -86,31 +138,31 @@ export const DemoPage = () => {
             {/* Header / Search */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
                 <div className="max-w-5xl mx-auto px-4 py-4 sm:py-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-                            StellaAds <span className="text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-100 text-xs align-middle font-bold uppercase tracking-wider ml-1">Demo</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                        <h1 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                            StellaAds <span className="text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-100 text-xs font-bold uppercase tracking-wider">Demo</span>
                         </h1>
                     </div>
 
-                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 w-full">
+                        <div className="relative flex-1 w-full">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input 
                                 type="text" 
                                 value={query} 
                                 onChange={(e) => setQuery(e.target.value)} 
                                 placeholder="Brand or Niche (e.g. Nike, Skincare)" 
-                                className="w-full pl-11 pr-4 py-3 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none" 
+                                className="w-full pl-11 pr-4 py-3 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
                             />
                         </div>
-                        <div className="flex gap-2">
-                            <div className="w-[140px] flex-shrink-0">
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <div className="w-full sm:w-[160px] flex-shrink-0">
                                 <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
                             </div>
                             <button 
                                 type="submit" 
                                 disabled={loading || !query} 
-                                className="bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 py-3 rounded-xl flex items-center justify-center min-w-[60px] shadow-lg shadow-brand-600/20 active:scale-95 transition-all"
+                                className="bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 py-3 rounded-xl flex items-center justify-center min-w-[60px] shadow-lg shadow-brand-600/20 active:scale-95 transition-all flex-shrink-0"
                             >
                                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
                             </button>
@@ -120,8 +172,7 @@ export const DemoPage = () => {
                     {/* Filters & Sorting Bar */}
                     {hasSearched && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                            {/* Active Filters */}
-                            <div className="flex items-center gap-2 text-xs text-gray-500 overflow-x-auto whitespace-nowrap no-scrollbar">
+                            <div className="flex items-center gap-2 text-xs text-gray-500 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
                                 <span className="flex items-center bg-gray-100 px-2.5 py-1.5 rounded-lg border border-gray-200 font-medium">
                                     <LayoutGrid className="w-3 h-3 mr-1.5 text-gray-400" /> Meta Only
                                 </span>
@@ -130,14 +181,13 @@ export const DemoPage = () => {
                                 </span>
                             </div>
 
-                            {/* Sorting Dropdown */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
                                 <span className="text-xs font-medium text-gray-500">Sort by:</span>
                                 <div className="relative group">
                                     <select 
                                         value={sortBy}
                                         onChange={(e) => setSortBy(e.target.value as SortOption)}
-                                        className="appearance-none bg-white border border-gray-200 text-gray-700 text-sm font-medium py-1.5 pl-3 pr-8 rounded-lg cursor-pointer hover:border-brand-300 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all"
+                                        className="appearance-none bg-white border border-gray-200 text-gray-700 text-sm font-medium py-1.5 pl-3 pr-8 rounded-lg cursor-pointer hover:border-brand-300 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all shadow-sm"
                                     >
                                         <option value="viral_score">🔥 Viral Score</option>
                                         <option value="reach">👀 Reach</option>

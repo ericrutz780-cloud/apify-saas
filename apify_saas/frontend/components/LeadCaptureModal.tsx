@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, CheckCircle2, Zap, ShieldCheck, Mail, Sparkles, TrendingUp } from 'lucide-react';
+import { X, Lock, CheckCircle2, Zap, ShieldCheck, Mail, Sparkles } from 'lucide-react';
 
 interface LeadCaptureModalProps {
     isOpen: boolean;
@@ -10,7 +10,6 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
     const [step, setStep] = useState<'form' | 'success'>('form');
     const [loading, setLoading] = useState(false);
     
-    // Form States
     const [email, setEmail] = useState('');
     const [industry, setIndustry] = useState('E-Commerce Brand');
     const [goal, setGoal] = useState('');
@@ -20,7 +19,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        // Simulation API Call
+        // Simulate API delay
         setTimeout(() => {
             setLoading(false);
             setStep('success');
@@ -32,9 +31,8 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
             {/* Backdrop */}
             <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
-            {/* Modal Card */}
+            {/* Modal */}
             <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-300">
-                
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 z-10 transition-colors">
                     <X className="w-5 h-5" />
                 </button>
@@ -52,16 +50,16 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                             </p>
                         </div>
 
-                        {/* Benefits List (Compact) */}
-                        <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mb-6 space-y-2">
-                            <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-2">Founder Benefits</h4>
-                            <div className="flex items-start gap-2">
+                        {/* Benefits Box */}
+                        <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mb-6 space-y-3">
+                            <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wide">Founder Benefits</h4>
+                            <div className="flex items-start gap-2.5">
                                 <ShieldCheck className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                <span className="text-xs text-blue-900"><b>50% Lifetime Discount</b> on all plans.</span>
+                                <span className="text-xs text-blue-900 leading-snug"><b>50% Lifetime Discount</b> on all plans (locked in forever).</span>
                             </div>
-                            <div className="flex items-start gap-2">
+                            <div className="flex items-start gap-2.5">
                                 <Sparkles className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                <span className="text-xs text-blue-900">Early access to <b>AI Ad Analyst Agent</b>.</span>
+                                <span className="text-xs text-blue-900 leading-snug">Exclusive access to <b>AI Ad Analyst Agent</b> (Beta).</span>
                             </div>
                         </div>
 
@@ -106,10 +104,10 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                                         className="w-full px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm appearance-none cursor-pointer"
                                     >
                                         <option value="">Select...</option>
-                                        <option>Find Creative Inspiration</option>
+                                        <option>Find Inspiration</option>
                                         <option>Competitor Analysis</option>
-                                        <option>Discover Winning Products</option>
-                                        <option>Improve Ad ROAS</option>
+                                        <option>Winning Products</option>
+                                        <option>Improve ROAS</option>
                                     </select>
                                 </div>
                             </div>

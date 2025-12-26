@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, CheckCircle2, Zap, ShieldCheck, Mail, Sparkles, AlertCircle } from 'lucide-react';
 
-// URL zum Backend (gleiche Logik wie in DemoPage)
+// URL zum Backend
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 const LEAD_API_URL = `${CLEAN_BASE_URL}/api/v1/demo/lead`;
@@ -18,7 +18,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
     // Form States
     const [email, setEmail] = useState('');
     const [industry, setIndustry] = useState('E-Commerce Brand');
-    const [goal, setGoal] = useState('Find Inspiration'); // Default Value
+    const [goal, setGoal] = useState('Find Inspiration'); 
 
     if (!isOpen) return null;
 
@@ -28,7 +28,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
         
         try {
             // ECHTER API CALL
-            const response = await fetch(LEAD_API_URL, {
+            await fetch(LEAD_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -38,13 +38,12 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                 })
             });
 
-            // Egal was passiert, wir zeigen dem User Erfolg (UX)
-            // Fehler sehen wir im Backend Log
+            // Success State
             setStep('success');
             
         } catch (error) {
             console.error("Lead save failed:", error);
-            setStep('success'); // Fallback: Trotzdem Success anzeigen
+            setStep('success'); 
         } finally {
             setLoading(false);
         }
@@ -83,11 +82,13 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                             </p>
                         </div>
 
+                        {/* PREIS & BENEFITS */}
                         <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 mb-6 space-y-3">
                             <div className="flex items-start gap-2.5">
                                 <ShieldCheck className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                                 <span className="text-xs text-blue-900 leading-snug">
-                                    <b>50% Lifetime Discount</b> on the <b>Tier 2 Plan</b>.
+                                    <b>50% Lifetime Discount</b> on the Pro Plan. <br/>
+                                    <span className="opacity-80">Normally <span className="line-through">49€/mo</span>, for you <b>24.50€/mo</b>.</span>
                                 </span>
                             </div>
                             <div className="flex items-start gap-2.5">
@@ -99,7 +100,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                             <div className="flex items-start gap-2.5">
                                 <Sparkles className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                                 <span className="text-xs text-blue-900 leading-snug">
-                                    Exclusive access to <b>AI Ad Analyst Agent Beta</b>.
+                                    Get early access to upcoming AI features.
                                 </span>
                             </div>
                         </div>
@@ -173,7 +174,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                             You're on the list! 🚀
                         </h2>
                         <p className="text-gray-600 mb-6 leading-relaxed text-sm">
-                            Your spot is reserved. Expect an email on <b>February 1st</b> with your personal Tier 2 discount code.
+                            Your spot is reserved. Expect an email on <b>February 1st</b> with your personal <b>Pro Plan</b> discount code.
                         </p>
                         <button 
                             onClick={onClose} 

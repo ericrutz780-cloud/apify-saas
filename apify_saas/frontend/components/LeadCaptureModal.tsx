@@ -27,7 +27,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
         setLoading(true);
         
         try {
-            // ECHTER API CALL
+            // 1. Daten an dein Backend senden
             await fetch(LEAD_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -37,6 +37,17 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                     goal
                 })
             });
+
+            // 2. FACEBOOK TRACKING EVENT
+            if ((window as any).fbq) {
+                (window as any).fbq('track', 'Lead', {
+                    content_name: 'Founder Deal Signup',
+                    value: 0.00,
+                    currency: 'EUR',
+                    status: 'success'
+                });
+                console.log("🔥 FB Pixel 'Lead' fired!");
+            }
 
             // Success State
             setStep('success');

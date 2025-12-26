@@ -5,118 +5,86 @@ import logging
 import math
 from datetime import datetime
 
-# Eigener Logger für Demo
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("demo_service")
 
 client = ApifyClient(settings.APIFY_TOKEN)
 
-# --- Hilfsfunktionen ---
-def get_nested_value(ad, path_list):
-    current = ad
-    for key in path_list:
-        if isinstance(current, dict):
-            current = current.get(key)
-        else:
-            return None
-    return current
-
 def calculate_simple_score(reach, days_active):
-    # Vereinfachtes Scoring für die Demo
     if days_active < 1: days_active = 1
     velocity = reach / days_active
-    if velocity <= 0: return 0
-    score = 15 * math.log2(1 + velocity)
-    return round(min(score, 100), 1)
+    return round(min(15 * math.log2(1 + velocity) if velocity > 0 else 0, 100), 1)
 
 async def search_demo_ads(query: str, country: str = "US", limit: int = 30):
-    """
-    Spezielle Suchfunktion für die Demo.
-    Setzt 'maxItems' hart auf das Limit (z.B. 30), um Kosten zu sparen.
-    """
     target_country = country.upper() if country and country != "ALL" else "US"
     
-    # 1. Such-URL konstruieren
+    # URL
     search_url = (
         f"https://www.facebook.com/ads/library/"
-        f"?active_status=active" 
-        f"&ad_type=all"
-        f"&country={target_country}"
-        f"&q={query}"
-        f"&sort_data[direction]=desc&sort_data[mode]=relevancy_monthly_grouped"
-        f"&media_type=all"
+        f"?active_status=active&ad_type=all&country={target_country}&q={query}"
+        f"&sort_data[direction]=desc&sort_data[mode]=relevancy_monthly_grouped&media_type=all"
     )
 
-    # 2. Apify Input Konfiguration
-    # WICHTIG: 'maxItems' ist der Parameter, der die Kosten begrenzt!
+    # NOTBREMSE: Wir setzen ALLE Limit-Parameter, die es gibt.
     run_input = {
         "urls": [{"url": search_url}],
-        "maxItems": limit,   # <--- HARD LIMIT (z.B. 30)
-        "pageTimeoutSecs": 45,
+        "resultsLimit": limit, # Oft genutzt von Ad Scrapern
+        "maxItems": limit,     # Apify Standard
+        "count": limit,        # Fallback
+        "pageTimeoutSecs": 30, # Schneller Timeout
         "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
         "scrapeAdDetails": True, 
         "countryCode": target_country
     }
 
-    logger.info(f"DEMO SEARCH: '{query}' in {target_country} with LIMIT={limit}")
+    logger.info(f"DEMO SEARCH: '{query}' (Limit: {limit})")
 
     try:
         loop = asyncio.get_event_loop()
         
-        # 3. Scraper starten
+        # Starten mit striktem Timeout auf Server-Ebene
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
             memory_mbytes=512,
-            timeout_secs=180 
+            timeout_secs=120 # Kill nach 2 Minuten hart
         ))
         
-        if not run:
-            return []
+        if not run: return []
 
         dataset_id = run.get("defaultDatasetId")
-        if not dataset_id:
-            return []
+        if not dataset_id: return []
 
-        # 4. Daten holen
-        dataset_items = await loop.run_in_executor(None, lambda: client.dataset(dataset_id).list_items(clean=True).items)
+        # Daten laden
+        dataset_items = await loop.run_in_executor(None, lambda: client.dataset(dataset_id).list_items(clean=True, limit=limit).items)
         
-        # 5. Aufbereitung
         results = []
         for item in dataset_items:
+            # Harter Stop wenn wir genug haben
+            if len(results) >= limit: break
+            
             snapshot = item.get("snapshot") or {}
             start_date = item.get("start_date", "")
             
-            reach = get_nested_value(item, ['eu_transparency', 'eu_total_reach'])
+            # Reach Check
+            reach = item.get('eu_transparency', {}).get('eu_total_reach')
             if not reach: reach = item.get('reach_estimate', {}).get('reach_upper_bound') if isinstance(item.get('reach_estimate'), dict) else 0
             
             try:
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d") if len(start_date) == 10 else datetime.now()
-                days_active = max(1, (datetime.now() - start_dt).days)
-            except:
-                days_active = 1
+                days = max(1, (datetime.now() - start_dt).days)
+            except: days = 1
 
-            ad_obj = {
-                "id": str(item.get("ad_archive_id") or item.get("ad_id")),
-                "page_name": item.get("page_name", "Unknown Brand"),
-                "start_date": start_date,
-                "efficiency_score": calculate_simple_score(reach or 0, days_active),
-                "snapshot": {
-                    "images": snapshot.get("images") or [],
-                    "videos": snapshot.get("videos") or [],
-                    "cards": snapshot.get("cards") or [],
-                    "body": {"text": snapshot.get("body", {}).get("text") or ""},
-                    "cta_text": snapshot.get("cta_text", "Learn More"),
-                    "link_url": snapshot.get("link_url") or "#"
-                },
-                "targeting": {"reach_estimate": reach}
-            }
-            
-            # Sicherheits-Check: Nur Ads mit Inhalt speichern
-            if ad_obj["snapshot"]["images"] or ad_obj["snapshot"]["videos"] or ad_obj["snapshot"]["cards"]:
-                results.append(ad_obj)
+            # Nur gültige Ads
+            if snapshot.get("images") or snapshot.get("videos") or snapshot.get("cards"):
+                results.append({
+                    "id": str(item.get("ad_archive_id") or item.get("ad_id")),
+                    "page_name": item.get("page_name", "Unknown"),
+                    "start_date": start_date,
+                    "efficiency_score": calculate_simple_score(reach or 0, days),
+                    "snapshot": snapshot,
+                    "targeting": {"reach_estimate": reach}
+                })
 
-        results.sort(key=lambda x: x['efficiency_score'], reverse=True)
-        
         return results[:limit]
 
     except Exception as e:

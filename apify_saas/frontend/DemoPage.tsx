@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ChevronDown, RefreshCw } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, Loader2, ArrowRight, Filter, LayoutGrid, ChevronDown, RefreshCw, CheckCircle2 } from 'lucide-react';
 import MetaAdCard from './components/MetaAdCard';
 import CountrySelector from './components/CountrySelector';
 import { LeadCaptureModal } from './components/LeadCaptureModal';
@@ -22,15 +22,55 @@ const COUNTRIES = [
 
 type SortOption = 'viral_score' | 'reach' | 'recency';
 
+// Loading Phases (English)
+const LOADING_PHASES = [
+    { progress: 10, text: "Connecting to Ad Library..." },
+    { progress: 30, text: "Scraping active creatives..." },
+    { progress: 50, text: "Analyzing engagement metrics..." },
+    { progress: 75, text: "Calculating viral scores..." },
+    { progress: 90, text: "Finalizing report..." }
+];
+
 export const DemoPage = () => {
     const [query, setQuery] = useState('');
     const [country, setCountry] = useState('DE');
+    
+    // Loading States
     const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [phaseText, setPhaseText] = useState("");
+    
     const [results, setResults] = useState<any[]>([]);
     const [hasSearched, setHasSearched] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>('viral_score');
     const [errorMsg, setErrorMsg] = useState('');
+
+    // --- PROGRESS BAR LOGIC ---
+    useEffect(() => {
+        let interval: any; // FIX: 'any' statt 'NodeJS.Timeout' um TypeScript Fehler zu vermeiden
+        if (loading) {
+            setProgress(5);
+            setPhaseText(LOADING_PHASES[0].text);
+            
+            interval = setInterval(() => {
+                setPhaseText(prev => {
+                    // Update text based on progress
+                    const currentPhase = LOADING_PHASES.find(p => p.progress >= (progress + 5));
+                    return currentPhase ? currentPhase.text : prev;
+                });
+
+                setProgress(old => {
+                    // Slow down as we approach 90%
+                    const increment = old < 50 ? 5 : old < 80 ? 2 : 0.5;
+                    return old >= 95 ? 95 : old + increment;
+                });
+            }, 600);
+        } else {
+            setProgress(0);
+        }
+        return () => clearInterval(interval);
+    }, [loading, progress]);
 
     const handleSearch = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -41,16 +81,16 @@ export const DemoPage = () => {
         setErrorMsg('');
         setResults([]);
 
-        // Datum: Letzte 30 Tage
         const today = new Date();
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(today.getDate() - 30);
 
-        // Payload mit HARD LIMIT 30
+        // Payload
         const payload = {
             keyword: query,
             platform: 'meta',
-            limit: 30, // <--- HIER IST DAS LIMIT
+            limit: 30,  // Request Limit
+            count: 30,  // Safety Limit
             country: country,
             start_date_min: thirtyDaysAgo.toISOString().split('T')[0],
             start_date_max: today.toISOString().split('T')[0],
@@ -59,7 +99,7 @@ export const DemoPage = () => {
         };
 
         try {
-            // Direkter Fetch zum Backend (Umgeht api.ts Login-Zwang)
+            // DIRECT FETCH (Bypass api.ts auth check)
             const response = await fetch(`${API_URL}/search/?user_id=demo-user`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -67,37 +107,45 @@ export const DemoPage = () => {
             });
 
             if (!response.ok) {
-                // Versuche Fehlertext zu lesen
                 const errText = await response.text();
-                throw new Error(`Server Error: ${response.status} - ${errText}`);
+                throw new Error(`Server Error: ${response.status}`);
             }
 
             const responseBody = await response.json();
             const rawAds = responseBody.data || [];
             
-            // Transformiere Daten
+            // Transform Data
             const rowsToTransform = rawAds.map((item: any) => ({ data: item }));
-            // Leeres Objekt für Benchmarks übergeben (reicht für Demo)
+            // Pass empty map for benchmarks (faster for demo)
             const cleaned = cleanAndTransformData(rowsToTransform, {});
             
-            // SAFETY FILTER: Verhindert MutationObserver Fehler durch kaputte Daten
+            // 1. SAFETY FILTER (Remove broken ads to prevent crashes)
             const validAds = cleaned.filter((ad: any) => 
                 ad && 
                 ad.snapshot && 
                 (ad.snapshot.images?.length > 0 || ad.snapshot.videos?.length > 0)
             );
+
+            // 2. HARD LIMIT (Cut off after 30 items)
+            const limitedAds = validAds.slice(0, 30);
             
-            setResults(validAds);
+            // Complete Progress
+            setProgress(100);
+            setPhaseText("Done!");
+            
+            // Slight delay to show 100% bar before rendering results
+            setTimeout(() => {
+                setResults(limitedAds);
+                setLoading(false);
+            }, 500);
 
         } catch (error: any) {
             console.error("Demo Search Error:", error);
-            setErrorMsg("Search failed. Please try again (Backend might be sleeping).");
-        } finally {
+            setErrorMsg("Search failed. Please ensure the backend is running and try again.");
             setLoading(false);
         }
     };
 
-    // Client-Side Sorting
     const sortedResults = useMemo(() => {
         if (!results.length) return [];
         const sorted = [...results];
@@ -119,21 +167,16 @@ export const DemoPage = () => {
         <div className="min-h-screen bg-gray-50 font-sans pb-20">
             <LeadCaptureModal isOpen={showModal} onClose={() => setShowModal(false)} />
             
-            {/* Sticky Header */}
+            {/* Header */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
                 <div className="max-w-5xl mx-auto px-4 py-4">
-                    
-                    {/* Brand Title */}
                     <div className="flex items-center justify-between mb-4">
                         <h1 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
                             StellaAds <span className="text-brand-600 bg-brand-50 px-2 py-0.5 rounded border border-brand-100 text-xs font-bold uppercase tracking-wider">Demo</span>
                         </h1>
                     </div>
 
-                    {/* Search Form - Optimiertes Layout */}
                     <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3 w-full">
-                        
-                        {/* 1. Input Field (Volle Breite oben auf Mobile, Flex auf Desktop) */}
                         <div className="relative flex-1 w-full">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input 
@@ -141,18 +184,13 @@ export const DemoPage = () => {
                                 value={query} 
                                 onChange={(e) => setQuery(e.target.value)} 
                                 placeholder="Brand or Niche (e.g. Huel, Skincare)" 
-                                className="w-full pl-11 pr-4 py-3 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
+                                className="w-full pl-11 pr-4 py-3.5 bg-gray-100 focus:bg-white border border-transparent focus:border-brand-500 rounded-xl outline-none transition-all shadow-inner sm:shadow-none text-base" 
                             />
                         </div>
-
-                        {/* 2. Controls Group (Country + Button) - IMMER IN EINER ZEILE (flex-row) */}
                         <div className="flex flex-row gap-2 shrink-0">
-                            {/* Country Selector - Feste Breite */}
                             <div className="w-[140px] shrink-0">
                                 <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
                             </div>
-                            
-                            {/* Search Button */}
                             <button 
                                 type="submit" 
                                 disabled={loading || !query} 
@@ -163,14 +201,34 @@ export const DemoPage = () => {
                         </div>
                     </form>
 
-                    {/* Filters & Error Message */}
-                    {errorMsg && (
+                    {/* PROGRESS BAR */}
+                    {loading && (
+                        <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="flex justify-between items-end mb-1">
+                                <span className="text-xs font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    {phaseText}
+                                </span>
+                                <span className="text-xs font-medium text-gray-500">{Math.round(progress)}%</span>
+                            </div>
+                            <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-brand-600 rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(37,99,235,0.3)]" 
+                                    style={{ width: `${progress}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Error Message */}
+                    {errorMsg && !loading && (
                         <div className="mt-3 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
                             <RefreshCw className="w-4 h-4" /> {errorMsg}
                         </div>
                     )}
 
-                    {hasSearched && !errorMsg && (
+                    {/* Filters & Sorting */}
+                    {hasSearched && !errorMsg && !loading && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex items-center gap-2 text-xs text-gray-500 overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
                                 <span className="flex items-center bg-gray-100 px-2.5 py-1.5 rounded-lg border border-gray-200 font-medium">
@@ -209,6 +267,7 @@ export const DemoPage = () => {
                         <h3 className="text-lg font-medium text-gray-400">Enter a brand name to start spying.</h3>
                     </div>
                 ) : loading ? (
+                    // LOADING SKELETONS
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                         {[1, 2, 3].map(i => (
                             <div key={i} className="bg-white rounded-xl h-96 animate-pulse border border-gray-100 shadow-sm p-4 space-y-4">
@@ -226,14 +285,14 @@ export const DemoPage = () => {
                 ) : (
                     <>
                          {!errorMsg && (
-                             <div className="mb-4 text-sm text-gray-500 font-medium px-1">
+                             <div className="mb-4 text-sm text-gray-500 font-medium px-1 flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-green-600" />
                                 Found <span className="text-gray-900 font-bold">{sortedResults.length}</span> active ads
                             </div>
                          )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                             {sortedResults.map((item: any, idx) => (
                                 <div key={idx} className="relative group transition-transform hover:-translate-y-1 duration-300" onClick={() => setShowModal(true)}>
-                                    {/* Overlay traps click */}
                                     <div className="absolute inset-0 z-20 cursor-pointer bg-transparent" />
                                     <div className="pointer-events-none">
                                         <MetaAdCard ad={item.data || item} onClick={() => {}} viewMode="details" />

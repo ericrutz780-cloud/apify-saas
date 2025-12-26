@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 // @ts-ignore
 import { cleanAndTransformData } from './adAdapter';
+import { DemoPage } from './DemoPage';
 
 // --- Constants ---
 const COUNTRIES = [
@@ -463,20 +464,30 @@ const App = () => {
   return (
     <ErrorBoundary>
         <Router>
-        <Layout user={user}>
-            <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
-            <AdDetailModal isOpen={!!selectedAdsGroup} onClose={() => setSelectedAdsGroup(null)} group={selectedAdsGroup?.data || []} type={selectedAdsGroup?.type} onSave={handleSaveAd} isSaved={isSaved} onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} />
             <Routes>
-            <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
-            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
-            <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
-            <Route path="/search" element={user ? <SearchPage user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-            <Route path="/results/:id" element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onToggleSave={handleToggleSave} /> : <Navigate to="/login" replace />} />
-            <Route path="/saved" element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} />
-            <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-            <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+                {/* 1. Public Demo Route (Isolated) */}
+                <Route path="/demo" element={<DemoPage />} />
+
+                {/* 2. Main App Routes (Wrapped in Layout) */}
+                <Route path="*" element={
+                    <Layout user={user}>
+                        <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
+                        <AdDetailModal isOpen={!!selectedAdsGroup} onClose={() => setSelectedAdsGroup(null)} group={selectedAdsGroup?.data || []} type={selectedAdsGroup?.type} onSave={handleSaveAd} isSaved={isSaved} onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} />
+                        
+                        <Routes>
+                            <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
+                            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
+                            <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
+                            <Route path="/search" element={user ? <SearchPage user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
+                            <Route path="/results/:id" element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onToggleSave={handleToggleSave} /> : <Navigate to="/login" replace />} />
+                            <Route path="/saved" element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} />
+                            <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
+                            
+                            <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+                        </Routes>
+                    </Layout>
+                } />
             </Routes>
-        </Layout>
         </Router>
     </ErrorBoundary>
   );

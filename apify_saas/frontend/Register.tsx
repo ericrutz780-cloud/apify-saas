@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from './services/api';
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, Mail } from 'lucide-react';
 
 export const Register = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false); // NEU: Success State
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -16,11 +18,9 @@ export const Register = () => {
     setError('');
     
     try {
-        // Registrierung durchführen
         await api.register(email, password);
-        
-        // Nach Registrierung direkt zum Login
-        navigate('/login');
+        // HIER: Keine Weiterleitung mehr, sondern Success-Status setzen
+        setSuccess(true);
     } catch (err: any) {
         setError(err.message || 'Registration failed.');
     } finally {
@@ -28,6 +28,31 @@ export const Register = () => {
     }
   };
 
+  // WENN ERFOLGREICH: Zeige diese Nachricht an
+  if (success) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+            <div className="max-w-md w-full bg-white p-10 rounded-2xl shadow-sm border border-gray-200 text-center animate-in zoom-in-95 duration-300">
+                <div className="mx-auto h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
+                    <Mail className="h-8 w-8 text-green-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Check your Email</h2>
+                <p className="text-gray-600 mb-8 leading-relaxed">
+                    We've sent a confirmation link to <span className="font-semibold text-gray-900">{email}</span>.<br/>
+                    Please click the link in that email to activate your account.
+                </p>
+                <button 
+                    onClick={() => navigate('/login')}
+                    className="w-full bg-white border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                    Back to Login
+                </button>
+            </div>
+        </div>
+      );
+  }
+
+  // NORMALES FORMULAR
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-sm border border-gray-200">

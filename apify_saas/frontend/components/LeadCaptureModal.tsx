@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { X, Lock, CheckCircle2, Zap, ShieldCheck, Mail, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Lock, CheckCircle2, Zap, ShieldCheck, Mail, Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
 
 // URL zum Backend
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 const LEAD_API_URL = `${CLEAN_BASE_URL}/api/v1/demo/lead`;
 
-// --- HIER DEINEN FOUNDER LINK EINFÜGEN ---
-const LINK_PRO_FOUNDER = "https://buy.stripe.com/test_..."; 
+// --- DEIN NEUER TEST LINK ---
+const LINK_PRO_FOUNDER = "https://buy.stripe.com/7sYaEQ8bB7mM8Z2fNb9k404"; 
 // -----------------------------------------
 
 interface LeadCaptureModalProps {
@@ -31,7 +31,8 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
         setLoading(true);
         
         try {
-            // 1. Daten an dein Backend senden
+            // 1. Daten an dein Backend senden (als "Lead" speichern)
+            // Das ist wichtig, damit du die Email hast, auch wenn sie bei Stripe abbrechen
             await fetch(LEAD_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -45,19 +46,19 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
             // 2. FACEBOOK TRACKING EVENT
             if ((window as any).fbq) {
                 (window as any).fbq('track', 'Lead', {
-                    content_name: 'Founder Deal Signup',
+                    content_name: 'Founder Pre-Order Step 1',
                     value: 0.00,
                     currency: 'EUR',
-                    status: 'success'
+                    status: 'form_submitted'
                 });
-                console.log("🔥 FB Pixel 'Lead' fired!");
             }
 
-            // Success State
+            // Weiter zum Payment Screen
             setStep('success');
             
         } catch (error) {
             console.error("Lead save failed:", error);
+            // Auch bei Fehler weiterlassen, wir wollen das Geld :)
             setStep('success'); 
         } finally {
             setLoading(false);
@@ -90,10 +91,10 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                                 <Lock className="w-6 h-6 text-brand-600" />
                             </div>
                             <h2 className="text-xl font-bold text-gray-900">
-                                Unlock Full Ad Insights
+                                Secure Founder Access
                             </h2>
                             <p className="text-sm text-gray-500 mt-2 leading-relaxed">
-                                You've tested the <b>Scout Mode</b>. Secure <b>Founder Access</b> to reveal exact copy, targeting details, and performance metrics.
+                                Join the exclusive Founder Circle. Pre-order now to lock in your lifetime discount.
                             </p>
                         </div>
 
@@ -102,20 +103,14 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                             <div className="flex items-start gap-2.5">
                                 <ShieldCheck className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                                 <span className="text-xs text-blue-900 leading-snug">
-                                    <b>50% Lifetime Discount</b> on the Pro Plan. <br/>
-                                    <span className="opacity-80">Normally <span className="line-through">49€/mo</span>, for you <b>24.50€/mo</b>.</span>
+                                    <b>50% Lifetime Discount</b> applied.<br/>
+                                    <span className="opacity-80">Only <b>24.50€/mo</b> (instead of 49€).</span>
                                 </span>
                             </div>
                             <div className="flex items-start gap-2.5">
-                                <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                                <Zap className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                                 <span className="text-xs text-blue-900 leading-snug">
-                                    Strictly limited to the first <b>100 Founders</b>.
-                                </span>
-                            </div>
-                            <div className="flex items-start gap-2.5">
-                                <Sparkles className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                <span className="text-xs text-blue-900 leading-snug">
-                                    Get early access to upcoming AI features.
+                                    Official App Access starts on <b>February 1st</b>.
                                 </span>
                             </div>
                         </div>
@@ -176,26 +171,33 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                                 disabled={loading}
                                 className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-brand-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
                             >
-                                {loading ? 'Processing...' : <>Secure Deal <Zap className="w-4 h-4 fill-white" /></>}
+                                {loading ? 'Saving...' : <>Continue to Payment <ArrowRight className="w-4 h-4" /></>}
                             </button>
                         </form>
                     </div>
                 ) : (
                     <div className="p-8 text-center animate-in zoom-in-95 duration-300">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-green-50">
-                            <CheckCircle2 className="w-8 h-8 text-green-600" />
+                        <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-brand-50">
+                            <CheckCircle2 className="w-8 h-8 text-brand-600" />
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                            Offer Unlocked! 🚀
+                            Details Saved!
                         </h2>
                         <p className="text-gray-600 mb-6 leading-relaxed text-sm">
-                            Click below to claim your <b>50% Lifetime Discount</b> now. 
+                            One last step to secure your <b>Founder Account</b>.<br/>
+                            Complete the payment now to lock in your discount.
                         </p>
+                        
+                        <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-6 text-xs text-amber-800 font-medium flex items-center justify-center gap-2">
+                            <AlertCircle className="w-4 h-4" />
+                            Reminder: Official App Access starts Feb 1st.
+                        </div>
+
                         <a 
                             href={LINK_PRO_FOUNDER}
-                            className="block w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl transition-colors shadow-lg"
+                            className="block w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3.5 rounded-xl transition-colors shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2"
                         >
-                            Complete Checkout (24.50€)
+                            Pay 24.50€ & Secure Access <ArrowRight className="w-4 h-4"/>
                         </a>
                     </div>
                 )}

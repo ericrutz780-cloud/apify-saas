@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import { api } from './services/api';
 import { User, SearchParams, SearchResult, MetaAd, TikTokAd, SavedAd, UserPlan, SearchHistoryItem } from './types';
 import MetaAdCard from './components/MetaAdCard';
+import { EmailConfirmed } from './EmailConfirmed';
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
 import DateRangePicker from './components/DateRangePicker';
@@ -476,6 +477,9 @@ const App = () => {
                 {/* --- NEU: ZUSÄTZLICHE PUBLIC ROUTES --- */}
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/register" element={<Register />} />
+
+                {/* NEU: Die Bestätigungs-Seite */}
+                <Route path="/email-confirmed" element={<EmailConfirmed />} />
                 {/* -------------------------------------- */}
 
                 {/* 2. Main App Routes (Wrapped in Layout) */}

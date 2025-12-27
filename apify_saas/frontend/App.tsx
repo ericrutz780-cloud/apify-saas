@@ -19,6 +19,11 @@ import {
 import { cleanAndTransformData } from './adAdapter';
 import { DemoPage } from './DemoPage';
 
+// --- NEUE IMPORTS (Hinzugefügt) ---
+import { PricingPage } from './PricingPage';
+import { Register } from './Register';
+// ----------------------------------
+
 // --- Constants ---
 const COUNTRIES = [
     { code: 'AT', name: 'Austria' },
@@ -467,6 +472,11 @@ const App = () => {
             <Routes>
                 {/* 1. Public Demo Route (Isolated) */}
                 <Route path="/demo" element={<DemoPage />} />
+                
+                {/* --- NEU: ZUSÄTZLICHE PUBLIC ROUTES --- */}
+                <Route path="/pricing" element={<PricingPage />} />
+                <Route path="/register" element={<Register />} />
+                {/* -------------------------------------- */}
 
                 {/* 2. Main App Routes (Wrapped in Layout) */}
                 <Route path="*" element={

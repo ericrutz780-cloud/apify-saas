@@ -6,6 +6,10 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 const LEAD_API_URL = `${CLEAN_BASE_URL}/api/v1/demo/lead`;
 
+// --- HIER DEINEN FOUNDER LINK EINFÜGEN ---
+const LINK_PRO_FOUNDER = "https://buy.stripe.com/test_..."; 
+// -----------------------------------------
+
 interface LeadCaptureModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -182,17 +186,17 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                             <CheckCircle2 className="w-8 h-8 text-green-600" />
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                            You're on the list! 🚀
+                            Offer Unlocked! 🚀
                         </h2>
                         <p className="text-gray-600 mb-6 leading-relaxed text-sm">
-                            Your spot is reserved. Expect an email on <b>February 1st</b> with your personal <b>Pro Plan</b> discount code.
+                            Click below to claim your <b>50% Lifetime Discount</b> now. 
                         </p>
-                        <button 
-                            onClick={onClose} 
-                            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold py-3 rounded-xl transition-colors"
+                        <a 
+                            href={LINK_PRO_FOUNDER}
+                            className="block w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl transition-colors shadow-lg"
                         >
-                            Back to Demo
-                        </button>
+                            Complete Checkout (24.50€)
+                        </a>
                     </div>
                 )}
             </div>

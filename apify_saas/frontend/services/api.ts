@@ -30,6 +30,22 @@ class ApiService {
     localStorage.setItem('adspy_local_history', JSON.stringify(updated));
   }
 
+  // --- NEU: REGISTER FUNKTION (Hinzugefügt für Payment Flow) ---
+  async register(email: string, password: string): Promise<any> {
+    const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Registration failed');
+    }
+    return await response.json();
+  }
+  // -------------------------------------------------------------
+
   async login(email: string, password: string): Promise<User> {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {

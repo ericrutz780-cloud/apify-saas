@@ -6,8 +6,7 @@
     "module": "ESNext",
     "skipLibCheck": true,
 
-    /* FIX: Wir stellen auf 'node' um - das ist am sichersten */
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -15,8 +14,11 @@
     "jsx": "react-jsx",
     "esModuleInterop": true,
 
-    /* FIX: DIESE ZEILE MUSS DRIN SEIN! */
     "types": ["vite/client", "react", "react-dom"],
+    
+    "paths": {
+      "@/*": ["./src/*"]
+    },
 
     "strict": false,
     "strictNullChecks": false,
@@ -25,5 +27,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["."],
-  "exclude": ["vite.config.ts", "node_modules"]
+  "exclude": ["node_modules"]
 }

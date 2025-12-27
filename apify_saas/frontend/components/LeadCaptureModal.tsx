@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { X, Lock, CheckCircle2, Zap, ShieldCheck, Mail, Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
+import { X, Lock, CheckCircle2, Zap, ShieldCheck, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 
 // URL zum Backend
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 const LEAD_API_URL = `${CLEAN_BASE_URL}/api/v1/demo/lead`;
 
-// --- DEIN NEUER TEST LINK ---
-const LINK_PRO_FOUNDER = "https://buy.stripe.com/7sYaEQ8bB7mM8Z2fNb9k404"; 
-// -----------------------------------------
+// --- FINALER LIVE LINK (Founder Deal) ---
+const LINK_PRO_FOUNDER = "https://buy.stripe.com/5kQ3co0J9fTia36eJ79k403"; 
+// ----------------------------------------
 
 interface LeadCaptureModalProps {
     isOpen: boolean;
@@ -31,8 +31,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
         setLoading(true);
         
         try {
-            // 1. Daten an dein Backend senden (als "Lead" speichern)
-            // Das ist wichtig, damit du die Email hast, auch wenn sie bei Stripe abbrechen
+            // 1. Daten an dein Backend senden (Lead sichern)
             await fetch(LEAD_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -43,7 +42,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
                 })
             });
 
-            // 2. FACEBOOK TRACKING EVENT
+            // 2. FACEBOOK TRACKING
             if ((window as any).fbq) {
                 (window as any).fbq('track', 'Lead', {
                     content_name: 'Founder Pre-Order Step 1',
@@ -58,7 +57,7 @@ export const LeadCaptureModal: React.FC<LeadCaptureModalProps> = ({ isOpen, onCl
             
         } catch (error) {
             console.error("Lead save failed:", error);
-            // Auch bei Fehler weiterlassen, wir wollen das Geld :)
+            // Auch bei Fehler weiterlassen (Conversion Priorität)
             setStep('success'); 
         } finally {
             setLoading(false);

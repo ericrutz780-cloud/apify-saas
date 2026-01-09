@@ -382,7 +382,7 @@ const Hero = () => {
                   loop 
                   muted 
                   playsInline 
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain bg-black"
                 >
                   {/* Pfad zum Video im public Ordner */}
                   <source src="/demo-video.mp4" type="video/mp4" />

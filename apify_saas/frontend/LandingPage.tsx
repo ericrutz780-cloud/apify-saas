@@ -423,7 +423,7 @@ const LogicSection = () => (
         <SectionHeader 
           badge="The Logic"
           title={<>Efficiency Over <span className="text-slate-400">Volume</span></>}
-          subtitle="Standard tools rely on cumulative metrics, often flagging saturated winners too late. We analyze the growth velocity relative to the estimated ad spend."
+          subtitle="Identify the creative angles that are scaling today. We distinguish between ads that are just taking off and campaigns that are already saturated."
           centered={false}
         />
         

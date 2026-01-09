@@ -376,13 +376,13 @@ const Hero = () => {
               </div>
               
               {/* Der Video Player */}
-              <div className="relative aspect-video bg-slate-100">
+              <div className="relative w-full bg-slate-100">
                 <video 
                   autoPlay 
                   loop 
                   muted 
                   playsInline 
-                  className="w-full h-full object-contain bg-black"
+                  className="w-full h-auto block"
                 >
                   {/* Pfad zum Video im public Ordner */}
                   <source src="/demo-video.mp4" type="video/mp4" />

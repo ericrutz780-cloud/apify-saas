@@ -20,10 +20,11 @@ import {
 import { cleanAndTransformData } from './adAdapter';
 import { DemoPage } from './DemoPage';
 
-// --- NEUE IMPORTS (Hinzugefügt) ---
+// --- NEUE IMPORTS ---
 import { PricingPage } from './PricingPage';
 import { Register } from './Register';
-// ----------------------------------
+import { LandingPage } from './LandingPage'; // <-- NEU
+// --------------------
 
 // --- Constants ---
 const COUNTRIES = [
@@ -157,21 +158,18 @@ const Dashboard = ({ user }: { user: User }) => {
     }, {} as Record<string, number>);
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
-    // --- FIX START: Caching Logik ---
+    // --- Caching Logik ---
     const handleRerun = (item: SearchHistoryItem) => {
-        // Zuerst im Cache schauen
         const cachedResult = localStorage.getItem(`search_${item.id}`);
 
         if (cachedResult) {
             console.log("♻️ Lade aus Cache:", item.id);
             navigate(`/results/${item.id}`);
         } else {
-            // Fallback: Neue Suche
             const countryParam = item.country ? `&country=${item.country}` : '';
             navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}${countryParam}`);
         }
     };
-    // --- FIX END ---
 
     return (
         <div className="space-y-8">
@@ -297,9 +295,6 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave }: { user: U
         if (!result || !result.metaAds) return [];
         const ads = result.metaAds;
         
-        // --- FIX: Check for 'demographics' to know if it's already clean ---
-        // 'demographics' only exists on clean data. 'aaa_info' exists on raw data.
-        // We force clean if 'demographics' is missing, even if 'page_name' exists.
         // @ts-ignore
         if (ads.length > 0 && ads[0].demographics) return ads; 
         
@@ -477,11 +472,14 @@ const App = () => {
                 {/* --- NEU: ZUSÄTZLICHE PUBLIC ROUTES --- */}
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/register" element={<Register />} />
+                
+                {/* Landing Page Route: Zeigt LandingPage, wenn nicht eingeloggt */}
+                <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+                {/* -------------------------------------- */}
 
                 {/* NEU: Die Bestätigungs-Seite */}
                 <Route path="/email-confirmed" element={<EmailConfirmed />} />
-                {/* -------------------------------------- */}
-
+                
                 {/* 2. Main App Routes (Wrapped in Layout) */}
                 <Route path="*" element={
                     <Layout user={user}>
@@ -497,6 +495,7 @@ const App = () => {
                             <Route path="/saved" element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} />
                             <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
                             
+                            {/* Fallback */}
                             <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
                         </Routes>
                     </Layout>

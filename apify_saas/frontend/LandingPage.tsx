@@ -328,6 +328,7 @@ const Hero = () => {
       <div className="absolute top-0 inset-x-0 h-[600px] bg-[radial-gradient(50%_50%_at_50%_0%,#f5f3ff_0%,transparent_100%)] -z-10"></div>
 
       <div className="max-w-5xl mx-auto text-center">
+        {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-semibold mb-8 shadow-sm hover:shadow-md transition-shadow cursor-default">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -336,47 +337,65 @@ const Hero = () => {
           Tracking 12 European Markets Live
         </div>
         
+        {/* Headline */}
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-slate-900 mb-8 leading-[1.05]">
           Find Winning Ads <br/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-purple-600 to-blue-600 animate-gradient-x">Before They Go Viral.</span>
         </h1>
         
+        {/* Subheadline */}
         <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
-          StellaAds calculates a proprietary <strong>Viral Score</strong> by correlating spend velocity with real-time costs. Spot winners based on efficiency, not just vanity metrics.
+          The fastest way to identify winning ads. We track <strong>live performance</strong> data to show you exactly which creatives are scaling right now.
         </p>
         
+        {/* CTA Button */}
         <div className="flex flex-col items-center gap-4">
           <a href="#pricing" onClick={scrollToPricing} className="group bg-brand-600 hover:bg-brand-500 text-white px-8 py-4 rounded-full text-lg font-bold transition-all hover:scale-[1.02] flex items-center gap-2 shadow-xl shadow-brand-600/30">
             Start Finding Winners
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </a>
-          <span className="text-sm text-slate-400 font-medium">Starts at €19/mo • Cancel Anytime</span>
+          <span className="text-sm text-slate-400 font-medium">Starts at €19/mo</span>
         </div>
 
-        {/* Hero Visual */}
+        {/* --- HIER IST DAS EINGEBAUTE VIDEO --- */}
         <div className="mt-20 relative mx-auto max-w-6xl group perspective-1000">
-          <div className="relative rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden bg-white ring-1 ring-slate-900/5">
+          <div className="relative rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden bg-white ring-1 ring-slate-900/5 transition-transform duration-500 hover:scale-[1.01]">
+              
+              {/* Browser Leiste (Design-Element) */}
               <div className="h-10 bg-slate-50 border-b border-slate-100 flex items-center px-4 gap-2">
                   <div className="flex gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-red-400/20 border border-red-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-amber-400/20 border border-amber-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-green-400/20 border border-green-400/30"></div>
                   </div>
-                  <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 text-[10px] text-slate-400 font-medium w-64 text-center">stellaads.com/dashboard</div>
+                  {/* Fake URL Bar */}
+                  <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 text-[10px] text-slate-400 font-medium w-64 text-center flex items-center justify-center gap-1 shadow-sm">
+                    <ShieldCheck className="w-2.5 h-2.5 text-slate-300" />
+                    stellaads.com/dashboard
+                  </div>
               </div>
               
-              <img 
-                src="/dashboard.png" 
-                alt="StellaAds Dashboard Interface" 
-                className="w-full h-auto object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "https://placehold.co/1400x900/f8fafc/cbd5e1?text=StellaAds+Dashboard+Interface";
-                }}
-              />
+              {/* Der Video Player */}
+              <div className="relative aspect-video bg-slate-100">
+                <video 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  className="w-full h-full object-cover"
+                >
+                  {/* Pfad zum Video im public Ordner */}
+                  <source src="/demo-video.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+                
+                {/* Optionaler Schatten unten */}
+                <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white/5 to-transparent pointer-events-none"></div>
+              </div>
           </div>
           
-          {/* Floating Stats */}
-          <div className="absolute -right-6 top-1/4 bg-white p-5 rounded-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 hidden lg:block animate-bounce-slow z-10">
+          {/* Schwebendes Statistik-Badge (Viral Score) */}
+          <div className="absolute -right-6 top-1/4 bg-white p-5 rounded-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 hidden lg:block animate-bounce-slow z-10 hover:shadow-xl transition-shadow">
               <div className="flex items-center gap-4 mb-3">
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
                       <TrendingUp className="w-5 h-5" />
@@ -387,7 +406,7 @@ const Hero = () => {
                   </div>
               </div>
               <div className="h-1.5 w-40 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-[98%]"></div>
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-[98%] animate-pulse"></div>
               </div>
           </div>
         </div>

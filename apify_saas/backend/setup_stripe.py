@@ -19,80 +19,105 @@ stripe.api_key = STRIPE_API_KEY
 REDIRECT_URL = "https://app.stellaads.io/#/register?session_id={CHECKOUT_SESSION_ID}"
 
 def create_products():
-    print("🚀 Erstelle Stripe Produkte (Live Mode via .env)...")
+    print("🚀 Erstelle NEUE Stripe Produkte & Preise (Monthly/Yearly)...")
 
-    products = [
-        # 1. STARTER (19€)
+    # Definition der neuen Paket-Struktur
+    plans = [
         {
+            "id": "starter",
             "name": "AdSpy Starter",
-            "description": "1.500 Credits / Monat - Ideal für Einsteiger",
-            "amount": 1900, 
-            "metadata": {"plan_code": "starter", "credits": "1500"}
+            "credits": 1500,
+            "price_monthly": 4900,   # 49€
+            "price_yearly": 46800,   # 39€ * 12 = 468€
         },
-        # 2. PRO (49€)
         {
+            "id": "pro",
             "name": "AdSpy Pro",
-            "description": "5.000 Credits / Monat - Für Wachstums-Brands",
-            "amount": 4900, 
-            "metadata": {"plan_code": "pro", "credits": "5000"}
+            "credits": 10000,
+            "price_monthly": 12900,  # 129€
+            "price_yearly": 118800,  # 99€ * 12 = 1.188€
         },
-        # 3. AGENCY (149€)
         {
-            "name": "AdSpy Agency",
-            "description": "15.000 Credits / Monat - Für Teams & Skalierung",
-            "amount": 14900, 
-            "metadata": {"plan_code": "agency", "credits": "15000"}
-        },
-        # 4. FOUNDER DEAL (24,50€ - Versteckt)
-        {
-            "name": "AdSpy Pro (Founder Deal)",
-            "description": "5.000 Credits / Monat - 50% Lifetime Rabatt",
-            "amount": 2450, 
-            "metadata": {"plan_code": "pro", "credits": "5000"}
+            "id": "enterprise", # Umbenannt von Agency
+            "name": "AdSpy Enterprise",
+            "credits": 50000,
+            "price_monthly": 39900,  # 399€
+            "price_yearly": 358800,  # 299€ * 12 = 3.588€
         }
     ]
 
-    print("\n--- TEIL 1: FÜR DEIN BACKEND (apify_saas/backend/app/routers/payment.py) ---")
-    print("PLAN_CREDITS = {")
+    backend_config = []
+    frontend_config = []
 
-    frontend_links = []
-
-    for p in products:
-        # Produkt erstellen
-        product = stripe.Product.create(name=p["name"], description=p["description"])
+    for plan in plans:
+        print(f"\n... Verarbeite {plan['name']} ...")
         
-        # Preis erstellen
-        price = stripe.Price.create(
-            product=product.id,
-            unit_amount=p["amount"],
-            currency="eur",
-            recurring={"interval": "month"}
+        # 1. Produkt erstellen (Ein Produkt für beide Laufzeiten)
+        product = stripe.Product.create(
+            name=plan["name"], 
+            metadata={"plan_code": plan["id"], "credits": str(plan["credits"])}
         )
 
-        # Payment Link erstellen
-        link = stripe.PaymentLink.create(
-            line_items=[{"price": price.id, "quantity": 1}],
+        # ---------------------------
+        # A. MONTHLY PRICE & LINK
+        # ---------------------------
+        price_monthly = stripe.Price.create(
+            product=product.id,
+            unit_amount=plan["price_monthly"],
+            currency="eur",
+            recurring={"interval": "month"},
+            metadata={"type": "monthly"}
+        )
+        
+        link_monthly = stripe.PaymentLink.create(
+            line_items=[{"price": price_monthly.id, "quantity": 1}],
             after_completion={"type": "redirect", "redirect": {"url": REDIRECT_URL}}
         )
 
-        # Output für Backend Config (IDs)
-        print(f'    "{price.id}": {p["metadata"]["credits"]}, # {p["name"]}')
-        
-        # Merken für Frontend Output
-        suffix = "FOUNDER" if "Founder" in p["name"] else p["metadata"]["plan_code"].upper()
-        # Normal vs Deal Suffix Logik
-        suffix_full = f"{suffix}_DEAL" if "Founder" in p["name"] else f"{suffix}_NORMAL"
-        frontend_links.append(f'const LINK_{suffix_full} = "{link.url}"; // {p["amount"]/100}€')
+        # ---------------------------
+        # B. YEARLY PRICE & LINK
+        # ---------------------------
+        price_yearly = stripe.Price.create(
+            product=product.id,
+            unit_amount=plan["price_yearly"],
+            currency="eur",
+            recurring={"interval": "year"},
+            metadata={"type": "yearly"}
+        )
 
+        link_yearly = stripe.PaymentLink.create(
+            line_items=[{"price": price_yearly.id, "quantity": 1}],
+            after_completion={"type": "redirect", "redirect": {"url": REDIRECT_URL}}
+        )
+
+        # Daten sammeln für Output
+        # Backend braucht Mapping von PriceID -> Credits
+        backend_config.append(f'    "{price_monthly.id}": {plan["credits"]}, # {plan["name"]} (Monthly)')
+        backend_config.append(f'    "{price_yearly.id}": {plan["credits"]}, # {plan["name"]} (Yearly)')
+
+        # Frontend braucht die Links
+        base_name = plan["id"].upper()
+        frontend_config.append(f'const LINK_{base_name}_MONTHLY = "{link_monthly.url}";')
+        frontend_config.append(f'const LINK_{base_name}_YEARLY = "{link_yearly.url}";')
+
+    # --- OUTPUT ---
+    print("\n\n" + "="*60)
+    print("✅ FERTIG! KOPIERE DAS IN DEINE DATEIEN:")
+    print("="*60)
+
+    print("\n--- 1. FÜR BACKEND (apify_saas/backend/app/routers/payment.py) ---")
+    print("PLAN_CREDITS = {")
+    for line in backend_config:
+        print(line)
     print("}")
     
-    print("\n--- TEIL 2: FÜR DEIN FRONTEND (PricingPage.tsx & LeadCaptureModal.tsx) ---")
-    for link_str in frontend_links:
-        print(link_str)
+    print("\n--- 2. FÜR FRONTEND (PricingPage.tsx) ---")
+    for line in frontend_config:
+        print(line)
+    print("\n")
 
 if __name__ == "__main__":
     try:
         create_products()
-        print("\n✅ Fertig! Die Schlüssel sind sicher.")
     except Exception as e:
         print(f"❌ Fehler: {e}")

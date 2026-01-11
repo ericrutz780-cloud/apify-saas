@@ -24,14 +24,15 @@ import {
   MousePointerClick,
   ArrowUpDown,
   Minus,
-  Coins
+  Coins,
+  Mail
 } from 'lucide-react';
 
 // --- STRIPE LINKS ---
-
 const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/cNifZa77xdLaa3644t9k405"; 
 const LINK_STARTER_YEARLY     = "https://buy.stripe.com/dRmfZagI7cH66QU1Wl9k406"; 
 
+// Annahme: Der 'verwaiste' Link aus deinem Text ist für Pro Monthly
 const LINK_PRO_MONTHLY        = "https://buy.stripe.com/cNi9AM8bBbD22AE9oN9k407"; 
 const LINK_PRO_YEARLY         = "https://buy.stripe.com/8x27sE3Vl22s2AE58x9k408"; 
 
@@ -70,6 +71,55 @@ const SectionHeader = ({
     {subtitle && <p className="text-slate-500 text-lg md:text-xl leading-relaxed font-medium">{subtitle}</p>}
   </div>
 );
+
+// --- MODALS ---
+
+const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    alert("Vielen Dank! Deine Anfrage wurde gesendet. Wir melden uns in Kürze.");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 font-sans">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-8 animate-in fade-in zoom-in-95">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 bg-slate-50 rounded-full hover:bg-slate-100 transition-colors">
+            <X className="w-5 h-5" />
+        </button>
+        
+        <div className="flex items-center gap-4 mb-8">
+            <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center border border-brand-100 shadow-sm">
+                <Mail className="w-7 h-7 text-brand-600" />
+            </div>
+            <div>
+                <h3 className="text-2xl font-bold text-slate-900">Contact Sales</h3>
+                <p className="text-slate-500 text-sm font-medium">Für Enterprise & Agentur-Lösungen</p>
+            </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Name</label>
+                <input required type="text" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="Max Mustermann" />
+            </div>
+            <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">E-Mail Adresse</label>
+                <input required type="email" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="name@firma.de" />
+            </div>
+            <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Nachricht</label>
+                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Erzähl uns von deinem Team und Anforderungen..." />
+            </div>
+            <button type="submit" className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5">Anfrage absenden</button>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 // Mock Data for Ad Versions Modal
 const AD_VERSIONS_DATA = [
@@ -357,7 +407,7 @@ const Hero = () => {
         </h1>
         
         <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
-          StellaAds calculates a proprietary <strong>Viral Score</strong> by correlating spend velocity with real-time costs. Spot winners based on efficiency, not just vanity metrics.
+          The fastest way to identify winning ads. We track <strong>live performance</strong> data to show you exactly which creatives are scaling right now.
         </p>
         
         <div className="flex flex-col items-center gap-4">
@@ -368,30 +418,43 @@ const Hero = () => {
           <span className="text-sm text-slate-400 font-medium">Starts at €39/mo • Cancel Anytime</span>
         </div>
 
-        {/* Hero Visual */}
+        {/* --- HIER IST DAS EINGEBAUTE VIDEO (Wiederhergestellt) --- */}
         <div className="mt-20 relative mx-auto max-w-6xl group perspective-1000">
-          <div className="relative rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden bg-white ring-1 ring-slate-900/5">
+          <div className="relative rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden bg-white ring-1 ring-slate-900/5 transition-transform duration-500 hover:scale-[1.01]">
+              
               <div className="h-10 bg-slate-50 border-b border-slate-100 flex items-center px-4 gap-2">
                   <div className="flex gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-red-400/20 border border-red-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-amber-400/20 border border-amber-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-green-400/20 border border-green-400/30"></div>
                   </div>
-                  <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 text-[10px] text-slate-400 font-medium w-64 text-center">stellaads.com/dashboard</div>
+                  {/* Fake URL Bar */}
+                  <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 text-[10px] text-slate-400 font-medium w-64 text-center flex items-center justify-center gap-1 shadow-sm">
+                    <ShieldCheck className="w-2.5 h-2.5 text-slate-300" />
+                    stellaads.com/dashboard
+                  </div>
               </div>
               
-              <img 
-                src="/dashboard.png" 
-                alt="StellaAds Dashboard Interface" 
-                className="w-full h-auto object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "https://placehold.co/1400x900/f8fafc/cbd5e1?text=StellaAds+Dashboard+Interface";
-                }}
-              />
+              {/* Der Video Player */}
+              <div className="relative w-full bg-slate-100">
+                <video 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  className="w-full h-auto block"
+                >
+                  <source src="/demo-video.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+                
+                {/* Optionaler Schatten unten */}
+                <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white/5 to-transparent pointer-events-none"></div>
+              </div>
           </div>
           
-          {/* Floating Stats */}
-          <div className="absolute -right-6 top-1/4 bg-white p-5 rounded-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 hidden lg:block animate-bounce-slow z-10">
+          {/* Schwebendes Statistik-Badge (Viral Score) */}
+          <div className="absolute -right-6 top-1/4 bg-white p-5 rounded-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 hidden lg:block animate-bounce-slow z-10 hover:shadow-xl transition-shadow">
               <div className="flex items-center gap-4 mb-3">
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
                       <TrendingUp className="w-5 h-5" />
@@ -402,7 +465,7 @@ const Hero = () => {
                   </div>
               </div>
               <div className="h-1.5 w-40 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-[98%]"></div>
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-[98%] animate-pulse"></div>
               </div>
           </div>
         </div>
@@ -419,7 +482,7 @@ const LogicSection = () => (
         <SectionHeader 
           badge="The Logic"
           title={<>Efficiency Over <span className="text-slate-400">Volume</span></>}
-          subtitle="Standard tools rely on cumulative metrics, often flagging saturated winners too late. We analyze the growth velocity relative to the estimated ad spend."
+          subtitle="Identify the creative angles that are scaling today. We distinguish between ads that are just taking off and campaigns that are already saturated."
           centered={false}
         />
         
@@ -614,7 +677,7 @@ const UseCasesSection = () => (
 );
 
 // Section 6: Pricing
-const PricingSection = () => {
+const PricingSection = ({ onOpenContact }: { onOpenContact: () => void }) => {
   const navigate = useNavigate();
   const [isAnnual, setIsAnnual] = useState(false);
 
@@ -669,16 +732,16 @@ const PricingSection = () => {
       ],
       export: "API & White Label",
       highlight: false,
-      // Special Logic for Enterprise
-      monthlyLink: LINK_ENTERPRISE_MONTHLY, 
-      yearlyLink: LINK_ENTERPRISE_YEARLY
+      isContact: true // Marker für Kontaktformular
     }
   ];
 
   const handlePlanClick = (plan: any) => {
-    if (plan.name === 'Enterprise') {
-        window.location.href = `mailto:${ENTERPRISE_MAIL}`;
+    if (plan.isContact) {
+        // Öffnet das neue Kontakt-Modal
+        onOpenContact();
     } else {
+        // Leitet zu Stripe weiter
         window.location.href = isAnnual ? plan.yearlyLink : plan.monthlyLink;
     }
   };
@@ -715,8 +778,8 @@ const PricingSection = () => {
               key={plan.name}
               className={`rounded-3xl p-10 border transition-all flex flex-col relative shadow-sm hover:shadow-lg ${
                 plan.highlight 
-                ? 'bg-slate-900 border-slate-800 transform md:-translate-y-4 shadow-2xl shadow-slate-900/10' 
-                : 'bg-white border-slate-200 hover:border-slate-300'
+                ? 'bg-slate-900 border-slate-800 transform md:-translate-y-4 shadow-2xl shadow-slate-900/10 text-white' 
+                : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900'
               }`}
             >
               {plan.highlight && (
@@ -779,7 +842,7 @@ const PricingSection = () => {
                   : 'bg-white border-2 border-slate-100 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
-                {plan.name === 'Enterprise' ? 'Contact Sales' : `Select ${plan.name}`}
+                {plan.isContact ? 'Contact Sales' : `Select ${plan.name}`}
               </button>
             </div>
           ))}
@@ -879,21 +942,28 @@ const Footer = () => (
 
 // --- EXPORTED PAGES (Including Login & Dashboard for reference/usage) ---
 
-export const LandingPage = () => (
-  <div className="bg-slate-50 min-h-screen">
-    <LandingHeader />
-    <main>
-      <Hero />
-      <LogicSection />
-      <USPSection />
-      <WorkflowSection />
-      <UseCasesSection />
-      <PricingSection />
-      <FAQSection />
-    </main>
-    <Footer />
-  </div>
-);
+export const LandingPage = () => {
+  const [isContactOpen, setIsContactOpen] = useState(false);
+
+  return (
+    <div className="bg-slate-50 min-h-screen">
+      <LandingHeader />
+      <main>
+        <Hero />
+        <LogicSection />
+        <USPSection />
+        <WorkflowSection />
+        <UseCasesSection />
+        {/* Contact Modal Trigger übergeben */}
+        <PricingSection onOpenContact={() => setIsContactOpen(true)} />
+        <FAQSection />
+      </main>
+      <Footer />
+      {/* Das Modal liegt über allem */}
+      <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
+    </div>
+  );
+};
 
 // New Design Login Page (Exported so you can link it if you want)
 export const LoginPage = () => {

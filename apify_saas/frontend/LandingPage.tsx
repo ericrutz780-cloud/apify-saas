@@ -27,20 +27,20 @@ import {
   Coins
 } from 'lucide-react';
 
-// --- DEINE STRIPE LINKS ---
-// Hier sind die Links, die du mir geschickt hast.
-// WICHTIG: Die Jahres-Links fehlen noch! Bitte hole sie aus deinem Stripe Dashboard ("Payment Links").
+// --- STRIPE LINKS ---
 
-const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/9B600c3VldLa5MQfNb9k400"; 
-const LINK_STARTER_YEARLY     = "https://buy.stripe.com/DEIN_STARTER_YEARLY_LINK"; // <--- HIER EINFÜGEN!
+const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/cNifZa77xdLaa3644t9k405"; 
+const LINK_STARTER_YEARLY     = "https://buy.stripe.com/dRmfZagI7cH66QU1Wl9k406"; 
 
-const LINK_PRO_MONTHLY        = "https://buy.stripe.com/eVqeV68bB22sa36eJ79k401"; 
-const LINK_PRO_YEARLY         = "https://buy.stripe.com/DEIN_PRO_YEARLY_LINK";     // <--- HIER EINFÜGEN!
+const LINK_PRO_MONTHLY        = "https://buy.stripe.com/cNi9AM8bBbD22AE9oN9k407"; 
+const LINK_PRO_YEARLY         = "https://buy.stripe.com/8x27sE3Vl22s2AE58x9k408"; 
 
-const LINK_ENTERPRISE_MONTHLY = "https://buy.stripe.com/6oU00c8bB4aA0sw6cB9k402"; 
-const LINK_ENTERPRISE_YEARLY  = "https://buy.stripe.com/DEIN_ENTERPRISE_YEARLY_LINK"; // <--- HIER EINFÜGEN!
+const LINK_ENTERPRISE_MONTHLY = "https://buy.stripe.com/fZudR28bB6iI6QUdF39k409"; 
+const LINK_ENTERPRISE_YEARLY  = "https://buy.stripe.com/cNi00c0J96iI0swfNb9k40a";
 
-// ---------------------------
+const ENTERPRISE_MAIL         = "eric.rutz@stellaads.io";
+
+// --- Components ---
 
 const SectionBadge = ({ children }: { children?: React.ReactNode }) => (
   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-600 text-[11px] font-bold uppercase tracking-wider mb-4 shadow-sm select-none">
@@ -71,7 +71,7 @@ const SectionHeader = ({
   </div>
 );
 
-// --- MOCK DATA (Dashboard Design) ---
+// Mock Data for Ad Versions Modal
 const AD_VERSIONS_DATA = [
   { id: '5458701543975786', status: 'Active', startDate: '12/29/2025', targeting: 'United States, Canada', reach: '8,500,000', score: 94, img: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' },
   { id: '5458916033257559', status: 'Active', startDate: '12/29/2025', targeting: '6 Countries', reach: '10,452,100', score: 45, img: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' },
@@ -192,8 +192,6 @@ const AdVersionsModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 };
 
 
-// --- LANDING PAGE COMPONENTS ---
-
 const LandingHeader = () => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -208,10 +206,11 @@ const LandingHeader = () => {
     { name: 'FAQ', id: 'faq' },
   ];
 
+  // Handle scroll spy to highlight active section
   useEffect(() => {
     const handleScroll = () => {
       const sections = navLinks.map(link => document.getElementById(link.id));
-      const scrollPosition = window.scrollY + 100;
+      const scrollPosition = window.scrollY + 100; // Offset
 
       for (const section of sections) {
         if (section && section.offsetTop <= scrollPosition && (section.offsetTop + section.offsetHeight) > scrollPosition) {
@@ -230,7 +229,7 @@ const LandingHeader = () => {
     setIsMobileMenuOpen(false);
     const element = document.getElementById(id);
     if (element) {
-      const yOffset = -80;
+      const yOffset = -80; // Header height offset
       const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
@@ -244,6 +243,7 @@ const LandingHeader = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        {/* Logo */}
         <div className="flex items-center gap-2.5 cursor-pointer group" onClick={scrollToTop}>
           <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-lg shadow-brand-600/20 group-hover:scale-105 transition-transform">
             <Zap className="text-white w-5 h-5 fill-white" />
@@ -251,6 +251,7 @@ const LandingHeader = () => {
           <span className="text-xl font-bold tracking-tight text-slate-900">StellaAds</span>
         </div>
         
+        {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => (
             <a 
@@ -268,6 +269,7 @@ const LandingHeader = () => {
           ))}
         </div>
 
+        {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-4">
           <button onClick={() => navigate('/login')} className="text-sm font-medium text-slate-600 hover:text-slate-900">
             Log in
@@ -281,6 +283,7 @@ const LandingHeader = () => {
           </a>
         </div>
 
+        {/* Mobile Menu Button */}
         <button 
           className="md:hidden text-slate-600 hover:text-slate-900 p-2"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -289,6 +292,7 @@ const LandingHeader = () => {
         </button>
       </div>
 
+      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-t border-slate-100 px-6 py-6 shadow-2xl absolute top-16 left-0 right-0 h-screen flex flex-col gap-6 animate-in slide-in-from-top-5">
           <div className="flex flex-col gap-2">
@@ -335,6 +339,7 @@ const Hero = () => {
 
   return (
     <section className="pt-32 pb-24 px-6 relative overflow-hidden bg-slate-50">
+      {/* Background Decorations */}
       <div className="absolute top-0 inset-x-0 h-[600px] bg-[radial-gradient(50%_50%_at_50%_0%,#f5f3ff_0%,transparent_100%)] -z-10"></div>
 
       <div className="max-w-5xl mx-auto text-center">
@@ -352,7 +357,7 @@ const Hero = () => {
         </h1>
         
         <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
-          The fastest way to identify winning ads. We track <strong>live performance</strong> data to show you exactly which creatives are scaling right now.
+          StellaAds calculates a proprietary <strong>Viral Score</strong> by correlating spend velocity with real-time costs. Spot winners based on efficiency, not just vanity metrics.
         </p>
         
         <div className="flex flex-col items-center gap-4">
@@ -360,41 +365,33 @@ const Hero = () => {
             Start Finding Winners
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </a>
-          <span className="text-sm text-slate-400 font-medium">Starts at €19/mo</span>
+          <span className="text-sm text-slate-400 font-medium">Starts at €39/mo • Cancel Anytime</span>
         </div>
 
+        {/* Hero Visual */}
         <div className="mt-20 relative mx-auto max-w-6xl group perspective-1000">
-          <div className="relative rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden bg-white ring-1 ring-slate-900/5 transition-transform duration-500 hover:scale-[1.01]">
-              
+          <div className="relative rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden bg-white ring-1 ring-slate-900/5">
               <div className="h-10 bg-slate-50 border-b border-slate-100 flex items-center px-4 gap-2">
                   <div className="flex gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-red-400/20 border border-red-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-amber-400/20 border border-amber-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-green-400/20 border border-green-400/30"></div>
                   </div>
-                  <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 text-[10px] text-slate-400 font-medium w-64 text-center flex items-center justify-center gap-1 shadow-sm">
-                    <ShieldCheck className="w-2.5 h-2.5 text-slate-300" />
-                    stellaads.com/dashboard
-                  </div>
+                  <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 text-[10px] text-slate-400 font-medium w-64 text-center">stellaads.com/dashboard</div>
               </div>
               
-              <div className="relative w-full bg-slate-100">
-                <video 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline 
-                  className="w-full h-auto block"
-                >
-                  <source src="/demo-video.mp4" type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-                
-                <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white/5 to-transparent pointer-events-none"></div>
-              </div>
+              <img 
+                src="/dashboard.png" 
+                alt="StellaAds Dashboard Interface" 
+                className="w-full h-auto object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "https://placehold.co/1400x900/f8fafc/cbd5e1?text=StellaAds+Dashboard+Interface";
+                }}
+              />
           </div>
           
-          <div className="absolute -right-6 top-1/4 bg-white p-5 rounded-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 hidden lg:block animate-bounce-slow z-10 hover:shadow-xl transition-shadow">
+          {/* Floating Stats */}
+          <div className="absolute -right-6 top-1/4 bg-white p-5 rounded-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 hidden lg:block animate-bounce-slow z-10">
               <div className="flex items-center gap-4 mb-3">
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
                       <TrendingUp className="w-5 h-5" />
@@ -405,7 +402,7 @@ const Hero = () => {
                   </div>
               </div>
               <div className="h-1.5 w-40 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-[98%] animate-pulse"></div>
+                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-400 w-[98%]"></div>
               </div>
           </div>
         </div>
@@ -414,6 +411,7 @@ const Hero = () => {
   );
 };
 
+// Section 2: The Logic
 const LogicSection = () => (
   <section id="logic" className="py-32 bg-white relative scroll-mt-20">
     <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
@@ -421,7 +419,7 @@ const LogicSection = () => (
         <SectionHeader 
           badge="The Logic"
           title={<>Efficiency Over <span className="text-slate-400">Volume</span></>}
-          subtitle="Identify the creative angles that are scaling today. We distinguish between ads that are just taking off and campaigns that are already saturated."
+          subtitle="Standard tools rely on cumulative metrics, often flagging saturated winners too late. We analyze the growth velocity relative to the estimated ad spend."
           centered={false}
         />
         
@@ -481,6 +479,7 @@ const LogicSection = () => (
   </section>
 );
 
+// Section 3: The Viral Score
 const USPSection = () => (
   <section id="viral-score" className="py-24 px-6 bg-slate-50 border-t border-slate-200 scroll-mt-20">
     <div className="max-w-7xl mx-auto">
@@ -523,6 +522,7 @@ const USPSection = () => (
   </section>
 );
 
+// Section 4: Workflow
 const WorkflowSection = () => (
   <section id="workflow" className="py-32 bg-white px-6 scroll-mt-20">
     <div className="max-w-7xl mx-auto">
@@ -569,6 +569,7 @@ const WorkflowSection = () => (
   </section>
 );
 
+// Section 5: Use Cases
 const UseCasesSection = () => (
   <section id="use-cases" className="py-24 px-6 bg-slate-50 border-y border-slate-200 scroll-mt-20">
     <div className="max-w-7xl mx-auto">
@@ -612,11 +613,11 @@ const UseCasesSection = () => (
   </section>
 );
 
+// Section 6: Pricing
 const PricingSection = () => {
   const navigate = useNavigate();
   const [isAnnual, setIsAnnual] = useState(false);
 
-  // --- HIER WIRD DIE LOGIK ZUSAMMENGESETZT ---
   const plans = [
     {
       name: "Starter",
@@ -627,13 +628,12 @@ const PricingSection = () => {
       topup: "25€ / 1k Credits",
       features: [
         "1,500 Credits",
-        "Scans 100 Data Points",
+        "100 Data Points per Search",
         "1 User-Seat",
         "Community Support"
       ],
       export: "-",
       highlight: false,
-      // HIER VERLINKEN WIR DIE KONSTANTEN VON OBEN
       monthlyLink: LINK_STARTER_MONTHLY,
       yearlyLink: LINK_STARTER_YEARLY
     },
@@ -641,41 +641,47 @@ const PricingSection = () => {
       name: "Pro",
       subheader: "Best for: Heavy Users & Scaling",
       monthlyPrice: 129,
-      yearlyPrice: 99,
-      yearlyTotal: 1188,
+      yearlyPrice: 109,
+      yearlyTotal: 1308,
       topup: "10€ / 1k Credits",
       features: [
         "10,000 Credits",
-        "Deep Scan (1,000 Data Points)",
-        "2 Team-Seats",
+        "1,000 Data Points per Search",
+        "2 User-Seats",
         "Priority Support"
       ],
       export: "CSV/JSON Export",
       highlight: true,
-      // HIER VERLINKEN WIR DIE KONSTANTEN VON OBEN
       monthlyLink: LINK_PRO_MONTHLY,
       yearlyLink: LINK_PRO_YEARLY
     },
     {
       name: "Enterprise",
       subheader: "Best for: Agencies & Large Teams",
-      monthlyPrice: 399,
-      yearlyPrice: 299,
-      yearlyTotal: 3588,
+      monthlyPrice: "Contact Sales",
+      yearlyPrice: "Contact Sales",
       topup: "5€ / 1k Credits",
       features: [
         "50,000 Credits",
         "Custom Analysis Limits",
-        "5 Team-Seats",
+        "5 User-Seats",
         "Dedicated Manager"
       ],
       export: "API & White Label",
       highlight: false,
-      // HIER VERLINKEN WIR DIE KONSTANTEN VON OBEN
-      monthlyLink: LINK_ENTERPRISE_MONTHLY,
+      // Special Logic for Enterprise
+      monthlyLink: LINK_ENTERPRISE_MONTHLY, 
       yearlyLink: LINK_ENTERPRISE_YEARLY
     }
   ];
+
+  const handlePlanClick = (plan: any) => {
+    if (plan.name === 'Enterprise') {
+        window.location.href = `mailto:${ENTERPRISE_MAIL}`;
+    } else {
+        window.location.href = isAnnual ? plan.yearlyLink : plan.monthlyLink;
+    }
+  };
 
   return (
     <section id="pricing" className="py-32 px-6 relative bg-white scroll-mt-20">
@@ -765,9 +771,8 @@ const PricingSection = () => {
                 </li>
               </ul>
 
-              {/* FIX: Leitet jetzt zu Stripe weiter, statt zur Login-Page */}
               <button 
-                onClick={() => window.location.href = isAnnual ? plan.yearlyLink : plan.monthlyLink} 
+                onClick={() => handlePlanClick(plan)} 
                 className={`w-full py-4 rounded-xl font-bold transition-all shadow-lg ${
                   plan.highlight 
                   ? 'bg-brand-600 text-white hover:bg-brand-500 shadow-brand-900/30' 
@@ -812,6 +817,7 @@ const PricingSection = () => {
   );
 };
 
+// Section 7: FAQ
 const FAQItem: React.FC<{ question: string; answer: string }> = ({ question, answer }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (

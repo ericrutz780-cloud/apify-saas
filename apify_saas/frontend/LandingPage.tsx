@@ -22,12 +22,14 @@ import {
   X,
   HelpCircle,
   MousePointerClick,
-  ArrowUpDown
+  ArrowUpDown,
+  Minus,
+  Coins
 } from 'lucide-react';
 
-// --- Components ---
+// --- Helper Components ---
 
-const SectionBadge = ({ children }: { children: React.ReactNode }) => (
+const SectionBadge = ({ children }: { children?: React.ReactNode }) => (
   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-600 text-[11px] font-bold uppercase tracking-wider mb-4 shadow-sm select-none">
     <Zap className="w-3 h-3 fill-brand-600" />
     {children}
@@ -56,7 +58,7 @@ const SectionHeader = ({
   </div>
 );
 
-// Mock Data for Ad Versions Modal (Code erhalten)
+// --- MOCK DATA (Dashboard Design) ---
 const AD_VERSIONS_DATA = [
   { id: '5458701543975786', status: 'Active', startDate: '12/29/2025', targeting: 'United States, Canada', reach: '8,500,000', score: 94, img: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' },
   { id: '5458916033257559', status: 'Active', startDate: '12/29/2025', targeting: '6 Countries', reach: '10,452,100', score: 45, img: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' },
@@ -177,6 +179,8 @@ const AdVersionsModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 };
 
 
+// --- LANDING PAGE COMPONENTS ---
+
 const LandingHeader = () => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -191,11 +195,10 @@ const LandingHeader = () => {
     { name: 'FAQ', id: 'faq' },
   ];
 
-  // Handle scroll spy to highlight active section
   useEffect(() => {
     const handleScroll = () => {
       const sections = navLinks.map(link => document.getElementById(link.id));
-      const scrollPosition = window.scrollY + 100; // Offset
+      const scrollPosition = window.scrollY + 100;
 
       for (const section of sections) {
         if (section && section.offsetTop <= scrollPosition && (section.offsetTop + section.offsetHeight) > scrollPosition) {
@@ -214,7 +217,7 @@ const LandingHeader = () => {
     setIsMobileMenuOpen(false);
     const element = document.getElementById(id);
     if (element) {
-      const yOffset = -80; // Header height offset
+      const yOffset = -80;
       const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
@@ -228,7 +231,6 @@ const LandingHeader = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
         <div className="flex items-center gap-2.5 cursor-pointer group" onClick={scrollToTop}>
           <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-lg shadow-brand-600/20 group-hover:scale-105 transition-transform">
             <Zap className="text-white w-5 h-5 fill-white" />
@@ -236,7 +238,6 @@ const LandingHeader = () => {
           <span className="text-xl font-bold tracking-tight text-slate-900">StellaAds</span>
         </div>
         
-        {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => (
             <a 
@@ -254,7 +255,6 @@ const LandingHeader = () => {
           ))}
         </div>
 
-        {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-4">
           <button onClick={() => navigate('/login')} className="text-sm font-medium text-slate-600 hover:text-slate-900">
             Log in
@@ -268,7 +268,6 @@ const LandingHeader = () => {
           </a>
         </div>
 
-        {/* Mobile Menu Button */}
         <button 
           className="md:hidden text-slate-600 hover:text-slate-900 p-2"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -277,7 +276,6 @@ const LandingHeader = () => {
         </button>
       </div>
 
-      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-t border-slate-100 px-6 py-6 shadow-2xl absolute top-16 left-0 right-0 h-screen flex flex-col gap-6 animate-in slide-in-from-top-5">
           <div className="flex flex-col gap-2">
@@ -324,11 +322,9 @@ const Hero = () => {
 
   return (
     <section className="pt-32 pb-24 px-6 relative overflow-hidden bg-slate-50">
-      {/* Background Decorations */}
       <div className="absolute top-0 inset-x-0 h-[600px] bg-[radial-gradient(50%_50%_at_50%_0%,#f5f3ff_0%,transparent_100%)] -z-10"></div>
 
       <div className="max-w-5xl mx-auto text-center">
-        {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-semibold mb-8 shadow-sm hover:shadow-md transition-shadow cursor-default">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -337,18 +333,15 @@ const Hero = () => {
           Tracking 12 European Markets Live
         </div>
         
-        {/* Headline */}
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-slate-900 mb-8 leading-[1.05]">
           Find Winning Ads <br/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-purple-600 to-blue-600 animate-gradient-x">Before They Go Viral.</span>
         </h1>
         
-        {/* Subheadline */}
         <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
           The fastest way to identify winning ads. We track <strong>live performance</strong> data to show you exactly which creatives are scaling right now.
         </p>
         
-        {/* CTA Button */}
         <div className="flex flex-col items-center gap-4">
           <a href="#pricing" onClick={scrollToPricing} className="group bg-brand-600 hover:bg-brand-500 text-white px-8 py-4 rounded-full text-lg font-bold transition-all hover:scale-[1.02] flex items-center gap-2 shadow-xl shadow-brand-600/30">
             Start Finding Winners
@@ -357,25 +350,21 @@ const Hero = () => {
           <span className="text-sm text-slate-400 font-medium">Starts at €19/mo</span>
         </div>
 
-        {/* --- HIER IST DAS EINGEBAUTE VIDEO --- */}
         <div className="mt-20 relative mx-auto max-w-6xl group perspective-1000">
           <div className="relative rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden bg-white ring-1 ring-slate-900/5 transition-transform duration-500 hover:scale-[1.01]">
               
-              {/* Browser Leiste (Design-Element) */}
               <div className="h-10 bg-slate-50 border-b border-slate-100 flex items-center px-4 gap-2">
                   <div className="flex gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-red-400/20 border border-red-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-amber-400/20 border border-amber-400/30"></div>
                       <div className="w-3 h-3 rounded-full bg-green-400/20 border border-green-400/30"></div>
                   </div>
-                  {/* Fake URL Bar */}
                   <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 text-[10px] text-slate-400 font-medium w-64 text-center flex items-center justify-center gap-1 shadow-sm">
                     <ShieldCheck className="w-2.5 h-2.5 text-slate-300" />
                     stellaads.com/dashboard
                   </div>
               </div>
               
-              {/* Der Video Player */}
               <div className="relative w-full bg-slate-100">
                 <video 
                   autoPlay 
@@ -384,17 +373,14 @@ const Hero = () => {
                   playsInline 
                   className="w-full h-auto block"
                 >
-                  {/* Pfad zum Video im public Ordner */}
                   <source src="/demo-video.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
                 
-                {/* Optionaler Schatten unten */}
                 <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white/5 to-transparent pointer-events-none"></div>
               </div>
           </div>
           
-          {/* Schwebendes Statistik-Badge (Viral Score) */}
           <div className="absolute -right-6 top-1/4 bg-white p-5 rounded-2xl shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 hidden lg:block animate-bounce-slow z-10 hover:shadow-xl transition-shadow">
               <div className="flex items-center gap-4 mb-3">
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
@@ -415,7 +401,6 @@ const Hero = () => {
   );
 };
 
-// Section 2: The Logic
 const LogicSection = () => (
   <section id="logic" className="py-32 bg-white relative scroll-mt-20">
     <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
@@ -483,7 +468,6 @@ const LogicSection = () => (
   </section>
 );
 
-// Section 3: The Viral Score
 const USPSection = () => (
   <section id="viral-score" className="py-24 px-6 bg-slate-50 border-t border-slate-200 scroll-mt-20">
     <div className="max-w-7xl mx-auto">
@@ -526,7 +510,6 @@ const USPSection = () => (
   </section>
 );
 
-// Section 4: Workflow
 const WorkflowSection = () => (
   <section id="workflow" className="py-32 bg-white px-6 scroll-mt-20">
     <div className="max-w-7xl mx-auto">
@@ -573,7 +556,6 @@ const WorkflowSection = () => (
   </section>
 );
 
-// Section 5: Use Cases
 const UseCasesSection = () => (
   <section id="use-cases" className="py-24 px-6 bg-slate-50 border-y border-slate-200 scroll-mt-20">
     <div className="max-w-7xl mx-auto">
@@ -617,10 +599,62 @@ const UseCasesSection = () => (
   </section>
 );
 
-// Section 6: Pricing
 const PricingSection = () => {
   const navigate = useNavigate();
   const [isAnnual, setIsAnnual] = useState(false);
+
+  // --- HIER SIND DEINE ANGEPASSTEN PAKETE ---
+  const plans = [
+    {
+      name: "Starter",
+      subheader: "Best for: Occasional Research",
+      monthlyPrice: 49,
+      yearlyPrice: 39,
+      yearlyTotal: 468,
+      topup: "25€ / 1k Credits",
+      features: [
+        "1,500 Credits",
+        "Scans 100 Data Points",
+        "1 User-Seat",
+        "Community Support"
+      ],
+      export: "-",
+      highlight: false
+    },
+    {
+      name: "Pro",
+      subheader: "Best for: Heavy Users & Scaling",
+      monthlyPrice: 129,
+      yearlyPrice: 99,
+      yearlyTotal: 1188,
+      topup: "10€ / 1k Credits",
+      features: [
+        "10,000 Credits",
+        "Deep Scan (1,000 Data Points)",
+        "2 Team-Seats",
+        "Priority Support"
+      ],
+      export: "CSV/JSON Export",
+      highlight: true
+    },
+    {
+      name: "Enterprise",
+      subheader: "Best for: Agencies & Large Teams",
+      monthlyPrice: 399,
+      yearlyPrice: 299,
+      yearlyTotal: 3588,
+      topup: "5€ / 1k Credits",
+      features: [
+        "50,000 Credits",
+        "Custom Analysis Limits",
+        "5 Team-Seats",
+        "Dedicated Manager"
+      ],
+      export: "API & White Label",
+      highlight: false
+    }
+  ];
+  // ---------------------------------------------
 
   return (
     <section id="pricing" className="py-32 px-6 relative bg-white scroll-mt-20">
@@ -631,74 +665,124 @@ const PricingSection = () => {
             subtitle="Start small and scale as you grow. No hidden fees."
         />
         
-        <div className="flex items-center justify-center mb-12">
-          <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-full border border-slate-200">
+        <div className="flex flex-col items-center gap-6 mb-16">
+          <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-full border border-slate-200 shadow-inner">
             <button 
               onClick={() => setIsAnnual(false)}
-              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${!isAnnual ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${!isAnnual ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Monthly
             </button>
             <button 
               onClick={() => setIsAnnual(true)}
-              className={`px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2 ${isAnnual ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2 ${isAnnual ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              Yearly <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200 uppercase tracking-wide">-20%</span>
+              Yearly <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200 uppercase tracking-wide font-bold">-20%</span>
             </button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {/* Starter Plan */}
-          <div className="bg-white rounded-3xl p-10 border border-slate-200 hover:border-slate-300 transition-colors flex flex-col shadow-sm hover:shadow-lg relative">
-            <div className="mb-6">
-              <h3 className="text-xl font-bold text-slate-900">Starter</h3>
-              <p className="text-slate-500 text-sm mt-2 font-medium">Best for: Occasional Research</p>
-            </div>
-            <div className="mb-8 flex items-baseline gap-1">
-              <span className="text-5xl font-bold text-slate-900 tracking-tight">€{isAnnual ? '15' : '19'}</span>
-              <span className="text-slate-500 font-medium">/mo</span>
-            </div>
-            <ul className="space-y-4 mb-8 flex-1">
-              <li className="flex items-center gap-3 text-slate-600">
-                <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-slate-600" /></div> 1,500 Credits
-              </li>
-              <li className="flex items-center gap-3 text-slate-600">
-                <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-slate-600" /></div> Meta & TikTok Search
-              </li>
-            </ul>
-            <button onClick={() => navigate('/login')} className="w-full py-4 rounded-xl border-2 border-slate-100 text-slate-700 font-bold hover:border-slate-300 hover:bg-slate-50 transition-all">
-              Select Starter
-            </button>
-          </div>
+        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-16">
+          {plans.map((plan, idx) => (
+            <div 
+              key={plan.name}
+              className={`rounded-3xl p-10 border transition-all flex flex-col relative shadow-sm hover:shadow-lg ${
+                plan.highlight 
+                ? 'bg-slate-900 border-slate-800 transform md:-translate-y-4 shadow-2xl shadow-slate-900/10' 
+                : 'bg-white border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {plan.highlight && (
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-600 text-white px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg border-4 border-white">
+                  Most Popular
+                </div>
+              )}
+              
+              <div className="mb-6">
+                <h3 className={`text-xl font-bold flex items-center ${plan.highlight ? 'text-white' : 'text-slate-900'}`}>
+                  {plan.name}
+                </h3>
+                <p className={`text-sm mt-2 font-medium ${plan.highlight ? 'text-slate-400' : 'text-slate-500'}`}>{plan.subheader}</p>
+              </div>
 
-          {/* Pro Plan */}
-          <div className="bg-slate-900 rounded-3xl p-10 border border-slate-800 flex flex-col relative shadow-2xl shadow-slate-900/10 transform md:-translate-y-4">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-600 text-white px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg border-4 border-white">
-              Most Popular
+              <div className="mb-8 min-h-[4rem]">
+                {typeof plan.monthlyPrice === 'string' ? (
+                  <div className={`text-2xl font-bold tracking-tight ${plan.highlight ? 'text-white' : 'text-slate-900'}`}>
+                    {plan.monthlyPrice}
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-5xl font-bold tracking-tight ${plan.highlight ? 'text-white' : 'text-slate-900'}`}>
+                        €{isAnnual ? plan.yearlyPrice : plan.monthlyPrice}
+                      </span>
+                      <span className={`font-medium ${plan.highlight ? 'text-slate-400' : 'text-slate-500'}`}>/mo</span>
+                    </div>
+                    {isAnnual && plan.yearlyTotal && (
+                      <div className={`text-xs mt-1 font-semibold ${plan.highlight ? 'text-slate-500' : 'text-slate-400'}`}>
+                        €{plan.yearlyTotal} billed annually
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <ul className="space-y-4 mb-8 flex-1">
+                {plan.features.map(feat => (
+                  <li key={feat} className={`flex items-center gap-3 text-sm ${plan.highlight ? 'text-slate-200' : 'text-slate-600'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${plan.highlight ? 'bg-brand-500/20' : 'bg-slate-100'}`}>
+                      <Check className={`w-3 h-3 ${plan.highlight ? 'text-brand-400' : 'text-slate-600'}`} />
+                    </div> 
+                    {feat}
+                  </li>
+                ))}
+                <li className={`flex items-center gap-3 text-sm ${plan.highlight ? 'text-slate-200' : 'text-slate-600'}`}>
+                   <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${plan.highlight ? 'bg-brand-500/20' : 'bg-slate-100'}`}>
+                      {plan.export === '-' ? <Minus className="w-3 h-3 text-slate-400" /> : <Check className={`w-3 h-3 ${plan.highlight ? 'text-brand-400' : 'text-slate-600'}`} />}
+                    </div>
+                    {plan.export}
+                </li>
+              </ul>
+
+              <button 
+                onClick={() => navigate('/login')} 
+                className={`w-full py-4 rounded-xl font-bold transition-all shadow-lg ${
+                  plan.highlight 
+                  ? 'bg-brand-600 text-white hover:bg-brand-500 shadow-brand-900/30' 
+                  : 'bg-white border-2 border-slate-100 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {plan.name === 'Enterprise' ? 'Contact Sales' : `Select ${plan.name}`}
+              </button>
             </div>
-            <div className="mb-6">
-              <h3 className="text-xl font-bold text-white">Pro</h3>
-              <p className="text-slate-400 text-sm mt-2 font-medium">Best for: Heavy Users & Scaling</p>
+          ))}
+        </div>
+
+        {/* Top-up Credits Banner */}
+        <div className="flex justify-center">
+          <div className="w-full max-w-4xl bg-brand-50 border border-brand-100 rounded-2xl p-4 md:p-6 shadow-sm overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+              <Coins className="w-24 h-24 text-brand-600" />
             </div>
-            <div className="mb-8 flex items-baseline gap-1">
-              <span className="text-5xl font-bold text-white tracking-tight">€{isAnnual ? '39' : '49'}</span>
-              <span className="text-slate-400 font-medium">/mo</span>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center shadow-lg shadow-brand-600/20 shrink-0">
+                  <Coins className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Buy more credits</h4>
+                  <p className="text-xs text-slate-500 font-medium">Top up whenever you need more data</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-6 w-full md:w-auto">
+                {plans.map(plan => (
+                  <div key={plan.name} className="text-center md:text-left">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{plan.name}</div>
+                    <div className="text-sm font-bold text-brand-700 whitespace-nowrap">{plan.topup}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <ul className="space-y-4 mb-8 flex-1">
-              <li className="flex items-center gap-3 text-slate-200">
-                <div className="w-5 h-5 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-brand-400" /></div> 5,000 Credits
-              </li>
-              <li className="flex items-center gap-3 text-slate-200">
-                <div className="w-5 h-5 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-brand-400" /></div> Deep Viral Score Details
-              </li>
-              <li className="flex items-center gap-3 text-slate-200">
-                <div className="w-5 h-5 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0"><Check className="w-3 h-3 text-brand-400" /></div> CSV/JSON Export
-              </li>
-            </ul>
-            <button onClick={() => navigate('/login')} className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-500 transition-all shadow-lg shadow-brand-900/30">
-              Select Pro
-            </button>
           </div>
         </div>
       </div>
@@ -706,7 +790,6 @@ const PricingSection = () => {
   );
 };
 
-// Section 7: FAQ
 const FAQItem: React.FC<{ question: string; answer: string }> = ({ question, answer }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -766,7 +849,7 @@ const Footer = () => (
   </footer>
 );
 
-// --- Pages ---
+// --- EXPORTED PAGES (Including Login & Dashboard for reference/usage) ---
 
 export const LandingPage = () => (
   <div className="bg-slate-50 min-h-screen">
@@ -784,56 +867,60 @@ export const LandingPage = () => (
   </div>
 );
 
-// --- Original Mock Pages (Preserved as requested) ---
-
-const LoginPage = ({ onNavigate }: { onNavigate: (page: string) => void }) => (
-  <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-    <div className="bg-white rounded-3xl p-8 md:p-12 w-full max-w-md border border-slate-200 shadow-xl">
-      <div className="flex justify-center mb-8">
-        <div className="w-12 h-12 bg-brand-600 rounded-xl flex items-center justify-center shadow-xl shadow-brand-600/30">
-          <Zap className="text-white w-7 h-7 fill-white" />
-        </div>
-      </div>
-      
-      <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">Welcome back</h2>
-      <p className="text-slate-500 text-center mb-8">Enter your credentials to access the live dashboard.</p>
-      
-      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); onNavigate('DASHBOARD'); }}>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Email address</label>
-          <input 
-            type="email" 
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all bg-slate-50 font-medium text-slate-900"
-            placeholder="name@company.com" 
-            defaultValue="marketer@stellaads.com"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-          <input 
-            type="password" 
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all bg-slate-50 font-medium text-slate-900"
-            placeholder="••••••••" 
-            defaultValue="password"
-          />
+// New Design Login Page (Exported so you can link it if you want)
+export const LoginPage = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="bg-white rounded-3xl p-8 md:p-12 w-full max-w-md border border-slate-200 shadow-xl">
+        <div className="flex justify-center mb-8">
+          <div className="w-12 h-12 bg-brand-600 rounded-xl flex items-center justify-center shadow-xl shadow-brand-600/30">
+            <Zap className="text-white w-7 h-7 fill-white" />
+          </div>
         </div>
         
-        <button type="submit" className="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors shadow-lg mt-4">
-          Sign In
-        </button>
-      </form>
-      
-      <div className="mt-8 text-center text-sm">
-        <span className="text-slate-500">Don't have an account? </span>
-        <button onClick={() => onNavigate('LANDING')} className="text-brand-600 font-bold hover:underline">
-          Sign up
-        </button>
+        <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">Welcome back</h2>
+        <p className="text-slate-500 text-center mb-8">Enter your credentials to access the live dashboard.</p>
+        
+        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); navigate('/dashboard'); }}>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email address</label>
+            <input 
+              type="email" 
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all bg-slate-50 font-medium text-slate-900"
+              placeholder="name@company.com" 
+              defaultValue="marketer@stellaads.com"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+            <input 
+              type="password" 
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all bg-slate-50 font-medium text-slate-900"
+              placeholder="••••••••" 
+              defaultValue="password"
+            />
+          </div>
+          
+          <button type="submit" className="w-full py-3.5 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors shadow-lg mt-4">
+            Sign In
+          </button>
+        </form>
+        
+        <div className="mt-8 text-center text-sm">
+          <span className="text-slate-500">Don't have an account? </span>
+          <button onClick={() => navigate('/')} className="text-brand-600 font-bold hover:underline">
+            Sign up
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
+// New Design Dashboard Page (Exported so you can link it if you want)
+export const DashboardPage = () => {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -844,7 +931,7 @@ const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => void }) =
       <div className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-8">
-                 <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate('LANDING')}>
+                 <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
                     <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-md">
                     <Zap className="text-white w-5 h-5 fill-white" />
                     </div>
@@ -879,7 +966,7 @@ const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => void }) =
                  <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center border border-purple-200">
                     A
                 </div>
-                <button onClick={() => onNavigate('LANDING')} className="text-slate-400 hover:text-slate-600">
+                <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-600">
                     <LogOut className="w-5 h-5" />
                 </button>
             </div>

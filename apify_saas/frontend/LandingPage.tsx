@@ -27,16 +27,20 @@ import {
   Coins
 } from 'lucide-react';
 
-// --- Helper Components ---
+// --- DEINE STRIPE LINKS ---
+// Hier sind die Links, die du mir geschickt hast.
+// WICHTIG: Die Jahres-Links fehlen noch! Bitte hole sie aus deinem Stripe Dashboard ("Payment Links").
 
-const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/DeinLinkFuerStarterMonat"; 
-const LINK_STARTER_YEARLY     = "https://buy.stripe.com/DeinLinkFuerStarterJahr"; 
+const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/9B600c3VldLa5MQfNb9k400"; 
+const LINK_STARTER_YEARLY     = "https://buy.stripe.com/DEIN_STARTER_YEARLY_LINK"; // <--- HIER EINFÜGEN!
 
-const LINK_PRO_MONTHLY        = "https://buy.stripe.com/DeinLinkFuerProMonat"; 
-const LINK_PRO_YEARLY         = "https://buy.stripe.com/DeinLinkFuerProJahr"; 
+const LINK_PRO_MONTHLY        = "https://buy.stripe.com/eVqeV68bB22sa36eJ79k401"; 
+const LINK_PRO_YEARLY         = "https://buy.stripe.com/DEIN_PRO_YEARLY_LINK";     // <--- HIER EINFÜGEN!
 
-const LINK_ENTERPRISE_MONTHLY = "https://buy.stripe.com/DeinLinkFuerEnterpriseMonat"; 
-const LINK_ENTERPRISE_YEARLY  = "https://buy.stripe.com/DeinLinkFuerEnterpriseJahr";
+const LINK_ENTERPRISE_MONTHLY = "https://buy.stripe.com/6oU00c8bB4aA0sw6cB9k402"; 
+const LINK_ENTERPRISE_YEARLY  = "https://buy.stripe.com/DEIN_ENTERPRISE_YEARLY_LINK"; // <--- HIER EINFÜGEN!
+
+// ---------------------------
 
 const SectionBadge = ({ children }: { children?: React.ReactNode }) => (
   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-600 text-[11px] font-bold uppercase tracking-wider mb-4 shadow-sm select-none">
@@ -612,7 +616,7 @@ const PricingSection = () => {
   const navigate = useNavigate();
   const [isAnnual, setIsAnnual] = useState(false);
 
-  // --- HIER SIND DEINE ANGEPASSTEN PAKETE ---
+  // --- HIER WIRD DIE LOGIK ZUSAMMENGESETZT ---
   const plans = [
     {
       name: "Starter",
@@ -628,7 +632,10 @@ const PricingSection = () => {
         "Community Support"
       ],
       export: "-",
-      highlight: false
+      highlight: false,
+      // HIER VERLINKEN WIR DIE KONSTANTEN VON OBEN
+      monthlyLink: LINK_STARTER_MONTHLY,
+      yearlyLink: LINK_STARTER_YEARLY
     },
     {
       name: "Pro",
@@ -644,7 +651,10 @@ const PricingSection = () => {
         "Priority Support"
       ],
       export: "CSV/JSON Export",
-      highlight: true
+      highlight: true,
+      // HIER VERLINKEN WIR DIE KONSTANTEN VON OBEN
+      monthlyLink: LINK_PRO_MONTHLY,
+      yearlyLink: LINK_PRO_YEARLY
     },
     {
       name: "Enterprise",
@@ -660,10 +670,12 @@ const PricingSection = () => {
         "Dedicated Manager"
       ],
       export: "API & White Label",
-      highlight: false
+      highlight: false,
+      // HIER VERLINKEN WIR DIE KONSTANTEN VON OBEN
+      monthlyLink: LINK_ENTERPRISE_MONTHLY,
+      yearlyLink: LINK_ENTERPRISE_YEARLY
     }
   ];
-  // ---------------------------------------------
 
   return (
     <section id="pricing" className="py-32 px-6 relative bg-white scroll-mt-20">
@@ -753,8 +765,9 @@ const PricingSection = () => {
                 </li>
               </ul>
 
+              {/* FIX: Leitet jetzt zu Stripe weiter, statt zur Login-Page */}
               <button 
-                onClick={() => navigate('/login')} 
+                onClick={() => window.location.href = isAnnual ? plan.yearlyLink : plan.monthlyLink} 
                 className={`w-full py-4 rounded-xl font-bold transition-all shadow-lg ${
                   plan.highlight 
                   ? 'bg-brand-600 text-white hover:bg-brand-500 shadow-brand-900/30' 

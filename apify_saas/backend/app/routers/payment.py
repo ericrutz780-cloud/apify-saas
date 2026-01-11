@@ -15,17 +15,29 @@ stripe.api_key = STRIPE_API_KEY
 # ⚠️ WICHTIG: Ersetze die Platzhalter unten mit den IDs aus dem Terminal-Output von setup_stripe.py!
 
 PLAN_CREDITS = {
-    "price_STARTER_ID_HIER_EINFÜGEN": 1500,     # Starter
-    "price_PRO_ID_HIER_EINFÜGEN": 5000,         # Pro
-    "price_AGENCY_ID_HIER_EINFÜGEN": 15000,     # Agency
-    "price_FOUNDER_ID_HIER_EINFÜGEN": 5000      # Founder Deal
+    # STARTER (1.500 Credits)
+    "price_DEINE_ID_STARTER_MONATLICH": 1500,
+    "price_DEINE_ID_STARTER_JAEHRLICH": 1500,
+
+    # PRO (10.000 Credits)
+    "price_DEINE_ID_PRO_MONATLICH":     10000,
+    "price_DEINE_ID_PRO_JAEHRLICH":     10000,
+
+    # ENTERPRISE (50.000 Credits)
+    "price_DEINE_ID_ENTERPRISE_MONATLICH": 50000,
+    "price_DEINE_ID_ENTERPRISE_JAEHRLICH": 50000,
 }
 
 PLAN_NAMES = {
-    "price_STARTER_ID_HIER_EINFÜGEN": "starter",
-    "price_PRO_ID_HIER_EINFÜGEN": "pro",
-    "price_AGENCY_ID_HIER_EINFÜGEN": "agency",
-    "price_FOUNDER_ID_HIER_EINFÜGEN": "pro"     # Founder ist technisch ein "pro" Plan
+    # Hier dieselben "price_" IDs nochmal eintragen:
+    "price_DEINE_ID_STARTER_MONATLICH": "starter",
+    "price_DEINE_ID_STARTER_JAEHRLICH": "starter",
+
+    "price_DEINE_ID_PRO_MONATLICH":     "pro",
+    "price_DEINE_ID_PRO_JAEHRLICH":     "pro",
+
+    "price_DEINE_ID_ENTERPRISE_MONATLICH": "enterprise",
+    "price_DEINE_ID_ENTERPRISE_JAEHRLICH": "enterprise",
 }
 # --- KONFIGURATION ENDE ---
 

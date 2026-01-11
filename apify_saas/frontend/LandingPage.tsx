@@ -29,6 +29,15 @@ import {
 
 // --- Helper Components ---
 
+const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/DeinLinkFuerStarterMonat"; 
+const LINK_STARTER_YEARLY     = "https://buy.stripe.com/DeinLinkFuerStarterJahr"; 
+
+const LINK_PRO_MONTHLY        = "https://buy.stripe.com/DeinLinkFuerProMonat"; 
+const LINK_PRO_YEARLY         = "https://buy.stripe.com/DeinLinkFuerProJahr"; 
+
+const LINK_ENTERPRISE_MONTHLY = "https://buy.stripe.com/DeinLinkFuerEnterpriseMonat"; 
+const LINK_ENTERPRISE_YEARLY  = "https://buy.stripe.com/DeinLinkFuerEnterpriseJahr";
+
 const SectionBadge = ({ children }: { children?: React.ReactNode }) => (
   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-600 text-[11px] font-bold uppercase tracking-wider mb-4 shadow-sm select-none">
     <Zap className="w-3 h-3 fill-brand-600" />

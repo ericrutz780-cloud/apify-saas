@@ -349,8 +349,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 await refreshUser();
                 localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
                 setLoading(false);
-                // Important: We navigate to the results path, but since this wrapper handles both,
-                // the state is preserved/reloaded via initialResultId logic below.
                 navigate(`/results/${result.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`);
             }, 500);
         } catch (err: any) { 
@@ -377,7 +375,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 if (!q) setQuery(parsed.params.query);
                 if (!p && parsed.params.platform) setPlatform(parsed.params.platform);
                 if (!c && parsed.params.country) setCountry(parsed.params.country);
-                
                 if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
             }
         }
@@ -388,7 +385,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         }
     }, [searchParams, initialResultId, handleSearch, loading]);
 
-    // Results Processing Logic - ROBUST DATA HANDLING FIX
+
+    // Results Processing Logic - DATA HANDLING FIX
     const transformedMetaAds = useMemo(() => {
         if (!result) return [];
         
@@ -403,7 +401,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         // @ts-ignore
         if (rawAds.length > 0 && rawAds[0].demographics) return rawAds; 
         
-        // 3. Otherwise run through adapter
+        // 3. Otherwise run through adapter, wrapping in {data: ...} as expected by adAdapter
         const adsToTransform = rawAds.map((ad: any) => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
@@ -605,7 +603,6 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
                             {(billingCycle === 'topup' ? creditTopupPlans : pricingPlans).map((plan: any) => (
                                 <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
-                                    {plan.popular && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</div>}
                                     <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
                                     <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
                                     <div className="p-6 bg-white rounded-b-2xl"><button className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>{billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}</button></div>

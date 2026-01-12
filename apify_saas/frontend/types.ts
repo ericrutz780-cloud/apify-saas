@@ -1,4 +1,3 @@
-
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -16,7 +15,8 @@ export interface SearchHistoryItem {
   limit: number;
 }
 
-export type UserPlan = 'starter' | 'pro' | 'agency';
+// FIX: 'enterprise' hinzugefügt, damit App.tsx keinen Fehler wirft
+export type UserPlan = 'starter' | 'pro' | 'agency' | 'enterprise';
 
 export interface User {
   id: string;

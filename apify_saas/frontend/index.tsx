@@ -1,9 +1,10 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import './index.css'; // WICHTIG: Styles laden
+// Styles (falls vorhanden, sonst erstellt Vite eine leere Datei im Build)
+import './index.css'; 
 
-console.log("🚀 App is initializing...");
+console.log("🚀 Booting App...");
 
 const container = document.getElementById('root');
 
@@ -15,17 +16,11 @@ if (container) {
         <App />
       </React.StrictMode>
     );
-    console.log("✅ App rendered successfully.");
-  } catch (error) {
-    console.error("🔥 Critical Error rendering App:", error);
-    // Zeigt den Fehler direkt auf dem Bildschirm an, statt nur weiß zu bleiben
-    container.innerHTML = `<div style="padding: 20px; color: red; font-family: sans-serif;">
-      <h1>Critical Error</h1>
-      <p>The application failed to start.</p>
-      <pre>${error instanceof Error ? error.message : JSON.stringify(error)}</pre>
-    </div>`;
+    console.log("✅ App mounted.");
+  } catch (err) {
+    console.error("🔥 Mount Error:", err);
+    container.innerHTML = `<div style="padding:20px;color:red"><h1>Failed to mount App</h1><pre>${err}</pre></div>`;
   }
 } else {
-  console.error("❌ Root element with id 'root' not found in index.html");
-  document.body.innerHTML = "<h1 style='color:red'>Fatal Error: Root element missing</h1>";
+  console.error("❌ Fatal: #root element missing in index.html");
 }

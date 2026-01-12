@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { HashRouter as Router, Routes, Route, useNavigate, Navigate, useSearchParams, useParams, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useNavigate, Navigate, useSearchParams, useParams, Link, Outlet } from 'react-router-dom';
 import Layout from './components/Layout';
 import { api } from './services/api';
 import { User, SearchResult, MetaAd, TikTokAd, UserPlan } from './types';
@@ -81,7 +81,8 @@ const STATUS_MESSAGES = [
 ];
 
 // --- Components ---
-const hasAutoRun = useRef(false);
+// FIX: hasAutoRun removed from here. It must be inside a component.
+
 const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => {
     return (
         <div className="flex flex-col gap-1.5 w-full sm:w-64 animate-in fade-in zoom-in-95 duration-300">
@@ -303,6 +304,9 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
     
+    // FIX 1: useRef MUSS hier drinnen sein
+    const hasAutoRun = useRef(false);
+
     // Results State
     const [result, setResult] = useState<SearchResult | null>(null); // <--- HIER MUSS DAS ERGEBNIS REIN
     const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
@@ -353,7 +357,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
             
             console.log("✅ Search Complete. Result:", apiResult); // DEBUG
 
-            // FIX: Ergebnis SOFORT setzen, nicht erst nach Reload!
+            // FIX 3: Ergebnis SOFORT setzen, nicht erst nach Reload!
             setResult(apiResult);
             localStorage.setItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
             
@@ -424,7 +428,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
 
         // 2. If data is already transformed (has demographics), use it directly
         // @ts-ignore
-        if (rawAds.length > 0 && rawAds[0].demographics) return rawAds; 
+        if (rawAds.length > 0 && (rawAds[0].efficiency_score !== undefined || rawAds[0].demographics)) return rawAds; 
         
         // 3. Otherwise run through adapter, wrapping in {data: ...} as expected by adAdapter
         const adsToTransform = rawAds.map((ad: any) => ({ data: ad }));
@@ -702,6 +706,12 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     )
 }
 
+// FIX 2: User Check Wrapper to prevent Layout Crash on Login
+const ProtectedRoute = ({ user, children }: { user: User | null, children: React.ReactElement }) => {
+    if (!user) return <Navigate to="/login" replace />;
+    return <Layout user={user}>{children}</Layout>;
+};
+
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -735,35 +745,26 @@ const App = () => {
     <ErrorBoundary>
         <Router>
             <Routes>
-                {/* 1. Public Routes */}
+                {/* 1. PUBLIC ROUTES (No Layout) - Fixes White Screen Crash */}
+                <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
+                <Route path="/register" element={<Register />} />
                 <Route path="/demo" element={<DemoPage />} />
                 <Route path="/pricing" element={<PricingPage />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
                 <Route path="/email-confirmed" element={<EmailConfirmed />} />
+                <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
                 
-                {/* 2. Main App Routes */}
-                <Route path="*" element={
-                    <Layout user={user}>
-                        <Routes>
-                            <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
-                            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
-                            <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
-                            {/* FIX: SearchPageLogicWrapper combines search & results view logic */}
-                            <Route path="/search" element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-                            <Route 
-                                path="/results/:id" 
-                                element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} /> : <Navigate to="/login" replace />} 
-                            />
-                            <Route 
-                                path="/saved" 
-                                element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={() => {}} onRemove={() => {}} /> : <Navigate to="/login" replace />} 
-                            />
-                            <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-                            <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
-                        </Routes>
-                    </Layout>
-                } />
+                {/* 2. PROTECTED ROUTES (With Layout) */}
+                <Route element={<ProtectedRoute user={user} children={<Outlet />} />}>
+                    <Route path="/dashboard" element={<Dashboard user={user!} />} />
+                    <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div>} />
+                    <Route path="/search" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} />} />
+                    <Route path="/results/:id" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} />} />
+                    <Route path="/saved" element={<SavedPage user={user!} refreshUser={refreshUser} onOpenModal={() => {}} onRemove={() => {}} />} />
+                    <Route path="/account" element={<Account user={user!} refreshUser={refreshUser} />} />
+                </Route>
+
+                {/* Catch all */}
+                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </Router>
     </ErrorBoundary>

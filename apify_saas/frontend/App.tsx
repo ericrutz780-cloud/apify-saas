@@ -81,7 +81,7 @@ const STATUS_MESSAGES = [
 ];
 
 // --- Components ---
-
+const hasAutoRun = useRef(false);
 const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => {
     return (
         <div className="flex flex-col gap-1.5 w-full sm:w-64 animate-in fade-in zoom-in-95 duration-300">
@@ -286,6 +286,9 @@ const Dashboard = ({ user }: { user: User }) => {
 }
 
 // Wrapper to handle shared state for Search and Results logic
+// ... (Imports und andere Komponenten bleiben gleich) ...
+
+// Wrapper to handle shared state for Search and Results logic
 const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User, refreshUser: () => void, initialResultId?: string }) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -299,16 +302,15 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const [progress, setProgress] = useState(0);
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
-    const hasAutoRun = useRef(false);
-
+    
     // Results State
-    const [result, setResult] = useState<SearchResult | null>(null);
+    const [result, setResult] = useState<SearchResult | null>(null); // <--- HIER MUSS DAS ERGEBNIS REIN
     const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
     const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
     const [sortBy, setSortBy] = useState<'efficiency_score' | 'reach' | 'newest'>('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
     
-    // Modal & Export State
+    // ... (Modal & Export State bleiben gleich) ...
     const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
     const [exportData, setExportData] = useState<SearchResult | null>(null);
     const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
@@ -335,7 +337,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         }, 100);
 
         try {
-            const result = await api.runSearch({ 
+            console.log("🚀 Starting Search for:", query);
+            const apiResult = await api.runSearch({ 
                 query, 
                 platform, 
                 country, 
@@ -343,47 +346,69 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 startDateMin: dateRange.from?.toISOString().split('T')[0], 
                 startDateMax: dateRange.to?.toISOString().split('T')[0] 
             });
-            clearInterval(progressTimer); setProgress(100); setStatusIndex(STATUS_MESSAGES.length - 1);
             
-            setTimeout(async () => {
-                await refreshUser();
-                localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
-                setLoading(false);
-                navigate(`/results/${result.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`);
-            }, 500);
+            clearInterval(progressTimer); 
+            setProgress(100); 
+            setStatusIndex(STATUS_MESSAGES.length - 1);
+            
+            console.log("✅ Search Complete. Result:", apiResult); // DEBUG
+
+            // FIX: Ergebnis SOFORT setzen, nicht erst nach Reload!
+            setResult(apiResult);
+            localStorage.setItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
+            
+            await refreshUser();
+            setLoading(false);
+            
+            // URL aktualisieren, aber ohne Reload, damit der State erhalten bleibt
+            navigate(`/results/${apiResult.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`, { replace: true });
+            
         } catch (err: any) { 
-            clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
+            console.error("❌ Search Failed:", err);
+            clearInterval(progressTimer); 
+            setLoading(false); 
+            setError(err.message || 'Search failed.'); 
         }
     }, [query, platform, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
-    // Initialize state
+    // Initialize state (Nur beim ersten Laden oder wenn ID sich ändert)
     useEffect(() => {
         const q = searchParams.get('q');
         const p = searchParams.get('platform');
         const c = searchParams.get('country');
         const autorun = searchParams.get('autorun');
         
-        if (q) setQuery(q);
-        if (p && (p === 'meta' || p === 'tiktok')) setPlatform(p as 'meta' | 'tiktok');
-        if (c) setCountry(c);
+        // Inputs syncen
+        if (q && q !== query) setQuery(q);
+        if (p && (p === 'meta' || p === 'tiktok') && p !== platform) setPlatform(p as 'meta' | 'tiktok');
+        if (c && c !== country) setCountry(c);
 
-        if (initialResultId) {
+        // Daten laden, falls ID vorhanden und noch kein Ergebnis im State
+        if (initialResultId && !result) {
             const stored = localStorage.getItem(`search_${initialResultId}`);
             if (stored) {
-                const parsed = JSON.parse(stored);
-                setResult(parsed);
-                if (!q) setQuery(parsed.params.query);
-                if (!p && parsed.params.platform) setPlatform(parsed.params.platform);
-                if (!c && parsed.params.country) setCountry(parsed.params.country);
-                if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
+                try {
+                    const parsed = JSON.parse(stored);
+                    console.log("📥 Loaded result from LocalStorage:", parsed);
+                    setResult(parsed);
+                    
+                    // Sync Tabs basierend auf geladenen Daten
+                    if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
+                } catch (e) {
+                    console.error("Error parsing stored result", e);
+                }
             }
         }
-
+        
+        // Auto-Run Logik
         if (autorun === 'true' && q && !hasAutoRun.current && !loading && !initialResultId) {
+            console.log("🔄 Auto-Run triggered via URL");
             hasAutoRun.current = true;
             handleSearch();
         }
-    }, [searchParams, initialResultId, handleSearch, loading]);
+        // Wir nutzen eine Ref, um Endlosschleifen zu verhindern
+        // const hasAutoRun = useRef(false); <--- Dies muss oben in der Komponente definiert sein!
+    }, [initialResultId, searchParams]); // Abhängigkeiten reduziert, um Loops zu vermeiden
 
 
     // Results Processing Logic - DATA HANDLING FIX

@@ -1,30 +1,30 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { HashRouter as Router, Routes, Route, useNavigate, Navigate, useSearchParams, useParams } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { HashRouter as Router, Routes, Route, useNavigate, Navigate, useSearchParams, useParams, Link } from 'react-router-dom';
 import Layout from './components/Layout';
 import { api } from './services/api';
-import { User, SearchParams, SearchResult, MetaAd, TikTokAd, SavedAd, UserPlan, SearchHistoryItem } from './types';
+import { User, SearchResult, MetaAd, TikTokAd, UserPlan } from './types';
 import MetaAdCard from './components/MetaAdCard';
-import { EmailConfirmed } from './EmailConfirmed';
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
+import ExportModal from './components/ExportModal';
 import DateRangePicker from './components/DateRangePicker';
 import CountrySelector from './components/CountrySelector';
 import ErrorBoundary from './components/ErrorBoundary';
 import AdFeed from './AdFeed';
 import { 
-    Search, Loader2, AlertCircle, CheckCircle2, CreditCard, Lock, 
-    ArrowRight, TrendingUp, Zap, Clock, Filter, Facebook, Instagram, Video,
-    ChevronDown, SlidersHorizontal, BarChart3, ListFilter, ArrowUpDown, Globe, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles
+    Search, Loader2, AlertCircle, CheckCircle2, CreditCard, 
+    ArrowRight, Zap, Filter, Facebook, Instagram, Video,
+    ChevronDown, BarChart3, ListFilter, ArrowUpDown, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles, Users as UsersIcon, Coins
 } from 'lucide-react';
 // @ts-ignore
 import { cleanAndTransformData } from './adAdapter';
-import { DemoPage } from './DemoPage';
 
-// --- NEUE IMPORTS ---
+// --- Pages Imports ---
+import { DemoPage } from './DemoPage';
 import { PricingPage } from './PricingPage';
 import { Register } from './Register';
-import { LandingPage } from './LandingPage'; // <-- NEU
-// --------------------
+import { LandingPage } from './LandingPage';
+import { EmailConfirmed } from './EmailConfirmed';
 
 // --- Constants ---
 const COUNTRIES = [
@@ -63,11 +63,42 @@ const COUNTRIES = [
 
 const PLAN_LIMITS: Record<UserPlan, number> = {
     'starter': 100,
-    'pro': 250,
-    'agency': 500
+    'pro': 1000,
+    'agency': 5000
 };
 
+const STATUS_MESSAGES = [
+    "Spinning up scraper nodes...",
+    "Connecting to Meta Ad Library...",
+    "Authenticating secure session...",
+    "Querying ad database...",
+    "Scraping creative assets...",
+    "Analyzing targeting demographics...",
+    "Extracting spend estimates...",
+    "Calculating viral efficiency...",
+    "Finalizing report results..."
+];
+
 // --- Components ---
+
+const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => {
+    return (
+        <div className="flex flex-col gap-1.5 w-full sm:w-64 animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between px-0.5">
+                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider animate-pulse">{status}</span>
+                <span className="text-sm font-bold text-gray-700">{progress}%</span>
+            </div>
+            <div className="flex items-center gap-3">
+                <div className="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-brand-500 rounded-full transition-all duration-500 ease-out" 
+                        style={{ width: `${progress}%` }}
+                    ></div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const Toast = ({ message, onUndo, onClose, visible }: { message: string, onUndo?: () => void, onClose: () => void, visible: boolean }) => {
     if (!visible) return null;
@@ -90,7 +121,7 @@ const Toast = ({ message, onUndo, onClose, visible }: { message: string, onUndo?
     );
 };
 
-// --- Pages ---
+// --- Pages (New Design Integrated) ---
 
 const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
   const navigate = useNavigate();
@@ -145,6 +176,10 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
             {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Sign in'}
           </button>
         </form>
+        <div className="text-center mt-4">
+            <span className="text-sm text-gray-500">Don't have an account? </span>
+            <Link to="/register" className="text-sm font-medium text-brand-600 hover:text-brand-500">Sign up</Link>
+        </div>
       </div>
     </div>
   );
@@ -158,17 +193,10 @@ const Dashboard = ({ user }: { user: User }) => {
     }, {} as Record<string, number>);
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
-    // --- Caching Logik ---
-    const handleRerun = (item: SearchHistoryItem) => {
-        const cachedResult = localStorage.getItem(`search_${item.id}`);
-
-        if (cachedResult) {
-            console.log("♻️ Lade aus Cache:", item.id);
-            navigate(`/results/${item.id}`);
-        } else {
-            const countryParam = item.country ? `&country=${item.country}` : '';
-            navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit}${countryParam}`);
-        }
+    const handleRerun = (item: any) => {
+        // Simple navigation to trigger search again
+        const countryParam = item.country ? `&country=${item.country}` : '';
+        navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit || 100}${countryParam}`);
     };
 
     return (
@@ -181,9 +209,9 @@ const Dashboard = ({ user }: { user: User }) => {
                 </div>
             </header>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col"><div className="flex items-center justify-between mb-4"><span className="text-sm font-medium text-gray-500">Credits Available</span><div className="p-2 bg-gray-50 rounded-full border border-gray-100"><CreditCard className="w-4 h-4 text-gray-600" /></div></div><div className="flex items-baseline space-x-2"><p className="text-3xl font-semibold text-gray-900">{user.credits}</p><span className="text-sm text-gray-500">credits</span></div><div className="mt-auto pt-4 flex items-center text-sm"><span onClick={() => navigate('/account?tab=billing')} className="text-brand-600 font-medium hover:text-brand-700 cursor-pointer flex items-center">Top up credits <ArrowRight className="w-4 h-4 ml-1" /></span></div></div>
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col"><div className="flex items-center justify-between mb-4"><span className="text-sm font-medium text-gray-500">Credits Available</span><div className="p-2 bg-gray-50 rounded-full border border-gray-100"><CreditCard className="w-4 h-4 text-gray-600" /></div></div><div className="flex items-baseline space-x-2"><p className="text-3xl font-semibold text-gray-900">{user.credits}</p><span className="text-sm text-gray-500">credits</span></div><div className="mt-auto pt-4 flex items-center text-sm"><span onClick={() => navigate('/account?tab=billing&mode=topup')} className="text-brand-600 font-medium hover:text-brand-700 cursor-pointer flex items-center">Top up credits <ArrowRight className="w-4 h-4 ml-1" /></span></div></div>
                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col"><div className="flex items-center justify-between mb-4"><span className="text-sm font-medium text-gray-500">Total Searches</span><div className="p-2 bg-gray-50 rounded-full border border-gray-100"><BarChart3 className="w-4 h-4 text-gray-600" /></div></div><div className="flex items-baseline space-x-2 mb-3"><p className="text-3xl font-semibold text-gray-900">{user.searchHistory.length}</p></div><div className="mt-auto flex flex-wrap gap-2">{topSearches.length > 0 ? topSearches.map(term => (<span key={term} onClick={() => navigate(`/search?q=${encodeURIComponent(term)}`)} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-50 text-brand-700 hover:bg-brand-100 cursor-pointer border border-brand-100 transition-colors">{term}</span>)) : <span className="text-xs text-gray-400 italic">No top searches yet</span>}</div></div>
-                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col"><div className="flex items-center justify-between mb-4"><span className="text-sm font-medium text-gray-500">Active Plan</span><div className="p-2 bg-gray-50 rounded-full border border-gray-100"><Zap className="w-4 h-4 text-gray-600" /></div></div><div className="flex items-baseline space-x-2"><p className="text-3xl font-semibold text-gray-900 capitalize">{user.plan}</p></div><div className="mt-auto pt-4 flex items-center text-sm text-gray-500">Renews on Nov 1, 2023</div></div>
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col"><div className="flex items-center justify-between mb-4"><span className="text-sm font-medium text-gray-500">Active Plan</span><div className="p-2 bg-gray-50 rounded-full border border-gray-100"><Zap className="w-4 h-4 text-gray-600" /></div></div><div className="flex items-baseline space-x-2"><p className="text-3xl font-semibold text-gray-900 capitalize">{user.plan}</p></div><div className="mt-auto pt-4 flex items-center text-sm text-gray-500 justify-between"><span>Renews monthly</span><Link to="/account?tab=billing" className="text-brand-600 hover:text-brand-700 font-medium">Change</Link></div></div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between"><h3 className="text-base font-semibold text-gray-900">Recent Searches</h3></div>
@@ -202,8 +230,10 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
     const [query, setQuery] = useState('');
     const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta');
     const [country, setCountry] = useState('DE');
-    const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>({ from: undefined, to: undefined });
+    const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>(() => ({ from: undefined, to: undefined }));
     const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -213,54 +243,79 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
         if (p && (p === 'meta' || p === 'tiktok')) setPlatform(p as 'meta' | 'tiktok');
     }, [searchParams]);
 
-    // FIX: Variable 'cost' muss VOR 'canAfford' definiert werden!
     const limit = PLAN_LIMITS[user.plan] || 100;
-    const cost = limit;
+    const cost = limit; // Or calculate based on platform (e.g. TikTok 500)
     const canAfford = user.credits >= cost;
+    const remainingCredits = user.credits - cost;
 
-    const handleSearch = async () => {
-        if (!query || !canAfford) return;
-        setLoading(true); setError('');
+    const handleSearch = useCallback(async () => {
+        if (!query || !canAfford || loading) return;
+        setLoading(true); setProgress(0); setStatusIndex(0); setError('');
+
+        // Visual progress simulation
+        const progressTimer = setInterval(() => {
+            setProgress(prev => {
+                const next = Math.min(99, prev + (100 / (7000 / 100)));
+                if (next > (100 / STATUS_MESSAGES.length) * (statusIndex + 1)) {
+                    setStatusIndex(idx => Math.min(STATUS_MESSAGES.length - 1, idx + 1));
+                }
+                return next;
+            });
+        }, 100);
+
         try {
-            const result = await api.runSearch({ query, platform, country, limit: cost, startDateMin: dateRange.from?.toISOString().split('T')[0], startDateMax: dateRange.to?.toISOString().split('T')[0] });
-            await refreshUser();
-            localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
-            navigate(`/results/${result.id}`);
-        } catch (err: any) { setError(err.message || 'Search failed.'); } finally { setLoading(false); }
-    };
+            const result = await api.runSearch({ 
+                query, 
+                platform, 
+                country, 
+                limit: cost, 
+                startDateMin: dateRange.from?.toISOString().split('T')[0], 
+                startDateMax: dateRange.to?.toISOString().split('T')[0] 
+            });
+            clearInterval(progressTimer); setProgress(100); setStatusIndex(STATUS_MESSAGES.length - 1);
+            setTimeout(async () => {
+                await refreshUser();
+                localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
+                setLoading(false);
+                navigate(`/results/${result.id}`);
+            }, 500);
+        } catch (err: any) { 
+            clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
+        }
+    }, [query, platform, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
     return (
         <div className="w-full">
-            <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok.</p></div>
-            <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
-                <div className="flex items-center px-4"><Search className="w-6 h-6 text-gray-400 mr-3" /><input type="text" className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" placeholder="e.g. 'Skincare', 'Nike'..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} autoFocus /></div>
-                <div className="h-px bg-gray-100 mx-4"></div>
-                <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-                    <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
-                        <div className="relative flex-1 md:flex-none"><div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">{(['meta', 'tiktok'] as const).map((p) => (<button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${platform === p ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>{p}</button>))}</div></div>
-                        {(platform === 'meta') && <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />}
-                        <DateRangePicker date={dateRange} setDate={setDateRange} />
+            <div className="w-full">
+                <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok.</p></div>
+                <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
+                    <div className="flex items-center px-4"><Search className="w-6 h-6 text-gray-400 mr-3" /><input type="text" className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" placeholder="e.g. 'Skincare', 'Nike'..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} autoFocus /></div>
+                    <div className="h-px bg-gray-100 mx-4"></div>
+                    <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
+                            <div className="relative flex-1 md:flex-none"><div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">{(['meta', 'tiktok'] as const).map((p) => (<button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${platform === p ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>{p}</button>))}</div></div>
+                            {(platform === 'meta') && <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />}
+                            <DateRangePicker date={dateRange} setDate={setDateRange} />
+                        </div>
+                        <div className="text-right flex items-center gap-3 w-full md:w-auto justify-between md:justify-end mt-4 md:mt-0 min-h-[48px]">
+                            {loading ? <SearchProgressBar progress={Math.floor(progress)} status={STATUS_MESSAGES[statusIndex]} /> : <><div className="text-sm"><span className="text-gray-500 mr-1">Cost:</span><span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span></div><button onClick={handleSearch} disabled={!query || !canAfford || loading} className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm flex items-center">Run Search <ArrowRight className="w-4 h-4 ml-2" /></button></>}
+                        </div>
                     </div>
-                    <div className="text-right flex items-center gap-3"><div className="text-sm"><span className="text-gray-500 mr-1">Cost:</span><span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span></div><button onClick={handleSearch} disabled={!query || !canAfford || loading} className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm flex items-center">{loading ? <Loader2 className="animate-spin w-4 h-4" /> : <>Run Search <ArrowRight className="w-4 h-4 ml-2" /></>}</button></div>
+                </div>
+                <div className="mt-4 flex justify-between items-start px-2">
+                     {!canAfford ? <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100"><AlertCircle className="w-4 h-4 mr-2" /> Insufficient credits. You have {user.credits}.</div> : <div className="text-sm text-gray-500 flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left.</div>}
+                     {error && <div className="text-red-600 text-sm">{error}</div>}
                 </div>
             </div>
-            {!canAfford && <div className="mt-4 flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100"><AlertCircle className="w-4 h-4 mr-2" /> Insufficient credits.</div>}
-            {error && <div className="mt-4 text-red-600 text-sm">{error}</div>}
         </div>
     );
 };
 
-const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void, onToggleSave: (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => void }) => {
+const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave, onOpenExport }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void, onToggleSave: (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => void, onOpenExport: (data: any) => void }) => {
     const navigate = useNavigate();
     const { id } = useParams();
     const [result, setResult] = useState<SearchResult | null>(null);
     const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
-    const [query, setQuery] = useState('');
-    const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta');
-    const [country, setCountry] = useState('DE');
-    const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>({ from: undefined, to: undefined });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
     const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
     const [sortBy, setSortBy] = useState<'efficiency_score' | 'reach' | 'newest'>('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
@@ -270,34 +325,15 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave }: { user: U
         if (stored) {
             const parsed = JSON.parse(stored);
             setResult(parsed);
-            setQuery(parsed.params.query);
-            if (parsed.params.platform !== 'both') setPlatform(parsed.params.platform);
-            if (parsed.params.country) setCountry(parsed.params.country);
             if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
         }
     }, [id]);
 
-    const cost = PLAN_LIMITS[user.plan] || 100;
-    const canAfford = user.credits >= cost;
-
-    const handleSearch = async () => {
-        if (!query || !canAfford) return;
-        setLoading(true); setError('');
-        try {
-            const result = await api.runSearch({ query, platform, country, limit: cost, startDateMin: dateRange.from?.toISOString().split('T')[0], startDateMax: dateRange.to?.toISOString().split('T')[0] });
-            await refreshUser();
-            localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
-            navigate(`/results/${result.id}`);
-        } catch (err: any) { setError(err.message || 'Search failed.'); } finally { setLoading(false); }
-    };
-
     const transformedMetaAds = useMemo(() => {
         if (!result || !result.metaAds) return [];
         const ads = result.metaAds;
-        
-        // @ts-ignore
+        // @ts-ignore - Handle raw API response vs cleaned
         if (ads.length > 0 && ads[0].demographics) return ads; 
-        
         const adsToTransform = ads.map(ad => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
@@ -309,6 +345,9 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave }: { user: U
     const facebookAds = transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'));
     const instagramAds = transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('instagram'));
     const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
+    
+    // Can export if Pro or Agency
+    const canExport = user.plan === 'pro' || user.plan === 'agency';
 
     const groupAdsByText = (ads: MetaAd[]) => {
         const groups: { [key: string]: MetaAd[] } = {};
@@ -344,7 +383,8 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave }: { user: U
             });
             return grouped;
         } else {
-            if (formatFilter === 'image') return [];
+            // TikTok Logic
+            if (formatFilter === 'image') return []; // TikTok is video only
             ads.sort((a, b) => {
                 if (sortBy === 'efficiency_score') return b.diggCount - a.diggCount;
                 if (sortBy === 'reach') return b.playCount - a.playCount;
@@ -358,22 +398,6 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave }: { user: U
 
     return (
         <div className="w-full">
-            <div className="w-full">
-                 <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok libraries.</p></div>
-                 <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
-                    <div className="flex items-center px-4"><Search className="w-6 h-6 text-gray-400 mr-3" /><input type="text" className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} /></div>
-                    <div className="h-px bg-gray-100 mx-4"></div>
-                    <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-                         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
-                            <div className="relative flex-1 md:flex-none"><div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">{(['meta', 'tiktok'] as const).map((p) => (<button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${platform === p ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>{p}</button>))}</div></div>
-                            {(platform === 'meta') && <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />}
-                            <DateRangePicker date={dateRange} setDate={setDateRange} />
-                         </div>
-                         <div className="text-right flex items-center gap-3"><button onClick={handleSearch} disabled={!query || !canAfford || loading} className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm flex items-center">{loading ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}</button></div>
-                    </div>
-                </div>
-            </div>
-
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
                 <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full xl:w-auto">
@@ -386,7 +410,20 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave }: { user: U
                     </div>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
                         <div className="flex items-center gap-3 w-full sm:w-auto"><div className="flex items-center text-gray-500 text-sm font-medium whitespace-nowrap"><ListFilter className="w-4 h-4 mr-2" /> Filters:</div><div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5 shadow-sm">{(['all', 'video', 'image'] as const).map((f) => (<button key={f} onClick={() => setFormatFilter(f)} className={`px-3 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${formatFilter === f ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-gray-600 hover:bg-gray-50'}`}>{f === 'all' ? 'All' : f}</button>))}</div></div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end"><span className="text-sm font-medium text-gray-500 whitespace-nowrap">Sort:</span><div className="relative group w-full sm:w-auto"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><ArrowUpDown className="h-3.5 w-3.5 text-gray-400" /></div><select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer hover:bg-gray-50"><option value="efficiency_score">Viral Score</option><option value="reach">Reach</option><option value="newest">Newest</option></select><div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-400" /></div></div></div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+                            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Sort:</span>
+                            <div className="relative group w-full sm:w-auto"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><ArrowUpDown className="h-3.5 w-3.5 text-gray-400" /></div><select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer hover:bg-gray-50"><option value="efficiency_score">Viral Score</option><option value="reach">Reach</option><option value="newest">Newest</option></select><div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-400" /></div></div>
+                            {canExport && (
+                                <button
+                                    onClick={() => onOpenExport(result)}
+                                    className="flex items-center gap-2 px-4 h-[35px] bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-normal transition-all shadow-sm group"
+                                    title="Export results to CSV/JSON"
+                                >
+                                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 rotate-90" /> {/* Using ArrowRight rotated as download icon fallback */}
+                                    Export
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
@@ -419,21 +456,60 @@ const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, r
 
 const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
     const [searchParams, setSearchParams] = useSearchParams();
+    const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'topup'>(searchParams.get('mode') === 'topup' ? 'topup' : 'monthly');
+    useEffect(() => { if (searchParams.get('mode') === 'topup') setBillingCycle('topup'); }, [searchParams]);
     const activeTab = searchParams.get('tab') || 'profile';
+
+    // Pricing Logic re-used from LandingPage conceptually but for dashboard view
+    const pricingPlans = [
+        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points per Search', seats: '1 User Seat', topup: '€25 / 1k Credits', export: '-' },
+        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users & Scaling', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points per Search', seats: '2 User Seats', topup: '€10 / 1k Credits', export: 'CSV/JSON Export', popular: true },
+        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies & Large Teams', monthlyPrice: 'Contact Us', yearlyPrice: 'Contact Us', credits: '50,000 Credits', scans: 'Custom Analysis Limits', seats: '5 User Seats', topup: '€5 / 1k Credits', export: 'API & White Label' },
+    ];
+    const creditTopupPlans = [
+        { name: 'Starter', id: 'starter_topup', subheader: 'Standard Top-up Rate', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },
+        { name: 'Pro', id: 'pro_topup', subheader: 'Best Value Top-up', price: '10 €', unit: '/ 1k Credits', features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], popular: true, buttonText: 'Buy Credits' },
+        { name: 'Enterprise', id: 'enterprise_topup', subheader: 'Wholesale Top-up', price: '5 €', unit: '/ 1k Credits', features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], buttonText: 'Buy Credits' }
+    ];
+
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ name: user.name, email: user.email });
     const [isSaving, setIsSaving] = useState(false);
     useEffect(() => { setFormData({ name: user.name, email: user.email }); }, [user]);
     const handleSave = async () => { setIsSaving(true); try { await api.updateUser(formData); await refreshUser(); setIsEditing(false); } catch (error) { console.error("Failed to update profile", error); } finally { setIsSaving(false); } };
+
     return (
-        <div className="max-w-4xl mx-auto">
-             <div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900">Settings</h1></div>
-             <div className="flex border-b border-gray-200 mb-6">
-                <button onClick={() => setSearchParams({ tab: 'profile' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'profile' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500'}`}>My Profile</button>
-                <button onClick={() => setSearchParams({ tab: 'billing' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'billing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500'}`}>Billing & Plans</button>
+        <div className="w-full">
+             <div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900">Settings</h1><p className="text-gray-500 mt-1">Manage your account and subscription.</p></div>
+             <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+                <button onClick={() => setSearchParams({ tab: 'profile' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'profile' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>My Profile</button>
+                <button onClick={() => setSearchParams({ tab: 'billing' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'billing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Billing & Plans</button>
+                <button onClick={() => setSearchParams({ tab: 'privacy' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'privacy' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Legal & Privacy</button>
              </div>
-             {activeTab === 'profile' && (<div className="space-y-6"><div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div><div className="p-6"><div className="flex items-start space-x-6"><div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div><div className="flex-1 space-y-4 max-w-lg"><div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm" /></div></div></div></div><div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div></div></div>)}
-             {activeTab === 'billing' && (<div className="space-y-8"><div className="bg-white shadow-sm rounded-xl border border-gray-200 p-6"><div className="flex items-center justify-between p-4 bg-brand-50/50 rounded-lg border border-brand-100"><div className="flex items-center"><div className="p-2 bg-brand-100 rounded-md text-brand-600 mr-4"><Zap className="w-5 h-5" /></div><div><div className="text-sm font-semibold text-gray-900 capitalize">{user.plan} Plan</div></div></div><button className="text-sm font-medium text-brand-600">Manage</button></div></div></div>)}
+             
+             {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300"><div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div><div className="p-6"><div className="flex items-start space-x-6"><div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div><div className="flex-1 space-y-4 max-w-lg"><div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div></div></div></div><div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div></div></div>)}
+
+             {activeTab === 'billing' && (
+                 <div className="space-y-8 animate-in fade-in duration-300">
+                    <div className="flex flex-col items-center">
+                        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 mb-8 overflow-x-auto max-w-full">
+                            <button onClick={() => setBillingCycle('monthly')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${billingCycle === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>Monthly</button>
+                            <button onClick={() => setBillingCycle('yearly')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${billingCycle === 'yearly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>Yearly <span className="ml-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full uppercase">Save 20%</span></button>
+                            <button onClick={() => setBillingCycle('topup')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${billingCycle === 'topup' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}><Coins className="w-3.5 h-3.5" /> Top up credits</button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                            {(billingCycle === 'topup' ? creditTopupPlans : pricingPlans).map((plan: any) => (
+                                <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
+                                    {plan.popular && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</div>}
+                                    <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
+                                    <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
+                                    <div className="p-6 bg-white rounded-b-2xl"><button className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>{billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}</button></div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                 </div>
+             )}
         </div>
     )
 }
@@ -441,61 +517,144 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  
   const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
+  const [exportData, setExportData] = useState<SearchResult | null>(null);
+
   const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
 
-  const refreshUser = async () => { try { const userData = await api.getUser(); setUser(userData); } catch (error) { console.error("Error fetching user:", error); } };
-  useEffect(() => { const init = async () => { await refreshUser(); setLoading(false); }; init(); }, []);
-  const showToast = (message: string, onUndo?: () => void) => { setToast({ message, visible: true, onUndo }); setTimeout(() => { setToast(prev => ({ ...prev, visible: false })); }, 5000); };
-  
+  const refreshUser = async () => {
+    try {
+      const userData = await api.getUser();
+      setUser(userData);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      await refreshUser();
+      setLoading(false);
+    };
+    init();
+  }, []);
+
+  const showToast = (message: string, onUndo?: () => void) => {
+      setToast({ message, visible: true, onUndo });
+      setTimeout(() => {
+          setToast(prev => ({ ...prev, visible: false }));
+      }, 5000);
+  };
+
   const handleToggleSave = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
       if (!user) return;
       const existing = user.savedAds.find(s => s.data.id === ad.id && s.type === type);
-      if (existing) await handleRemoveAd(existing.id); else await handleSaveAd(ad, type);
+      if (existing) {
+          await handleRemoveAd(existing.id);
+      } else {
+          await handleSaveAd(ad, type);
+      }
   };
-  const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => { try { await api.saveAd(ad, type); await refreshUser(); showToast("Ad saved to library"); } catch (e) { console.error("Failed to save ad", e); } };
-  const handleRemoveAd = async (id: string) => { try { await api.removeSavedAd(id); await refreshUser(); showToast("Ad removed"); } catch (e) { console.error("Failed to remove ad", e); } };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
+  const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
+      try {
+          await api.saveAd(ad, type);
+          await refreshUser();
+          showToast("Ad saved to library");
+      } catch (e) {
+          console.error("Failed to save ad", e);
+      }
+  };
+
+  const handleRemoveAd = async (id: string) => {
+      const adToRemove = user?.savedAds.find(ad => ad.id === id);
+      try {
+          await api.removeSavedAd(id);
+          await refreshUser(); 
+          showToast("Ad removed from library", async () => {
+              if (adToRemove) {
+                   await api.saveAd(adToRemove.data, adToRemove.type);
+                   await refreshUser();
+              }
+          });
+      } catch (e) {
+          console.error("Failed to remove ad", e);
+      }
+  };
+
+  const handleExport = (format: 'csv' | 'json') => {
+    if (!exportData) return;
+    const fileName = `stella_ads_export_${new Date().toISOString().split('T')[0]}.${format}`;
+    console.log(`Downloading ${fileName}...`);
+    showToast(`Exported ${exportData.metaAds.length + exportData.tikTokAds.length} results as ${format.toUpperCase()}`);
+    setExportData(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+      </div>
+    );
+  }
 
   const primaryAd = selectedAdsGroup?.data[0];
-  const savedAdEntry = primaryAd && user?.savedAds.find(ad => ad.data.id === primaryAd.id && ad.type === selectedAdsGroup.type);
+  const savedAdEntry = primaryAd && user?.savedAds.find(ad => 
+      ad.data.id === primaryAd.id && ad.type === selectedAdsGroup.type
+  );
   const isSaved = !!savedAdEntry;
 
   return (
     <ErrorBoundary>
         <Router>
             <Routes>
-                {/* 1. Public Demo Route (Isolated) */}
+                {/* 1. Public Routes */}
                 <Route path="/demo" element={<DemoPage />} />
-                
-                {/* --- NEU: ZUSÄTZLICHE PUBLIC ROUTES --- */}
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/register" element={<Register />} />
-                
-                {/* Landing Page Route: Zeigt LandingPage, wenn nicht eingeloggt */}
                 <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-                {/* -------------------------------------- */}
-
-                {/* NEU: Die Bestätigungs-Seite */}
                 <Route path="/email-confirmed" element={<EmailConfirmed />} />
                 
                 {/* 2. Main App Routes (Wrapped in Layout) */}
                 <Route path="*" element={
                     <Layout user={user}>
-                        <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
-                        <AdDetailModal isOpen={!!selectedAdsGroup} onClose={() => setSelectedAdsGroup(null)} group={selectedAdsGroup?.data || []} type={selectedAdsGroup?.type} onSave={handleSaveAd} isSaved={isSaved} onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} />
+                        <Toast 
+                            message={toast.message} 
+                            visible={toast.visible} 
+                            onUndo={toast.onUndo} 
+                            onClose={() => setToast(prev => ({ ...prev, visible: false }))} 
+                        />
+                        <AdDetailModal 
+                            isOpen={!!selectedAdsGroup} 
+                            onClose={() => setSelectedAdsGroup(null)} 
+                            group={selectedAdsGroup?.data || []} 
+                            type={selectedAdsGroup?.type}
+                            onSave={handleSaveAd}
+                            isSaved={isSaved}
+                            onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)}
+                        />
+                        <ExportModal 
+                            isOpen={!!exportData} 
+                            onClose={() => setExportData(null)} 
+                            onExport={handleExport}
+                            resultCount={exportData ? (exportData.metaAds.length + exportData.tikTokAds.length) : 0}
+                        />
                         
                         <Routes>
                             <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
                             <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
                             <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
                             <Route path="/search" element={user ? <SearchPage user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-                            <Route path="/results/:id" element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onToggleSave={handleToggleSave} /> : <Navigate to="/login" replace />} />
-                            <Route path="/saved" element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} />
+                            <Route 
+                                path="/results/:id" 
+                                element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onToggleSave={handleToggleSave} onOpenExport={(data) => setExportData(data)} /> : <Navigate to="/login" replace />} 
+                            />
+                            <Route 
+                                path="/saved" 
+                                element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} 
+                            />
                             <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-                            
-                            {/* Fallback */}
                             <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
                         </Routes>
                     </Layout>

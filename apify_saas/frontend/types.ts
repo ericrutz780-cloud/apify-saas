@@ -9,13 +9,13 @@ export interface SearchHistoryItem {
   id: string;
   query: string;
   platform: Platform;
+  country?: string;
   timestamp: string;
   resultsCount: number;
   limit: number;
-  country?: string;
 }
 
-export type UserPlan = 'starter' | 'pro' | 'agency';
+export type UserPlan = 'starter' | 'pro' | 'agency' | 'enterprise';
 
 export interface User {
   id: string;
@@ -45,15 +45,8 @@ export interface MetaAdSnapshot {
   body: {
     text: string;
   };
-  images: Array<{ resized_image_url: string; original_image_url?: string }>;
-  videos: Array<{ video_hd_url: string; video_preview_image_url?: string }>;
-  // --- FIX: Cards Array hinzugefügt für Carousels ---
-  cards?: Array<{
-    original_image_url?: string;
-    resized_image_url?: string;
-    video_preview_image_url?: string;
-    title?: string;
-  }>;
+  images: Array<{ resized_image_url: string }>;
+  videos: Array<{ video_hd_url: string }>;
 }
 
 export interface MetaAdTargetingBreakdown {

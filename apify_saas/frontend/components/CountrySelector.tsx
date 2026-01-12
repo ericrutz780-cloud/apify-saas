@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Globe, Check } from 'lucide-react';
 
@@ -33,17 +32,14 @@ const CountrySelector: React.FC<CountrySelectorProps> = ({ value, onChange, coun
 
     useEffect(() => {
         if (isOpen && listRef.current) {
-            // Scroll to selected
             const selectedEl = itemRefs.current[value];
             if (selectedEl) {
                 selectedEl.scrollIntoView({ block: 'nearest' });
             }
 
-            // Keyboard listener for type-ahead navigation
             const handleKeyDown = (e: KeyboardEvent) => {
                 if (e.key.length === 1 && /[a-z]/i.test(e.key)) {
                     const char = e.key.toLowerCase();
-                    // Find first country starting with the pressed character
                     const match = countries.find(c => c.name.toLowerCase().startsWith(char));
                     if (match) {
                         const el = itemRefs.current[match.code];
@@ -60,15 +56,17 @@ const CountrySelector: React.FC<CountrySelectorProps> = ({ value, onChange, coun
     }, [isOpen, value, countries]);
 
     return (
-        <div className="relative h-10" ref={containerRef}>
+        <div className="relative h-[35px] w-full" ref={containerRef}>
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="h-full flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-3 rounded-lg text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all shadow-sm whitespace-nowrap w-auto min-w-[max-content]"
+                className="h-full w-full flex items-center justify-between gap-2 bg-white border border-gray-200 text-gray-700 px-3 rounded-lg text-sm font-normal hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 transition-all shadow-sm whitespace-nowrap"
             >
-                <Globe className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                <span className="truncate max-w-[150px]">{selectedCountry?.name || 'Select Country'}</span>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ml-1 ${isOpen ? 'rotate-180' : ''}`} />
+                <div className="flex items-center gap-2 overflow-hidden">
+                    <Globe className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{selectedCountry?.name || 'Select Country'}</span>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (

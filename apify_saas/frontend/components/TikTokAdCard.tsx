@@ -1,7 +1,6 @@
-
 import React, { useMemo } from 'react';
 import { TikTokAd } from '../types';
-import { Heart, MessageCircle, Share2, Play, Bookmark, ExternalLink, Video, Clock } from 'lucide-react';
+import { Play, ExternalLink, Video, Clock } from 'lucide-react';
 
 interface TikTokAdCardProps {
   ad: TikTokAd;
@@ -33,7 +32,6 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
 
   const daysActive = Math.floor((new Date().getTime() - new Date(ad.createTimeISO).getTime()) / (1000 * 3600 * 24));
 
-  // Process text
   const { content, hashtags } = useMemo(() => {
     const text = ad.text || '';
     const words = text.replace(/\n/g, ' ').split(/\s+/);
@@ -51,7 +49,7 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
         onClick={handleCardClick}
         className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md transition-all duration-300 cursor-pointer group"
     >
-       {/* 1. Media Content - Always visible */}
+       {/* 1. Media Content */}
        <div className="relative aspect-[4/5] bg-gray-100 overflow-hidden border-b border-gray-100">
           <img 
             src={ad.videoMeta.coverUrl} 
@@ -66,7 +64,6 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
              </div>
           </div>
 
-          {/* Overlays */}
           <div className="absolute top-3 left-3 flex items-center gap-2">
                <div className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-semibold text-gray-700 shadow-sm flex items-center">
                   <Clock className="w-3 h-3 mr-1 text-gray-500" />
@@ -80,7 +77,6 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
               </div>
           </div>
 
-          {/* Action Button - Bottom Right */}
           {onAction && actionIcon && (
              <button
                 onClick={handleActionClick}
@@ -91,7 +87,7 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
           )}
        </div>
 
-       {/* 2. Metrics Row - Always Visible */}
+       {/* 2. Metrics Row */}
         <div className="grid grid-cols-4 divide-x divide-gray-100 border-b border-gray-100 bg-gray-50/50">
             <div className="py-2.5 px-1 text-center">
                 <div className="flex flex-col items-center">
@@ -119,10 +115,9 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
             </div>
         </div>
 
-       {/* DETAILS VIEW ONLY - Identity & Text */}
+       {/* 3. Details */}
        {viewMode === 'details' && (
             <div className="p-4 flex-1 flex flex-col gap-1">
-                {/* Identity */}
                 <div className="flex items-center gap-3 mb-3">
                     <img src={ad.authorMeta.avatarUrl} alt="" className="w-9 h-9 rounded-full border border-gray-200 bg-gray-50 object-cover" />
                     <div className="min-w-0 flex-1">
@@ -132,7 +127,6 @@ const TikTokAdCard: React.FC<TikTokAdCardProps> = ({ ad, viewMode = 'details', o
                     </div>
                 </div>
 
-                {/* Description & Tags */}
                 <div className="text-sm text-gray-600 leading-5 font-normal line-clamp-2 h-10 overflow-hidden">
                     {content || <span className="text-gray-400 italic">No description</span>}
                 </div>

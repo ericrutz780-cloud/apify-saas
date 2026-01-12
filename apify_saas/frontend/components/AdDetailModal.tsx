@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MetaAd, TikTokAd } from '../types';
-import { X, ExternalLink, Play, Calendar, Globe, Monitor, Info, ChevronDown, ChevronUp, Users, ShieldCheck, Download, Save, Facebook, CheckCircle2, Layers, LayoutGrid, Eye, Building2, Sparkles, TrendingUp, Clock, ArrowUpDown, ArrowUp, ArrowDown, FileText, User } from 'lucide-react';
+import { X, Heart, Share2, ExternalLink, Play, Calendar, Globe, Monitor, Info, ChevronDown, ChevronUp, MapPin, Users, ShieldCheck, Download, Save, Facebook, Instagram, CheckCircle2, XCircle, ArrowUp, ArrowDown, FileText, User, CreditCard, Layers, ArrowLeft, MessageCircle, BarChart3, Hash, LayoutGrid, Eye, Building2, Sparkles, Bot, Loader2, ThumbsUp, ThumbsDown, Lightbulb, TrendingUp, Clock, ArrowUpDown } from 'lucide-react';
 
 interface AdDetailModalProps {
   isOpen: boolean;
@@ -8,9 +8,11 @@ interface AdDetailModalProps {
   onSave?: (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => void;
   onRemove?: () => void;
   isSaved?: boolean;
-  group: any[]; 
+  group: any[]; // Accepts array of ads
   type: 'meta' | 'tiktok' | undefined;
 }
+
+// --- AI Analysis Component (Coming Soon - Compact) ---
 
 const AIAnalysisSection = () => {
     return (
@@ -71,8 +73,7 @@ interface MetaAdDetailViewProps {
     openTabs: string[];
     activeTabId: string;
     onOpenAd: (id: string) => void;
-    // FIX: Changed from (ad: MetaAd) => void to () => void because parent handles args
-    onSave: () => void; 
+    onSave: (ad: MetaAd) => void;
     onRemove: () => void;
     isSaved: boolean;
 }
@@ -442,8 +443,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                         </button>
                     ) : (
                         <button 
-                            // FIX: onSave needs no arguments now as they are curried in parent
-                            onClick={() => onSave()} 
+                            onClick={() => onSave?.(ad, 'meta')}
                             className="flex-1 flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm"
                         >
                             <Save className="w-4 h-4" />
@@ -484,6 +484,17 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
   const sortedGroup = React.useMemo(() => {
       if (!group) return [];
       let ads = [...group];
+      if (!sortConfig.key && lastOpenedIds.length > 0) {
+         ads.sort((a, b) => {
+             const idxA = lastOpenedIds.indexOf(a.id);
+             const idxB = lastOpenedIds.indexOf(b.id);
+             if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+             if (idxA !== -1) return -1;
+             if (idxB !== -1) return 1;
+             return 0;
+         });
+         return ads;
+      }
       if (!sortConfig.key) return ads;
       return ads.sort((a, b) => {
           let aValue = 0, bValue = 0;
@@ -662,18 +673,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                         </div>
                     )}
                     {group.map((ad: MetaAd) => (
-                        <MetaAdDetailView 
-                            key={ad.id} 
-                            ad={ad} 
-                            group={sortedGroup} 
-                            isActiveView={activeTabId === ad.id} 
-                            openTabs={openTabs} 
-                            activeTabId={activeTabId} 
-                            onOpenAd={handleOpenAd} 
-                            onSave={() => onSave?.(ad, 'meta')} 
-                            onRemove={() => onRemove?.()} 
-                            isSaved={isSaved || false} 
-                        />
+                        <MetaAdDetailView key={ad.id} ad={ad} group={sortedGroup} isActiveView={activeTabId === ad.id} openTabs={openTabs} activeTabId={activeTabId} onOpenAd={handleOpenAd} onSave={() => onSave?.(ad, 'meta')} onRemove={() => onRemove?.()} isSaved={isSaved || false} />
                     ))}
                 </div>
             </div>

@@ -1,6 +1,7 @@
+
 import React, { useMemo } from 'react';
 import { MetaAd } from '../types';
-import { Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, Bookmark, Zap, Flame, Users } from 'lucide-react';
+import { ExternalLink, Facebook, Instagram, Info, MessageCircle, Globe, Layers, Play, Bookmark, Zap, Flame, Users, TrendingUp } from 'lucide-react';
 
 interface MetaAdCardProps {
   ad: MetaAd;
@@ -14,7 +15,7 @@ interface MetaAdCardProps {
 }
 
 const MetricTag = ({ icon: Icon, value, label, iconColor, textColor }: { icon: any, value: string | number, label: string, iconColor: string, textColor: string }) => (
-  <div className="group/tag relative flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-200 rounded text-[10px] font-bold cursor-help hover:border-gray-300 hover:shadow-sm transition-all">
+  <div className="group/tag relative flex items-center gap-1 px-1.5 py-0.5 bg-white border border-gray-200 rounded text-[10px] font-bold cursor-help hover:border-gray-300 hover:shadow-sm transition-all">
     <Icon className={`w-3 h-3 ${iconColor}`} />
     <span className={textColor}>{value}</span>
     
@@ -95,6 +96,8 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
   const reachVal = targeting?.reach_estimate || 0;
   const formatCompact = (num: number) => new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
   
+  // Factor Logic: Arbitrary calculation for demo purposes if not provided by backend
+  // We simulate a 'factor' based on the viral score. e.g. Score 90 = ~4.5x
   const factor = (viralScore / 20).toFixed(1);
   const showFactor = parseFloat(factor) > 1.5;
 
@@ -131,17 +134,48 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
                     {ad.page_name}
                 </h3>
                 
+                {/* Metric Tags Area (Replaces ID) */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                    <MetricTag icon={Zap} value={viralScore} label="Viral Score" iconColor="text-indigo-600 fill-indigo-100" textColor="text-indigo-700" />
-                    <MetricTag icon={Users} value={formatCompact(reachVal)} label="Est. Reach" iconColor="text-emerald-600" textColor="text-emerald-700" />
-                    {showFactor && <MetricTag icon={Flame} value={`${factor}x`} label="Growth Factor" iconColor="text-orange-500 fill-orange-100" textColor="text-orange-700" />}
+                    {/* Viral Score Tag */}
+                    <MetricTag 
+                        icon={Zap} 
+                        value={viralScore} 
+                        label="Viral Score" 
+                        iconColor="text-indigo-600 fill-indigo-100" 
+                        textColor="text-indigo-700" 
+                    />
+                    
+                    {/* Reach Tag */}
+                    <MetricTag 
+                        icon={Users} 
+                        value={formatCompact(reachVal)} 
+                        label="Est. Reach" 
+                        iconColor="text-emerald-600" 
+                        textColor="text-emerald-700" 
+                    />
+
+                    {/* Conditional Factor Tag */}
+                    {showFactor && (
+                        <MetricTag 
+                            icon={Flame} 
+                            value={`${factor}x`} 
+                            label="Growth Factor" 
+                            iconColor="text-orange-500 fill-orange-100" 
+                            textColor="text-orange-700" 
+                        />
+                    )}
                 </div>
           </div>
           
+          {/* Version Badge */}
           {versionCount > 1 && (
-              <div className="ml-auto flex-shrink-0 cursor-help" title={`There are ${versionCount} versions of this ad`}>
+              <div 
+                className="ml-auto flex-shrink-0 cursor-help"
+                title={`There are ${versionCount} versions of this ad`}
+              >
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100 hover:bg-blue-100 transition-colors shadow-sm whitespace-nowrap">
-                      <Layers className="w-3 h-3" /> {versionCount}
+                      <Layers className="w-3 h-3" />
+                      {versionCount}
                   </span>
               </div>
           )}
@@ -152,14 +186,21 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
         {mediaUrl ? (
           hasVideo ? (
              <div className="relative w-full h-full">
-                 <video src={mediaUrl} className="w-full h-full object-cover bg-black" poster={snapshot.images[0]?.resized_image_url} muted />
+                 <video 
+                    src={mediaUrl} 
+                    className="w-full h-full object-cover bg-black"
+                    poster={snapshot.images[0]?.resized_image_url} 
+                    muted
+                 />
                  <div className="absolute inset-0 flex items-center justify-center bg-black/10">
                     <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/50">
                         <Play className="w-5 h-5 text-white fill-white ml-1" />
                     </div>
                  </div>
              </div>
-          ) : <img src={mediaUrl} alt="Ad Creative" className="w-full h-full object-cover" />
+          ) : (
+            <img src={mediaUrl} alt="Ad Creative" className="w-full h-full object-cover" />
+          )
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
               <Info className="w-8 h-8 mb-2 opacity-50" />
@@ -167,11 +208,17 @@ const MetaAdCard: React.FC<MetaAdCardProps> = ({
           </div>
         )}
 
-        {/* Action Button */}
+        {/* Action Button Overlay - Moved to TOP RIGHT */}
         {onToggleSave && (
             <button
             onClick={handleSaveClick}
-            className={`absolute top-2 right-2 z-10 p-2 rounded-full shadow-sm transition-all duration-200 ${actionIcon ? 'bg-white/90 text-red-600 hover:bg-red-50 hover:text-red-700 border border-gray-200' : isSaved ? 'bg-brand-600 text-white' : 'bg-white/90 text-gray-400 hover:text-gray-900 hover:bg-white border border-gray-200'}`}
+            className={`absolute top-2 right-2 z-10 p-2 rounded-full shadow-sm transition-all duration-200 ${
+                actionIcon 
+                ? 'bg-white/90 text-red-600 hover:bg-red-50 hover:text-red-700 border border-gray-200'
+                : isSaved 
+                    ? 'bg-brand-600 text-white' 
+                    : 'bg-white/90 text-gray-400 hover:text-gray-900 hover:bg-white border border-gray-200'
+            }`}
             title={actionIcon ? "Remove" : (isSaved ? "Remove from saved" : "Save ad")}
             >
                 {actionIcon || <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />}

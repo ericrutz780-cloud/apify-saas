@@ -32,14 +32,17 @@ const CountrySelector: React.FC<CountrySelectorProps> = ({ value, onChange, coun
 
     useEffect(() => {
         if (isOpen && listRef.current) {
+            // Scroll to selected
             const selectedEl = itemRefs.current[value];
             if (selectedEl) {
                 selectedEl.scrollIntoView({ block: 'nearest' });
             }
 
+            // Keyboard listener for type-ahead navigation
             const handleKeyDown = (e: KeyboardEvent) => {
                 if (e.key.length === 1 && /[a-z]/i.test(e.key)) {
                     const char = e.key.toLowerCase();
+                    // Find first country starting with the pressed character
                     const match = countries.find(c => c.name.toLowerCase().startsWith(char));
                     if (match) {
                         const el = itemRefs.current[match.code];

@@ -32,6 +32,7 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({ date, setDate }) => {
   const [tempDate, setTempDate] = useState<DateRange>(date);
   const [viewDate, setViewDate] = useState<Date>(date.from || new Date());
   
+  // Local state for raw text input in the footer
   const [fromInput, setFromInput] = useState('');
   const [toInput, setToInput] = useState('');
 

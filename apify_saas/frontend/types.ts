@@ -1,3 +1,4 @@
+
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -15,7 +16,7 @@ export interface SearchHistoryItem {
   limit: number;
 }
 
-export type UserPlan = 'starter' | 'pro' | 'agency' | 'enterprise';
+export type UserPlan = 'starter' | 'pro' | 'agency';
 
 export interface User {
   id: string;

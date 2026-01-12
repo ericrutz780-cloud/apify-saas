@@ -253,7 +253,6 @@ const Dashboard = ({ user }: { user: User }) => {
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
     const handleRerun = (item: any) => {
-        // FIX: Rerun triggers auto-search by adding &autorun=true
         navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform || 'meta'}&country=${item.country || 'DE'}&autorun=true`);
     };
 
@@ -275,11 +274,9 @@ const Dashboard = ({ user }: { user: User }) => {
                 <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between"><h3 className="text-base font-semibold text-gray-900">Recent Searches</h3></div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Query</th>
-                        {/* FIX: Column changed from Platform to Country */}
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th><th className="relative px-6 py-3"><span className="sr-only">Actions</span></th></tr></thead>
                         <tbody className="bg-white divide-y divide-gray-200">{user.searchHistory.length > 0 ? (user.searchHistory.slice(0, 5).map((search) => (<tr key={search.id} className="hover:bg-gray-50 transition-colors"><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{search.query}</td>
-                            {/* FIX: Display Country name instead of platform */}
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{search.country ? (COUNTRIES.find(c => c.code === search.country)?.name || search.country) : 'Global'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(search.timestamp).toLocaleDateString()}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleRerun(search)} className="text-brand-600 hover:text-brand-900">Rerun</button></td></tr>))) : (<tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">No searches yet</td></tr>)}</tbody></table>
                 </div>
@@ -302,6 +299,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const [progress, setProgress] = useState(0);
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
+    const hasAutoRun = useRef(false);
 
     // Results State
     const [result, setResult] = useState<SearchResult | null>(null);
@@ -321,7 +319,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const canAfford = user.credits >= cost;
     const remainingCredits = user.credits - cost;
 
-    // --- Search Handler (Moved up for auto-run access) ---
+    // --- Search Handler ---
     const handleSearch = useCallback(async () => {
         if (!query || !canAfford || loading) return;
         setLoading(true); setProgress(0); setStatusIndex(0); setError('');
@@ -351,8 +349,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 await refreshUser();
                 localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
                 setLoading(false);
-                // Update URL without full reload if already on result page, else navigate
-                // SearchInputSection remains visible because we are still in SearchLogicWrapper
                 navigate(`/results/${result.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`);
             }, 500);
         } catch (err: any) { 
@@ -360,7 +356,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         }
     }, [query, platform, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
-    // Initialize state from URL params or LocalStorage
+    // Initialize
     useEffect(() => {
         const q = searchParams.get('q');
         const p = searchParams.get('platform');
@@ -371,23 +367,18 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         if (p && (p === 'meta' || p === 'tiktok')) setPlatform(p as 'meta' | 'tiktok');
         if (c) setCountry(c);
 
-        // Load result from LocalStorage if ID exists
         if (initialResultId) {
             const stored = localStorage.getItem(`search_${initialResultId}`);
             if (stored) {
                 const parsed = JSON.parse(stored);
                 setResult(parsed);
-                // Sync inputs if not set from URL
                 if (!q) setQuery(parsed.params.query);
                 if (!p && parsed.params.platform) setPlatform(parsed.params.platform);
                 if (!c && parsed.params.country) setCountry(parsed.params.country);
-                
                 if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
             }
         }
 
-        // Auto-run if triggered from dashboard (only once)
-        const hasAutoRun = useRef(false);
         if (autorun === 'true' && q && !hasAutoRun.current && !loading && !initialResultId) {
             hasAutoRun.current = true;
             handleSearch();
@@ -397,15 +388,13 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
 
     // Results Processing Logic
     const transformedMetaAds = useMemo(() => {
-        // FIX: Check for 'metaAds' OR 'data' (fallback for backend response)
         if (!result) return [];
-        // @ts-ignore
+        // @ts-ignore - FALLBACK LOGIC ADDED
         const rawAds = result.metaAds || result.data || [];
         
         // @ts-ignore
         if (rawAds.length > 0 && rawAds[0].demographics) return rawAds; 
         
-        // Wrap raw items for cleanAndTransformData
         const adsToTransform = rawAds.map((ad: any) => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
@@ -423,7 +412,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         let ads: any[] = [];
         let isMetaTab = false;
         
-        // @ts-ignore - Handle fallback for missing arrays
+        // @ts-ignore
         const tiktokAds = result.tikTokAds || [];
 
         if (activeTab === 'facebook') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'))]; isMetaTab = true; }
@@ -479,7 +468,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
             <div className="w-full">
                 <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok.</p></div>
                 
-                {/* FIX: Search Bar is now ALWAYS visible here */}
                 <SearchInputSection 
                     query={query} setQuery={setQuery} 
                     platform={platform} setPlatform={setPlatform} 
@@ -492,7 +480,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 />
             </div>
 
-            {/* RESULTS SECTION */}
             {result && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
                     <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
@@ -501,7 +488,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                             <div className="hidden sm:block w-px h-6 bg-gray-300 mx-2"></div>
                             <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-start">
                                 {result.params.platform !== 'tiktok' && (<><button onClick={() => setActiveTab('facebook')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'facebook' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" /> Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('facebook')).length}</span></button><button onClick={() => setActiveTab('instagram')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'instagram' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Instagram className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> Instagram <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('instagram')).length}</span></button></>)}
-                                {result.params.platform !== 'meta' && (<button onClick={() => setActiveTab('tiktok')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'tiktok' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Video className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> TikTok <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.tikTokAds.length}</span></button>)}
+                                {/* @ts-ignore */}
+                                {result.params.platform !== 'meta' && (<button onClick={() => setActiveTab('tiktok')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'tiktok' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Video className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> TikTok <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.tikTokAds?.length || 0}</span></button>)}
                             </div>
                         </div>
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
@@ -509,7 +497,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                             <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
                                 <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Sort:</span>
                                 <div className="relative group w-full sm:w-auto"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><ArrowUpDown className="h-3.5 w-3.5 text-gray-400" /></div><select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer hover:bg-gray-50"><option value="efficiency_score">Viral Score</option><option value="reach">Reach</option><option value="newest">Newest</option></select><div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-400" /></div></div>
-                                {/* FIX: Export Button added back */}
                                 {canExport && (
                                     <button
                                         onClick={() => setExportData(result)}
@@ -541,151 +528,204 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
 };
 
 const SavedPage = ({ user, refreshUser, onOpenModal, onRemove }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void, onRemove: (id: string) => void }) => {
-    if (user.savedAds.length === 0) return <div className="flex flex-col items-center justify-center py-32 text-center"><Bookmark className="w-8 h-8 text-brand-600 mb-6" /><h2 className="text-2xl font-bold text-gray-900">No saved ads yet</h2></div>;
-    return (
-        <div className="w-full">
-            <div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Saved Library</h1></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                {user.savedAds.map((savedAd) => (<React.Fragment key={savedAd.id}>{savedAd.type === 'meta' ? <MetaAdCard ad={savedAd.data as MetaAd} onClick={(data) => onOpenModal([data], 'meta')} onToggleSave={() => onRemove(savedAd.id)} actionIcon={<Trash2 className="w-4 h-4" />} /> : <TikTokAdCard ad={savedAd.data as TikTokAd} onClick={(data) => onOpenModal([data], 'tiktok')} onAction={() => onRemove(savedAd.id)} actionIcon={<Trash2 className="w-4 h-4" />} />}</React.Fragment>))}
-            </div>
-        </div>
-    );
+    if (user.savedAds.length === 0) return <div className="flex flex-col items-center justify-center py-32 text-center"><Bookmark className="w-8 h-8 text-brand-600 mb-6" /><h2 className="text-2xl font-bold text-gray-900">No saved ads yet</h2></div>;
+    return (
+        <div className="w-full">
+            <div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Saved Library</h1></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                {user.savedAds.map((savedAd) => (<React.Fragment key={savedAd.id}>{savedAd.type === 'meta' ? <MetaAdCard ad={savedAd.data as MetaAd} onClick={(data) => onOpenModal([data], 'meta')} onToggleSave={() => onRemove(savedAd.id)} actionIcon={<Trash2 className="w-4 h-4" />} /> : <TikTokAdCard ad={savedAd.data as TikTokAd} onClick={(data) => onOpenModal([data], 'tiktok')} onAction={() => onRemove(savedAd.id)} actionIcon={<Trash2 className="w-4 h-4" />} />}</React.Fragment>))}
+            </div>
+        </div>
+    );
 };
 
 const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise<void> }) => {
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'topup'>(searchParams.get('mode') === 'topup' ? 'topup' : 'monthly');
-    useEffect(() => { if (searchParams.get('mode') === 'topup') setBillingCycle('topup'); }, [searchParams]);
-    const activeTab = searchParams.get('tab') || 'profile';
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'topup'>(searchParams.get('mode') === 'topup' ? 'topup' : 'monthly');
+    useEffect(() => { if (searchParams.get('mode') === 'topup') setBillingCycle('topup'); }, [searchParams]);
+    const activeTab = searchParams.get('tab') || 'profile';
 
-    // Pricing Plans Data
-    const pricingPlans = [
-        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points per Search', seats: '1 User Seat', topup: '€25 / 1k Credits', export: '-' },
-        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users & Scaling', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points per Search', seats: '2 User Seats', topup: '€10 / 1k Credits', export: 'CSV/JSON Export', popular: true },
-        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies & Large Teams', monthlyPrice: 'Contact Us', yearlyPrice: 'Contact Us', credits: '50,000 Credits', scans: 'Custom Analysis Limits', seats: '5 User Seats', topup: '€5 / 1k Credits', export: 'API & White Label' },
-    ];
-    const creditTopupPlans = [
-        { name: 'Starter', id: 'starter_topup', subheader: 'Standard Top-up Rate', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },
-        { name: 'Pro', id: 'pro_topup', subheader: 'Best Value Top-up', price: '10 €', unit: '/ 1k Credits', features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], popular: true, buttonText: 'Buy Credits' },
-        { name: 'Enterprise', id: 'enterprise_topup', subheader: 'Wholesale Top-up', price: '5 €', unit: '/ 1k Credits', features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], buttonText: 'Buy Credits' }
-    ];
+    // Pricing Plans Data
+    const pricingPlans = [ { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' }, { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true }, { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '50,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' } ];
+    const creditTopupPlans = [ { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits' }, { name: 'Pro', id: 'pro_topup', price: '10 €', unit: '/ 1k Credits' }, { name: 'Enterprise', id: 'enterprise_topup', price: '5 €', unit: '/ 1k Credits' } ];
 
-    const [isEditing, setIsEditing] = useState(false);
-    const [formData, setFormData] = useState({ name: user.name, email: user.email });
-    const [isSaving, setIsSaving] = useState(false);
-    useEffect(() => { setFormData({ name: user.name, email: user.email }); }, [user]);
-    const handleSave = async () => { setIsSaving(true); try { await api.updateUser(formData); await refreshUser(); setIsEditing(false); } catch (error) { console.error("Failed to update profile", error); } finally { setIsSaving(false); } };
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({ name: user.name, email: user.email });
+    const [isSaving, setIsSaving] = useState(false);
+    useEffect(() => { setFormData({ name: user.name, email: user.email }); }, [user]);
+    const handleSave = async () => { setIsSaving(true); try { await api.updateUser(formData); await refreshUser(); setIsEditing(false); } catch (error) { console.error("Failed to update profile", error); } finally { setIsSaving(false); } };
 
-    return (
-        <div className="w-full">
-             <div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900">Settings</h1><p className="text-gray-500 mt-1">Manage your account and subscription.</p></div>
-             <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-                <button onClick={() => setSearchParams({ tab: 'profile' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'profile' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>My Profile</button>
-                <button onClick={() => setSearchParams({ tab: 'billing' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'billing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Billing & Plans</button>
-                <button onClick={() => setSearchParams({ tab: 'privacy' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'privacy' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Legal & Privacy</button>
-             </div>
-             
-             {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300"><div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div><div className="p-6"><div className="flex items-start space-x-6"><div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div><div className="flex-1 space-y-4 max-w-lg"><div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div></div></div></div><div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div></div>
-             
-             {/* FIX: Contact Us Section added here */}
-             <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center"><h3 className="text-base font-medium text-gray-900">Contact Us</h3></div>
-                <div className="p-6">
-                    <div className="flex items-center gap-4"><div className="p-3 bg-brand-50 rounded-lg text-brand-600"><Mail className="w-5 h-5" /></div><div><p className="text-sm font-medium text-gray-700">Email Support</p><a href="mailto:info@stellaads.com" className="text-sm text-brand-600 hover:text-brand-700 font-semibold">info@stellaads.com</a></div></div>
-                </div>
-             </div>
-             </div>)}
+    return (
+        <div className="w-full">
+             <div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900">Settings</h1><p className="text-gray-500 mt-1">Manage your account and subscription.</p></div>
+             <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+                <button onClick={() => setSearchParams({ tab: 'profile' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'profile' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>My Profile</button>
+                <button onClick={() => setSearchParams({ tab: 'billing' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'billing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Billing & Plans</button>
+                <button onClick={() => setSearchParams({ tab: 'privacy' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'privacy' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Legal & Privacy</button>
+             </div>
+             
+             {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300"><div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div><div className="p-6"><div className="flex items-start space-x-6"><div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div><div className="flex-1 space-y-4 max-w-lg"><div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div></div></div></div><div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div></div>
+             
+             {/* Contact Us Section */}
+             <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center"><h3 className="text-base font-medium text-gray-900">Contact Us</h3></div>
+                <div className="p-6">
+                    <div className="flex items-center gap-4"><div className="p-3 bg-brand-50 rounded-lg text-brand-600"><Mail className="w-5 h-5" /></div><div><p className="text-sm font-medium text-gray-700">Email Support</p><a href="mailto:info@stellaads.com" className="text-sm text-brand-600 hover:text-brand-700 font-semibold">info@stellaads.com</a></div></div>
+                </div>
+             </div>
+             </div>)}
 
-             {activeTab === 'billing' && (
-                 <div className="space-y-8 animate-in fade-in duration-300">
-                    <div className="flex flex-col items-center">
-                        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 mb-8 overflow-x-auto max-w-full">
-                            <button onClick={() => setBillingCycle('monthly')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${billingCycle === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>Monthly</button>
-                            <button onClick={() => setBillingCycle('yearly')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${billingCycle === 'yearly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>Yearly <span className="ml-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full uppercase">Save 20%</span></button>
-                            <button onClick={() => setBillingCycle('topup')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${billingCycle === 'topup' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}><Coins className="w-3.5 h-3.5" /> Top up credits</button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                            {(billingCycle === 'topup' ? creditTopupPlans : pricingPlans).map((plan: any) => (
-                                <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
-                                    <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
-                                    <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
-                                    <div className="p-6 bg-white rounded-b-2xl"><button className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>{billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}</button></div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                 </div>
-             )}
-        </div>
-    )
+             {activeTab === 'billing' && (
+                 <div className="space-y-8 animate-in fade-in duration-300">
+                    <div className="flex flex-col items-center">
+                        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 mb-8 overflow-x-auto max-w-full">
+                            <button onClick={() => setBillingCycle('monthly')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${billingCycle === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>Monthly</button>
+                            <button onClick={() => setBillingCycle('yearly')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${billingCycle === 'yearly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>Yearly <span className="ml-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full uppercase">Save 20%</span></button>
+                            <button onClick={() => setBillingCycle('topup')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${billingCycle === 'topup' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}><Coins className="w-3.5 h-3.5" /> Top up credits</button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                            {(billingCycle === 'topup' ? creditTopupPlans : pricingPlans).map((plan: any) => (
+                                <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
+                                    <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
+                                    <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
+                                    <div className="p-6 bg-white rounded-b-2xl"><button className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>{billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}</button></div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                 </div>
+             )}
+             
+             {activeTab === 'privacy' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden p-8 text-gray-800">
+                        <h2 className="text-2xl font-bold mb-6">Legal Notice</h2>
+                        <div className="space-y-4 mb-10 text-sm">
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Information pursuant to Sect. 5 German Telemedia Act (TMG)</h3>
+                                <p className="text-gray-600 mt-1">StellaAds GmbH<br />Musterstraße 123<br />10115 Berlin</p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Represented by</h3>
+                                <p className="text-gray-600 mt-1">Max Mustermann</p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Contact</h3>
+                                <p className="text-gray-600 mt-1">Phone: +49 (0) 123 44 55 66<br />Email: info@stellaads.com</p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Register Entry</h3>
+                                <p className="text-gray-600 mt-1">Entry in the commercial register.<br />Register Court: Amtsgericht Berlin-Charlottenburg<br />Register Number: HRB 123456</p>
+                            </div>
+                        </div>
+            
+                        <hr className="border-gray-200 my-8" />
+            
+                        <h2 className="text-2xl font-bold mb-6">Privacy Policy</h2>
+                        <div className="space-y-6 text-sm">
+                            <div>
+                                <h3 className="font-semibold text-lg text-gray-900 mb-2">1. Privacy at a glance</h3>
+                                <h4 className="font-medium text-gray-800 mt-3">General information</h4>
+                                <p className="text-gray-600 mt-1 leading-relaxed">
+                                    The following notes provide a simple overview of what happens to your personal data when you visit this website. Personal data is any data with which you can be personally identified.
+                                </p>
+                                <h4 className="font-medium text-gray-800 mt-3">Data collection on this website</h4>
+                                <p className="text-gray-600 mt-1 leading-relaxed">
+                                    <strong>Who is responsible for the data collection on this website?</strong><br/>
+                                    The data processing on this website is carried out by the website operator. You can find their contact details in the imprint of this website.
+                                </p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-lg text-gray-900 mb-2">2. Hosting and Content Delivery Networks (CDN)</h3>
+                                <p className="text-gray-600 mb-2 leading-relaxed">
+                                    We host the content of our website with the following providers:
+                                </p>
+                                <h4 className="font-medium text-gray-800">External Hosting</h4>
+                                <p className="text-gray-600 mt-1 leading-relaxed">
+                                    This website is hosted externally. The personal data collected on this website is stored on the servers of the hoster(s). This may include IP addresses, contact requests, meta and communication data, contract data, contact details, names, website accesses and other data generated via a website.
+                                </p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-lg text-gray-900 mb-2">3. General Notes and Mandatory Information</h3>
+                                <h4 className="font-medium text-gray-800">Data Protection</h4>
+                                <p className="text-gray-600 mt-1 leading-relaxed">
+                                    The operators of these pages take the protection of your personal data very seriously. We treat your personal data confidentially and in accordance with the statutory data protection regulations and this privacy policy.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
 }
 
 const App = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  
-  const refreshUser = async () => {
-    try {
-      const userData = await api.getUser();
-      setUser(userData);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-    }
-  };
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  const refreshUser = async () => {
+    try {
+      const userData = await api.getUser();
+      setUser(userData);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+    }
+  };
 
-  useEffect(() => {
-    const init = async () => {
-      await refreshUser();
-      setLoading(false);
-    };
-    init();
-  }, []);
+  useEffect(() => {
+    const init = async () => {
+      await refreshUser();
+      setLoading(false);
+    };
+    init();
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-      </div>
-    );
-  }
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+      </div>
+    );
+  }
 
-  return (
-    <ErrorBoundary>
-        <Router>
-            <Routes>
-                {/* 1. Public Routes */}
-                <Route path="/demo" element={<DemoPage />} />
-                <Route path="/pricing" element={<PricingPage />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-                <Route path="/email-confirmed" element={<EmailConfirmed />} />
-                
-                {/* 2. Main App Routes */}
-                <Route path="*" element={
-                    <Layout user={user}>
-                        <Routes>
-                            <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
-                            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
-                            <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
-                            {/* FIX: SearchPageLogicWrapper combines search & results view logic */}
-                            <Route path="/search" element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-                            <Route 
-                                path="/results/:id" 
-                                element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} /> : <Navigate to="/login" replace />} 
-                            />
-                            <Route 
-                                path="/saved" 
-                                element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={() => {}} onRemove={() => {}} /> : <Navigate to="/login" replace />} 
-                            />
-                            <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
-                            <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
-                        </Routes>
-                    </Layout>
-                } />
-            </Routes>
-        </Router>
-    </ErrorBoundary>
-  );
+  return (
+    <ErrorBoundary>
+        <Router>
+            <Routes>
+                {/* 1. Public Routes */}
+                <Route path="/demo" element={<DemoPage />} />
+                <Route path="/pricing" element={<PricingPage />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+                <Route path="/email-confirmed" element={<EmailConfirmed />} />
+                
+                {/* 2. Main App Routes */}
+                <Route path="*" element={
+                    <Layout user={user}>
+                        <Routes>
+                            <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
+                            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
+                            <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
+                            {/* FIX: SearchPageLogicWrapper combines search & results view logic */}
+                            <Route path="/search" element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
+                            <Route 
+                                path="/results/:id" 
+                                element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} /> : <Navigate to="/login" replace />} 
+                            />
+                            <Route 
+                                path="/saved" 
+                                element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={() => {}} onRemove={() => {}} /> : <Navigate to="/login" replace />} 
+                            />
+                            <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
+                            <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+                        </Routes>
+                    </Layout>
+                } />
+            </Routes>
+        </Router>
+    </ErrorBoundary>
+  );
 };
 
 export default App;

@@ -14,7 +14,7 @@ import AdFeed from './AdFeed';
 import { 
     Search, Loader2, AlertCircle, CheckCircle2, CreditCard, 
     ArrowRight, Zap, Filter, Facebook, Instagram, Video,
-    ChevronDown, BarChart3, ListFilter, ArrowUpDown, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles, Users as UsersIcon, Coins
+    ChevronDown, BarChart3, ListFilter, ArrowUpDown, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles, Users as UsersIcon, Coins, Download
 } from 'lucide-react';
 // @ts-ignore
 import { cleanAndTransformData } from './adAdapter';
@@ -61,12 +61,11 @@ const COUNTRIES = [
     { code: 'US', name: 'United States' }
 ];
 
-// --- HIER WAR DER FEHLER: Enterprise hat gefehlt ---
 const PLAN_LIMITS: Record<UserPlan, number> = {
     'starter': 100,
     'pro': 1000,
     'agency': 5000,
-    'enterprise': 50000 // <--- Hinzugefügt, damit TypeScript zufrieden ist
+    'enterprise': 50000
 };
 
 const STATUS_MESSAGES = [
@@ -123,7 +122,81 @@ const Toast = ({ message, onUndo, onClose, visible }: { message: string, onUndo?
     );
 };
 
-// --- Pages (New Design Integrated) ---
+// --- SEARCH SECTION COMPONENT ---
+const SearchInputSection = ({ 
+    query, setQuery, 
+    platform, setPlatform, 
+    country, setCountry, 
+    dateRange, setDateRange,
+    loading, progress, statusIndex,
+    handleSearch,
+    canAfford, cost, remainingCredits,
+    error, user
+}: any) => {
+    return (
+        <div className="w-full mb-8">
+            <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
+                <div className="flex items-center px-4">
+                    <Search className="w-6 h-6 text-gray-400 mr-3" />
+                    <input 
+                        type="text" 
+                        className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" 
+                        placeholder="e.g. 'Skincare', 'Nike'..." 
+                        value={query} 
+                        onChange={(e) => setQuery(e.target.value)} 
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
+                        autoFocus 
+                    />
+                </div>
+                <div className="h-px bg-gray-100 mx-4"></div>
+                <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
+                        <div className="relative flex-1 md:flex-none">
+                            <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">
+                                {(['meta', 'tiktok'] as const).map((p) => (
+                                    <button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${platform === p ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>{p}</button>
+                                ))}
+                            </div>
+                        </div>
+                        {(platform === 'meta') && <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />}
+                        <DateRangePicker date={dateRange} setDate={setDateRange} />
+                    </div>
+                    <div className="text-right flex items-center gap-3 w-full md:w-auto justify-between md:justify-end mt-4 md:mt-0 min-h-[48px]">
+                        {loading ? (
+                            <SearchProgressBar progress={Math.floor(progress)} status={STATUS_MESSAGES[statusIndex]} />
+                        ) : (
+                            <>
+                                <div className="text-sm">
+                                    <span className="text-gray-500 mr-1">Cost:</span>
+                                    <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span>
+                                </div>
+                                <button onClick={handleSearch} disabled={!query || !canAfford || loading} className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm flex items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Run Search <ArrowRight className="w-4 h-4 ml-2" />
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+            <div className="mt-4 flex justify-between items-start px-2">
+                    {!canAfford ? (
+                        <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                            <AlertCircle className="w-4 h-4 mr-2" />
+                            Insufficient credits. You have {user.credits}.
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500 flex items-center">
+                            <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
+                            You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left.
+                        </div>
+                    )}
+                    {error && <div className="text-red-600 text-sm">{error}</div>}
+            </div>
+        </div>
+    );
+};
+
+// --- Pages ---
 
 const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
   const navigate = useNavigate();
@@ -158,30 +231,14 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
            <p className="mt-2 text-sm text-gray-600">Enter your credentials to access the workspace.</p>
         </div>
         <form className="mt-8 space-y-5" onSubmit={handleLogin}>
-          {error && (
-            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center">
-                <AlertCircle className="w-4 h-4 mr-2" />
-                {error}
-            </div>
-          )}
+          {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center"><AlertCircle className="w-4 h-4 mr-2" />{error}</div>}
           <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-              <input id="email" name="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm transition-all shadow-xs" placeholder="Enter your email" />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
-              <input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm transition-all shadow-xs" placeholder="••••••••" />
-            </div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label><input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="Enter your email" /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label><input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="••••••••" /></div>
           </div>
-          <button type="submit" disabled={loading} className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-70 disabled:cursor-not-allowed transition-all">
-            {loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Sign in'}
-          </button>
+          <button type="submit" disabled={loading} className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-70 disabled:cursor-not-allowed transition-all">{loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Sign in'}</button>
         </form>
-        <div className="text-center mt-4">
-            <span className="text-sm text-gray-500">Don't have an account? </span>
-            <Link to="/register" className="text-sm font-medium text-brand-600 hover:text-brand-500">Sign up</Link>
-        </div>
+        <div className="text-center mt-4"><span className="text-sm text-gray-500">Don't have an account? </span><Link to="/register" className="text-sm font-medium text-brand-600 hover:text-brand-500">Sign up</Link></div>
       </div>
     </div>
   );
@@ -196,9 +253,7 @@ const Dashboard = ({ user }: { user: User }) => {
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
     const handleRerun = (item: any) => {
-        // Simple navigation to trigger search again
-        const countryParam = item.country ? `&country=${item.country}` : '';
-        navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform}&limit=${item.limit || 100}${countryParam}`);
+        navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform || 'meta'}&country=${item.country || 'DE'}`);
     };
 
     return (
@@ -218,17 +273,24 @@ const Dashboard = ({ user }: { user: User }) => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between"><h3 className="text-base font-semibold text-gray-900">Recent Searches</h3></div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Query</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th><th className="relative px-6 py-3"><span className="sr-only">Actions</span></th></tr></thead>
-                        <tbody className="bg-white divide-y divide-gray-200">{user.searchHistory.length > 0 ? (user.searchHistory.slice(0, 5).map((search) => (<tr key={search.id} className="hover:bg-gray-50 transition-colors"><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{search.query}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{search.platform}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(search.timestamp).toLocaleDateString()}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleRerun(search)} className="text-brand-600 hover:text-brand-900">Rerun</button></td></tr>))) : (<tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">No searches yet</td></tr>)}</tbody></table>
+                    <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Query</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th><th className="relative px-6 py-3"><span className="sr-only">Actions</span></th></tr></thead>
+                        <tbody className="bg-white divide-y divide-gray-200">{user.searchHistory.length > 0 ? (user.searchHistory.slice(0, 5).map((search) => (<tr key={search.id} className="hover:bg-gray-50 transition-colors"><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{search.query}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{search.country ? (COUNTRIES.find(c => c.code === search.country)?.name || search.country) : 'Global'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(search.timestamp).toLocaleDateString()}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleRerun(search)} className="text-brand-600 hover:text-brand-900">Rerun</button></td></tr>))) : (<tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">No searches yet</td></tr>)}</tbody></table>
                 </div>
             </div>
         </div>
     )
 }
 
-const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void }) => {
+// Wrapper to handle shared state for Search and Results logic
+const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User, refreshUser: () => void, initialResultId?: string }) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    
+    // Search State
     const [query, setQuery] = useState('');
     const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta');
     const [country, setCountry] = useState('DE');
@@ -238,15 +300,45 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
 
+    // Results State
+    const [result, setResult] = useState<SearchResult | null>(null);
+    const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
+    const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
+    const [sortBy, setSortBy] = useState<'efficiency_score' | 'reach' | 'newest'>('efficiency_score');
+    const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
+    
+    // Modal & Export State
+    const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
+    const [exportData, setExportData] = useState<SearchResult | null>(null);
+    const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
+
+    // Initialize state from URL params or LocalStorage
     useEffect(() => {
         const q = searchParams.get('q');
         const p = searchParams.get('platform');
+        const c = searchParams.get('country');
+        
         if (q) setQuery(q);
         if (p && (p === 'meta' || p === 'tiktok')) setPlatform(p as 'meta' | 'tiktok');
-    }, [searchParams]);
+        if (c) setCountry(c);
+
+        if (initialResultId) {
+            const stored = localStorage.getItem(`search_${initialResultId}`);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                setResult(parsed);
+                // Sync search bar with result data
+                setQuery(parsed.params.query);
+                if (parsed.params.platform) setPlatform(parsed.params.platform);
+                if (parsed.params.country) setCountry(parsed.params.country);
+                
+                if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
+            }
+        }
+    }, [searchParams, initialResultId]);
 
     const limit = PLAN_LIMITS[user.plan] || 100;
-    const cost = limit; // Or calculate based on platform (e.g. TikTok 500)
+    const cost = limit;
     const canAfford = user.credits >= cost;
     const remainingCredits = user.credits - cost;
 
@@ -254,7 +346,6 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
         if (!query || !canAfford || loading) return;
         setLoading(true); setProgress(0); setStatusIndex(0); setError('');
 
-        // Visual progress simulation
         const progressTimer = setInterval(() => {
             setProgress(prev => {
                 const next = Math.min(99, prev + (100 / (7000 / 100)));
@@ -275,107 +366,46 @@ const SearchPage = ({ user, refreshUser }: { user: User, refreshUser: () => void
                 startDateMax: dateRange.to?.toISOString().split('T')[0] 
             });
             clearInterval(progressTimer); setProgress(100); setStatusIndex(STATUS_MESSAGES.length - 1);
+            
             setTimeout(async () => {
                 await refreshUser();
                 localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
                 setLoading(false);
-                navigate(`/results/${result.id}`);
+                navigate(`/results/${result.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`);
             }, 500);
         } catch (err: any) { 
             clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
         }
     }, [query, platform, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
-    return (
-        <div className="w-full">
-            <div className="w-full">
-                <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok.</p></div>
-                <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
-                    <div className="flex items-center px-4"><Search className="w-6 h-6 text-gray-400 mr-3" /><input type="text" className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" placeholder="e.g. 'Skincare', 'Nike'..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} autoFocus /></div>
-                    <div className="h-px bg-gray-100 mx-4"></div>
-                    <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
-                            <div className="relative flex-1 md:flex-none"><div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">{(['meta', 'tiktok'] as const).map((p) => (<button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${platform === p ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>{p}</button>))}</div></div>
-                            {(platform === 'meta') && <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />}
-                            <DateRangePicker date={dateRange} setDate={setDateRange} />
-                        </div>
-                        <div className="text-right flex items-center gap-3 w-full md:w-auto justify-between md:justify-end mt-4 md:mt-0 min-h-[48px]">
-                            {loading ? <SearchProgressBar progress={Math.floor(progress)} status={STATUS_MESSAGES[statusIndex]} /> : <><div className="text-sm"><span className="text-gray-500 mr-1">Cost:</span><span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span></div><button onClick={handleSearch} disabled={!query || !canAfford || loading} className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm flex items-center">Run Search <ArrowRight className="w-4 h-4 ml-2" /></button></>}
-                        </div>
-                    </div>
-                </div>
-                <div className="mt-4 flex justify-between items-start px-2">
-                     {!canAfford ? <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100"><AlertCircle className="w-4 h-4 mr-2" /> Insufficient credits. You have {user.credits}.</div> : <div className="text-sm text-gray-500 flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left.</div>}
-                     {error && <div className="text-red-600 text-sm">{error}</div>}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave, onOpenExport }: { user: User, refreshUser: () => void, onOpenModal: (data: any, type: any) => void, onToggleSave: (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => void, onOpenExport: (data: any) => void }) => {
-    const navigate = useNavigate();
-    const { id } = useParams();
-    const [result, setResult] = useState<SearchResult | null>(null);
-    const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
-    const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
-    const [sortBy, setSortBy] = useState<'efficiency_score' | 'reach' | 'newest'>('efficiency_score');
-    const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
-
-    useEffect(() => {
-        const stored = localStorage.getItem(`search_${id}`);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            setResult(parsed);
-            if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
-        }
-    }, [id]);
-
     const transformedMetaAds = useMemo(() => {
         if (!result || !result.metaAds) return [];
         const ads = result.metaAds;
-        // @ts-ignore - Handle raw API response vs cleaned
+        // @ts-ignore
         if (ads.length > 0 && ads[0].demographics) return ads; 
         const adsToTransform = ads.map(ad => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
 
-    if (!result) return <div className="flex justify-center pt-24"><Loader2 className="animate-spin w-8 h-8 text-brand-600" /></div>;
-
-    const showMeta = result.params.platform !== 'tiktok';
-    const showTikTok = result.params.platform !== 'meta';
-    const facebookAds = transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'));
-    const instagramAds = transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('instagram'));
-    const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
-    
-    // Can export if Pro or Agency
     const canExport = user.plan === 'pro' || user.plan === 'agency';
 
     const groupAdsByText = (ads: MetaAd[]) => {
         const groups: { [key: string]: MetaAd[] } = {};
-        ads.forEach(ad => {
-            const key = ad.snapshot.body.text ? ad.snapshot.body.text.trim() : ad.id;
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(ad);
-        });
-        return Object.values(groups).map(group => {
-            group.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
-            return { representative: group[0], group: group, count: group.length };
-        });
+        ads.forEach(ad => { const key = ad.snapshot.body.text ? ad.snapshot.body.text.trim() : ad.id; if (!groups[key]) groups[key] = []; groups[key].push(ad); });
+        return Object.values(groups).map(group => { group.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()); return { representative: group[0], group: group, count: group.length }; });
     };
 
     const getFilteredAndSortedAds = () => {
+        if (!result) return [];
         let ads: any[] = [];
         let isMetaTab = false;
-
-        if (activeTab === 'facebook') { ads = [...facebookAds]; isMetaTab = true; }
-        else if (activeTab === 'instagram') { ads = [...instagramAds]; isMetaTab = true; }
+        if (activeTab === 'facebook') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'))]; isMetaTab = true; }
+        else if (activeTab === 'instagram') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('instagram'))]; isMetaTab = true; }
         else { ads = [...result.tikTokAds]; isMetaTab = false; }
 
         if (isMetaTab) {
             if (formatFilter === 'video') ads = ads.filter(ad => ad.snapshot.videos && ad.snapshot.videos.length > 0);
             else if (formatFilter === 'image') ads = ads.filter(ad => (!ad.snapshot.videos || ad.snapshot.videos.length === 0));
-
             const grouped = groupAdsByText(ads as MetaAd[]);
             grouped.sort((a, b) => {
                 const adA = a.representative, adB = b.representative;
@@ -385,8 +415,7 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave, onOpenExpor
             });
             return grouped;
         } else {
-            // TikTok Logic
-            if (formatFilter === 'image') return []; // TikTok is video only
+            if (formatFilter === 'image') return [];
             ads.sort((a, b) => {
                 if (sortBy === 'efficiency_score') return b.diggCount - a.diggCount;
                 if (sortBy === 'reach') return b.playCount - a.playCount;
@@ -397,49 +426,84 @@ const ResultsPage = ({ user, refreshUser, onOpenModal, onToggleSave, onOpenExpor
     };
 
     const displayedItems = getFilteredAndSortedAds();
+    const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
+    
+    const showToast = (message: string, onUndo?: () => void) => { setToast({ message, visible: true, onUndo }); setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 5000); };
+    const handleToggleSave = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
+        if (!user) return;
+        const existing = user.savedAds.find(s => s.data.id === ad.id && s.type === type);
+        if (existing) await handleRemoveAd(existing.id); else await handleSaveAd(ad, type);
+    };
+    const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => { try { await api.saveAd(ad, type); await refreshUser(); showToast("Ad saved to library"); } catch (e) { console.error("Failed to save ad", e); } };
+    const handleRemoveAd = async (id: string) => { const adToRemove = user?.savedAds.find(ad => ad.id === id); try { await api.removeSavedAd(id); await refreshUser(); showToast("Ad removed from library", async () => { if (adToRemove) { await api.saveAd(adToRemove.data, adToRemove.type); await refreshUser(); } }); } catch (e) { console.error("Failed to remove ad", e); } };
+    const handleExportFile = (format: 'csv' | 'json') => { if (!exportData) return; const fileName = `stella_ads_${new Date().toISOString()}.${format}`; console.log(`Downloading ${fileName}...`); showToast(`Exported results as ${format.toUpperCase()}`); setExportData(null); };
+
+    const primaryAd = selectedAdsGroup?.data[0];
+    const savedAdEntry = primaryAd && user?.savedAds.find(ad => ad.data.id === primaryAd.id && ad.type === selectedAdsGroup.type);
+    const isSaved = !!savedAdEntry;
 
     return (
         <div className="w-full">
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
-                <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full xl:w-auto">
-                        <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">Results for <span className="text-brand-600">"{result.params.query}"</span></h2>
-                        <div className="hidden sm:block w-px h-6 bg-gray-300 mx-2"></div>
-                        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-start">
-                            {showMeta && (<><button onClick={() => setActiveTab('facebook')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'facebook' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" /> Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{facebookAds.length}</span></button><button onClick={() => setActiveTab('instagram')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'instagram' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Instagram className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> Instagram <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{instagramAds.length}</span></button></>)}
-                            {showTikTok && (<button onClick={() => setActiveTab('tiktok')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'tiktok' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Video className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> TikTok <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.tikTokAds.length}</span></button>)}
-                        </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
-                        <div className="flex items-center gap-3 w-full sm:w-auto"><div className="flex items-center text-gray-500 text-sm font-medium whitespace-nowrap"><ListFilter className="w-4 h-4 mr-2" /> Filters:</div><div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5 shadow-sm">{(['all', 'video', 'image'] as const).map((f) => (<button key={f} onClick={() => setFormatFilter(f)} className={`px-3 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${formatFilter === f ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-gray-600 hover:bg-gray-50'}`}>{f === 'all' ? 'All' : f}</button>))}</div></div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
-                            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Sort:</span>
-                            <div className="relative group w-full sm:w-auto"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><ArrowUpDown className="h-3.5 w-3.5 text-gray-400" /></div><select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer hover:bg-gray-50"><option value="efficiency_score">Viral Score</option><option value="reach">Reach</option><option value="newest">Newest</option></select><div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-400" /></div></div>
-                            {canExport && (
-                                <button
-                                    onClick={() => onOpenExport(result)}
-                                    className="flex items-center gap-2 px-4 h-[35px] bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-normal transition-all shadow-sm group"
-                                    title="Export results to CSV/JSON"
-                                >
-                                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 rotate-90" /> {/* Using ArrowRight rotated as download icon fallback */}
-                                    Export
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                    {isMetaActive && displayedItems.map((item: any) => {
-                        const ad = item.representative;
-                        const savedEntry = user.savedAds.find(s => s.data.id === ad.id && s.type === 'meta');
-                        return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => onOpenModal(item.group, 'meta')} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => onToggleSave(ad, 'meta')} isSaved={!!savedEntry} />;
-                    })}
-                    {activeTab === 'tiktok' && displayedItems.map((ad: any) => (
-                        <TikTokAdCard key={ad.id} ad={ad} viewMode={viewMode} onClick={(data) => onOpenModal([data], 'tiktok')} />
-                    ))}
-                </div>
-                {displayedItems.length === 0 && <div className="text-center py-20 text-gray-500">No results match your filters</div>}
+            <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
+            <AdDetailModal isOpen={!!selectedAdsGroup} onClose={() => setSelectedAdsGroup(null)} group={selectedAdsGroup?.data || []} type={selectedAdsGroup?.type} onSave={handleSaveAd} isSaved={isSaved} onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} />
+            <ExportModal isOpen={!!exportData} onClose={() => setExportData(null)} onExport={handleExportFile} resultCount={exportData ? (exportData.metaAds.length + exportData.tikTokAds.length) : 0} />
+
+            <div className="w-full">
+                <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok.</p></div>
+                <SearchInputSection 
+                    query={query} setQuery={setQuery} 
+                    platform={platform} setPlatform={setPlatform} 
+                    country={country} setCountry={setCountry}
+                    dateRange={dateRange} setDateRange={setDateRange}
+                    loading={loading} progress={progress} statusIndex={statusIndex}
+                    handleSearch={handleSearch}
+                    canAfford={canAfford} cost={cost} remainingCredits={remainingCredits}
+                    error={error} user={user}
+                />
             </div>
+
+            {result && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
+                    <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full xl:w-auto">
+                            <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">Results for <span className="text-brand-600">"{result.params.query}"</span></h2>
+                            <div className="hidden sm:block w-px h-6 bg-gray-300 mx-2"></div>
+                            <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-start">
+                                {result.params.platform !== 'tiktok' && (<><button onClick={() => setActiveTab('facebook')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'facebook' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" /> Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('facebook')).length}</span></button><button onClick={() => setActiveTab('instagram')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'instagram' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Instagram className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> Instagram <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('instagram')).length}</span></button></>)}
+                                {result.params.platform !== 'meta' && (<button onClick={() => setActiveTab('tiktok')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'tiktok' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Video className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> TikTok <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.tikTokAds.length}</span></button>)}
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
+                            <div className="flex items-center gap-3 w-full sm:w-auto"><div className="flex items-center text-gray-500 text-sm font-medium whitespace-nowrap"><ListFilter className="w-4 h-4 mr-2" /> Filters:</div><div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5 shadow-sm">{(['all', 'video', 'image'] as const).map((f) => (<button key={f} onClick={() => setFormatFilter(f)} className={`px-3 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${formatFilter === f ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-gray-600 hover:bg-gray-50'}`}>{f === 'all' ? 'All' : f}</button>))}</div></div>
+                            <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+                                <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Sort:</span>
+                                <div className="relative group w-full sm:w-auto"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><ArrowUpDown className="h-3.5 w-3.5 text-gray-400" /></div><select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer hover:bg-gray-50"><option value="efficiency_score">Viral Score</option><option value="reach">Reach</option><option value="newest">Newest</option></select><div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-400" /></div></div>
+                                {canExport && (
+                                    <button
+                                        onClick={() => setExportData(result)}
+                                        className="flex items-center gap-2 px-4 h-[35px] bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-normal transition-all shadow-sm group"
+                                        title="Export results to CSV/JSON"
+                                    >
+                                        <Download className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                                        Export
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+                        {isMetaActive && displayedItems.map((item: any) => {
+                            const ad = item.representative;
+                            const savedEntry = user.savedAds.find(s => s.data.id === ad.id && s.type === 'meta');
+                            return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => setSelectedAdsGroup({data: item.group, type: 'meta'})} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => handleToggleSave(ad, 'meta')} isSaved={!!savedEntry} />;
+                        })}
+                        {activeTab === 'tiktok' && displayedItems.map((ad: any) => (
+                            <TikTokAdCard key={ad.id} ad={ad} viewMode={viewMode} onClick={(data) => setSelectedAdsGroup({data: [data], type: 'tiktok'})} />
+                        ))}
+                    </div>
+                    {displayedItems.length === 0 && !loading && <div className="text-center py-20 text-gray-500">No results match your filters</div>}
+                </div>
+            )}
         </div>
     );
 };
@@ -462,17 +526,9 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     useEffect(() => { if (searchParams.get('mode') === 'topup') setBillingCycle('topup'); }, [searchParams]);
     const activeTab = searchParams.get('tab') || 'profile';
 
-    // Pricing Logic re-used from LandingPage conceptually but for dashboard view
-    const pricingPlans = [
-        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points per Search', seats: '1 User Seat', topup: '€25 / 1k Credits', export: '-' },
-        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users & Scaling', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points per Search', seats: '2 User Seats', topup: '€10 / 1k Credits', export: 'CSV/JSON Export', popular: true },
-        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies & Large Teams', monthlyPrice: 'Contact Us', yearlyPrice: 'Contact Us', credits: '50,000 Credits', scans: 'Custom Analysis Limits', seats: '5 User Seats', topup: '€5 / 1k Credits', export: 'API & White Label' },
-    ];
-    const creditTopupPlans = [
-        { name: 'Starter', id: 'starter_topup', subheader: 'Standard Top-up Rate', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },
-        { name: 'Pro', id: 'pro_topup', subheader: 'Best Value Top-up', price: '10 €', unit: '/ 1k Credits', features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], popular: true, buttonText: 'Buy Credits' },
-        { name: 'Enterprise', id: 'enterprise_topup', subheader: 'Wholesale Top-up', price: '5 €', unit: '/ 1k Credits', features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], buttonText: 'Buy Credits' }
-    ];
+    // Pricing Plans Data
+    const pricingPlans = [ { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' }, { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true }, { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '50,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' } ];
+    const creditTopupPlans = [ { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits' }, { name: 'Pro', id: 'pro_topup', price: '10 €', unit: '/ 1k Credits' }, { name: 'Enterprise', id: 'enterprise_topup', price: '5 €', unit: '/ 1k Credits' } ];
 
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ name: user.name, email: user.email });
@@ -489,7 +545,16 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                 <button onClick={() => setSearchParams({ tab: 'privacy' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'privacy' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Legal & Privacy</button>
              </div>
              
-             {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300"><div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div><div className="p-6"><div className="flex items-start space-x-6"><div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div><div className="flex-1 space-y-4 max-w-lg"><div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div></div></div></div><div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div></div></div>)}
+             {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300"><div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div><div className="p-6"><div className="flex items-start space-x-6"><div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div><div className="flex-1 space-y-4 max-w-lg"><div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div></div></div></div><div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div></div>
+             
+             {/* Contact Us Section */}
+             <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center"><h3 className="text-base font-medium text-gray-900">Contact Us</h3></div>
+                <div className="p-6">
+                    <div className="flex items-center gap-4"><div className="p-3 bg-brand-50 rounded-lg text-brand-600"><Mail className="w-5 h-5" /></div><div><p className="text-sm font-medium text-gray-700">Email Support</p><a href="mailto:info@stellaads.com" className="text-sm text-brand-600 hover:text-brand-700 font-semibold">info@stellaads.com</a></div></div>
+                </div>
+             </div>
+             </div>)}
 
              {activeTab === 'billing' && (
                  <div className="space-y-8 animate-in fade-in duration-300">
@@ -502,7 +567,6 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
                             {(billingCycle === 'topup' ? creditTopupPlans : pricingPlans).map((plan: any) => (
                                 <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
-                                    {plan.popular && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</div>}
                                     <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
                                     <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
                                     <div className="p-6 bg-white rounded-b-2xl"><button className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>{billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}</button></div>
@@ -520,11 +584,6 @@ const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
-  const [exportData, setExportData] = useState<SearchResult | null>(null);
-
-  const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
-
   const refreshUser = async () => {
     try {
       const userData = await api.getUser();
@@ -542,57 +601,6 @@ const App = () => {
     init();
   }, []);
 
-  const showToast = (message: string, onUndo?: () => void) => {
-      setToast({ message, visible: true, onUndo });
-      setTimeout(() => {
-          setToast(prev => ({ ...prev, visible: false }));
-      }, 5000);
-  };
-
-  const handleToggleSave = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
-      if (!user) return;
-      const existing = user.savedAds.find(s => s.data.id === ad.id && s.type === type);
-      if (existing) {
-          await handleRemoveAd(existing.id);
-      } else {
-          await handleSaveAd(ad, type);
-      }
-  };
-
-  const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
-      try {
-          await api.saveAd(ad, type);
-          await refreshUser();
-          showToast("Ad saved to library");
-      } catch (e) {
-          console.error("Failed to save ad", e);
-      }
-  };
-
-  const handleRemoveAd = async (id: string) => {
-      const adToRemove = user?.savedAds.find(ad => ad.id === id);
-      try {
-          await api.removeSavedAd(id);
-          await refreshUser(); 
-          showToast("Ad removed from library", async () => {
-              if (adToRemove) {
-                   await api.saveAd(adToRemove.data, adToRemove.type);
-                   await refreshUser();
-              }
-          });
-      } catch (e) {
-          console.error("Failed to remove ad", e);
-      }
-  };
-
-  const handleExport = (format: 'csv' | 'json') => {
-    if (!exportData) return;
-    const fileName = `stella_ads_export_${new Date().toISOString().split('T')[0]}.${format}`;
-    console.log(`Downloading ${fileName}...`);
-    showToast(`Exported ${exportData.metaAds.length + exportData.tikTokAds.length} results as ${format.toUpperCase()}`);
-    setExportData(null);
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -600,12 +608,6 @@ const App = () => {
       </div>
     );
   }
-
-  const primaryAd = selectedAdsGroup?.data[0];
-  const savedAdEntry = primaryAd && user?.savedAds.find(ad => 
-      ad.data.id === primaryAd.id && ad.type === selectedAdsGroup.type
-  );
-  const isSaved = !!savedAdEntry;
 
   return (
     <ErrorBoundary>
@@ -618,43 +620,22 @@ const App = () => {
                 <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
                 <Route path="/email-confirmed" element={<EmailConfirmed />} />
                 
-                {/* 2. Main App Routes (Wrapped in Layout) */}
+                {/* 2. Main App Routes */}
                 <Route path="*" element={
                     <Layout user={user}>
-                        <Toast 
-                            message={toast.message} 
-                            visible={toast.visible} 
-                            onUndo={toast.onUndo} 
-                            onClose={() => setToast(prev => ({ ...prev, visible: false }))} 
-                        />
-                        <AdDetailModal 
-                            isOpen={!!selectedAdsGroup} 
-                            onClose={() => setSelectedAdsGroup(null)} 
-                            group={selectedAdsGroup?.data || []} 
-                            type={selectedAdsGroup?.type}
-                            onSave={handleSaveAd}
-                            isSaved={isSaved}
-                            onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)}
-                        />
-                        <ExportModal 
-                            isOpen={!!exportData} 
-                            onClose={() => setExportData(null)} 
-                            onExport={handleExport}
-                            resultCount={exportData ? (exportData.metaAds.length + exportData.tikTokAds.length) : 0}
-                        />
-                        
                         <Routes>
                             <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
                             <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
                             <Route path="/feed" element={user ? <div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div> : <Navigate to="/login" replace />} />
-                            <Route path="/search" element={user ? <SearchPage user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
+                            {/* FIX: SearchPageLogicWrapper combines search & results view logic */}
+                            <Route path="/search" element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
                             <Route 
                                 path="/results/:id" 
-                                element={user ? <ResultsPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onToggleSave={handleToggleSave} onOpenExport={(data) => setExportData(data)} /> : <Navigate to="/login" replace />} 
+                                element={user ? <SearchLogicWrapper user={user} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} /> : <Navigate to="/login" replace />} 
                             />
                             <Route 
                                 path="/saved" 
-                                element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={(data, type) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} /> : <Navigate to="/login" replace />} 
+                                element={user ? <SavedPage user={user} refreshUser={refreshUser} onOpenModal={() => {}} onRemove={() => {}} /> : <Navigate to="/login" replace />} 
                             />
                             <Route path="/account" element={user ? <Account user={user} refreshUser={refreshUser} /> : <Navigate to="/login" replace />} />
                             <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />

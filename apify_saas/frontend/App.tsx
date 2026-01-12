@@ -349,6 +349,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 await refreshUser();
                 localStorage.setItem(`search_${result.id}`, JSON.stringify(result));
                 setLoading(false);
+                // Important: We navigate to the results path, but since this wrapper handles both,
+                // the state is preserved/reloaded via initialResultId logic below.
                 navigate(`/results/${result.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`);
             }, 500);
         } catch (err: any) { 
@@ -356,7 +358,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         }
     }, [query, platform, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
-    // Initialize
+    // Initialize state
     useEffect(() => {
         const q = searchParams.get('q');
         const p = searchParams.get('platform');
@@ -375,6 +377,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 if (!q) setQuery(parsed.params.query);
                 if (!p && parsed.params.platform) setPlatform(parsed.params.platform);
                 if (!c && parsed.params.country) setCountry(parsed.params.country);
+                
                 if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
             }
         }
@@ -385,16 +388,22 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         }
     }, [searchParams, initialResultId, handleSearch, loading]);
 
-
-    // Results Processing Logic
+    // Results Processing Logic - ROBUST DATA HANDLING FIX
     const transformedMetaAds = useMemo(() => {
         if (!result) return [];
-        // @ts-ignore - FALLBACK LOGIC ADDED
-        const rawAds = result.metaAds || result.data || [];
         
+        // 1. Get raw ads from either metaAds (structured) or data (flat/backend response)
+        // @ts-ignore
+        let rawAds = result.metaAds || result.data || [];
+        
+        // Ensure it's an array
+        if (!Array.isArray(rawAds)) return [];
+
+        // 2. If data is already transformed (has demographics), use it directly
         // @ts-ignore
         if (rawAds.length > 0 && rawAds[0].demographics) return rawAds; 
         
+        // 3. Otherwise run through adapter
         const adsToTransform = rawAds.map((ad: any) => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
@@ -468,6 +477,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
             <div className="w-full">
                 <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok.</p></div>
                 
+                {/* Search Input Section is ALWAYS rendered here */}
                 <SearchInputSection 
                     query={query} setQuery={setQuery} 
                     platform={platform} setPlatform={setPlatform} 
@@ -480,6 +490,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 />
             </div>
 
+            {/* RESULTS SECTION - Rendered conditionally below search input */}
             {result && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
                     <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
@@ -546,8 +557,16 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     const activeTab = searchParams.get('tab') || 'profile';
 
     // Pricing Plans Data
-    const pricingPlans = [ { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' }, { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true }, { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '50,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' } ];
-    const creditTopupPlans = [ { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits' }, { name: 'Pro', id: 'pro_topup', price: '10 €', unit: '/ 1k Credits' }, { name: 'Enterprise', id: 'enterprise_topup', price: '5 €', unit: '/ 1k Credits' } ];
+    const pricingPlans = [
+        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points per Search', seats: '1 User Seat', topup: '€25 / 1k Credits', export: '-' },
+        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users & Scaling', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points per Search', seats: '2 User Seats', topup: '€10 / 1k Credits', export: 'CSV/JSON Export', popular: true },
+        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies & Large Teams', monthlyPrice: 'Contact Us', yearlyPrice: 'Contact Us', credits: '50,000 Credits', scans: 'Custom Analysis Limits', seats: '5 User Seats', topup: '€5 / 1k Credits', export: 'API & White Label' },
+    ];
+    const creditTopupPlans = [
+        { name: 'Starter', id: 'starter_topup', subheader: 'Standard Top-up Rate', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },
+        { name: 'Pro', id: 'pro_topup', subheader: 'Best Value Top-up', price: '10 €', unit: '/ 1k Credits', features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], popular: true, buttonText: 'Buy Credits' },
+        { name: 'Enterprise', id: 'enterprise_topup', subheader: 'Wholesale Top-up', price: '5 €', unit: '/ 1k Credits', features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], buttonText: 'Buy Credits' }
+    ];
 
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ name: user.name, email: user.email });
@@ -586,6 +605,7 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
                             {(billingCycle === 'topup' ? creditTopupPlans : pricingPlans).map((plan: any) => (
                                 <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
+                                    {plan.popular && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Most Popular</div>}
                                     <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
                                     <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
                                     <div className="p-6 bg-white rounded-b-2xl"><button className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>{billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}</button></div>

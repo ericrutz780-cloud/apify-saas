@@ -61,10 +61,12 @@ const COUNTRIES = [
     { code: 'US', name: 'United States' }
 ];
 
+// --- HIER WAR DER FEHLER: Enterprise hat gefehlt ---
 const PLAN_LIMITS: Record<UserPlan, number> = {
     'starter': 100,
     'pro': 1000,
-    'agency': 5000
+    'agency': 5000,
+    'enterprise': 50000 // <--- Hinzugefügt, damit TypeScript zufrieden ist
 };
 
 const STATUS_MESSAGES = [

@@ -18,20 +18,19 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-NORMALISIERUNG (KORRIGIERT) ---
+// --- HELPER: DATEN-NORMALISIERUNG (MANUELL KORRIGIERT) ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // 1. Basis-Daten initialisieren
+    // 1. Daten aus dem Adapter holen (diese sind da!)
     let demographics = ad.demographics || [];
     let locations: string[] = ad.targeting?.locations || [];
     let reach = ad.reach || ad.eu_total_reach || 0;
     
+    // Fallback: Nur versuchen, wenn wir noch das alte Datenformat haben
     const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
-    let breakdown = ad.targeting?.breakdown || [];
 
-    // 2. Fehlende Daten aus rawInfo ergänzen (falls vorhanden)
     if (rawInfo) {
         if (!demographics || demographics.length === 0) {
             demographics = rawInfo.age_country_gender_reach_breakdown || [];
@@ -44,8 +43,11 @@ const normalizeAdData = (ad: any) => {
         }
     }
 
-    // 3. WICHTIG: Breakdown generieren - JETZT AUSSERHALB von if(rawInfo)
-    // Damit funktioniert es auch, wenn der Adapter 'demographics' direkt liefert aber 'aaa_info' weglässt.
+    let breakdown = ad.targeting?.breakdown || [];
+
+    // 2. BREAKDOWN BERECHNUNG (JETZT UNABHÄNGIG VON rawInfo)
+    // Wenn wir Demographics haben, aber kein Breakdown (oder ein leeres), berechnen wir es hier.
+    // Das fixt das Problem, dass die Tabelle leer bleibt.
     if ((!breakdown || breakdown.length === 0) && demographics.length > 0) {
         breakdown = demographics.flatMap((d: any) => {
              if (d.age_gender_breakdowns) {
@@ -60,13 +62,14 @@ const normalizeAdData = (ad: any) => {
         });
     }
 
-    // 4. Regionen bauen & Zombie-Check
+    // 3. REGIONEN UPDATEN
+    // Wir stellen sicher, dass die "Transparency Regions" auch die berechneten Daten enthalten.
     let regions = ad.transparency_regions || [];
     
-    // Prüfen, ob die existierende Region "leer" ist (vom Adapter ohne Breakdown erstellt)
+    // Check: Ist die Region vom Adapter evtl. leer (kein Breakdown)?
     const isRegionEmpty = regions.length > 0 && (!regions[0].breakdown || regions[0].breakdown.length === 0);
 
-    // Fall 1: Keine Regionen oder leere Region -> Neu erstellen aus den berechneten Daten
+    // Fall A: Keine Region oder leere Region -> Wir bauen eine neue mit unseren Daten
     if ((regions.length === 0 || isRegionEmpty) && breakdown.length > 0) {
         regions = [{
             region: "European Union",
@@ -77,7 +80,7 @@ const normalizeAdData = (ad: any) => {
             genders: ad.targeting?.genders || ['All']
         }];
     } 
-    // Fall 2: Region existiert, wir injizieren das berechnete Breakdown zur Sicherheit
+    // Fall B: Region ist da, wir injizieren sicherheitshalber das Breakdown
     else if (regions.length > 0 && breakdown.length > 0) {
         regions = regions.map((r: any) => ({
             ...r,
@@ -94,7 +97,7 @@ const normalizeAdData = (ad: any) => {
         targeting: {
             ...ad.targeting,
             locations,
-            breakdown // Das sichergestellte Breakdown
+            breakdown // Hier sind die Daten jetzt drin
         },
         transparency_regions: regions
     };
@@ -147,7 +150,7 @@ const formatReach = (num?: number | null) => {
     return new Intl.NumberFormat('en-US').format(num);
 };
 
-const formatCompact = (num?: number) => {
+const formatFollowerCount = (num?: number) => {
     if (!num) return '';
     return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
 };
@@ -174,6 +177,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
+    
+    // --- CAROUSEL STATE ---
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
@@ -226,9 +231,10 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
     
+    // FIX: Priorisiere Region-spezifische Daten
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
+    // WICHTIG: Das Breakdown ist jetzt garantiert da
     const breakdownData = activeTargeting?.breakdown || [];
-    const demoData = ad.demographics || [];
 
     const nextCard = () => setCardIndex((prev) => (prev + 1) % cards.length);
     const prevCard = () => setCardIndex((prev) => (prev - 1 + cards.length) % cards.length);
@@ -276,6 +282,11 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                         <ImageIcon className="w-3 h-3" />
                                         <span>{cardIndex + 1} / {cards.length}</span>
                                     </div>
+                                    {currentTitle && currentTitle !== ad.page_name && (
+                                        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 to-transparent p-3 text-white text-xs font-medium">
+                                            {currentTitle}
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -419,31 +430,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                  <div className="text-3xl font-normal text-gray-900 mb-2">{formatReach(ad.reach)}</div>
                                  <div className="text-xs text-gray-500">Accounts Center accounts in the EU that saw this ad at least once.</div>
                              </div>
-
-                             {demoData.length > 0 && (
-                                 <div className="mb-6">
-                                     <h4 className="text-sm font-bold text-gray-800 mb-3">Audience Breakdown</h4>
-                                     <div className="space-y-4">
-                                         {/* @ts-ignore */}
-                                         {demoData.slice(0, 3).map((countryData: any, i: number) => (
-                                            <div key={i} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
-                                                <p className="text-xs font-bold text-gray-700 mb-2 uppercase flex items-center gap-2"><MapPin className="w-3 h-3"/> {countryData.country}</p>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    {/* @ts-ignore */}
-                                                    {countryData.age_gender_breakdowns.slice(0, 4).map((d: any, j: number) => (
-                                                        <div key={j} className="flex justify-between text-xs bg-white p-1.5 rounded border border-gray-100 shadow-sm">
-                                                            <span className="text-gray-500">{d.age_range}</span>
-                                                            <span className="font-medium text-[10px]">
-                                                                {((d.female || 0) > (d.male || 0)) ? `FEMALE ${formatCompact(d.female || 0)}` : `MALE ${formatCompact(d.male || 0)}`}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                         ))}
-                                     </div>
-                                 </div>
-                             )}
 
                              {breakdownData.length > 0 ? (
                                  <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -701,7 +687,6 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 <div className="flex-1 overflow-y-auto p-8">
                      <div className="flex items-center gap-4 mb-6">
                          <img src={ad.authorMeta.avatarUrl} className="w-14 h-14 rounded-full border border-gray-100 bg-gray-50" alt="" />
-                         {/* Fix für TikTok Author */}
                          <div><h2 className="text-xl font-bold text-gray-900">{ad.authorMeta.nickName}</h2><a href={ad.authorMeta.profileUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">View Profile <ExternalLink className="w-3 h-3" /></a></div>
                      </div>
                      <div className="text-gray-800 text-lg leading-relaxed mb-8">{ad.text}</div>

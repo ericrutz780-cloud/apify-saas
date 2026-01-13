@@ -41,7 +41,7 @@ const COUNTRIES = [
     { code: 'US', name: 'United States' }
 ];
 
-// FIX: Agency entfernt
+// FIX: Agency entfernt, Enterprise bleibt
 const PLAN_LIMITS: Record<UserPlan, number> = {
     'starter': 100, 'pro': 1000, 'enterprise': 50000
 };
@@ -52,15 +52,14 @@ const STATUS_MESSAGES = [
     "Extracting spend estimates...", "Calculating viral efficiency...", "Finalizing report results..."
 ];
 
-// --- Helper for LocalStorage Quota ---
+// --- Helper: Safe LocalStorage (Fixes QuotaExceededError Crash) ---
 const safeLocalStorageSetItem = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
+        // Fang Fehler ab, wenn LocalStorage voll ist (QuotaExceededError)
         if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
             console.warn(`LocalStorage quota exceeded for key "${key}". Data will not be persisted but is available in current session.`);
-            // Optional: Try to clear old search results to make space
-            // clearOldSearchResults(); 
         } else {
             console.error("Error saving to localStorage", e);
         }
@@ -237,6 +236,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const [progress, setProgress] = useState(0);
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
+    // FIX: Moved useRef INSIDE component to fix crash
     const hasAutoRun = useRef(false);
 
     // Results State
@@ -314,7 +314,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 if (!q) setQuery(parsed.params.query);
                 if (parsed.params.country) setCountry(parsed.params.country);
                 
-                // TikTok Handling entfernt
+                // TikTok Handling removed
                 setActiveTab('facebook');
             }
         }

@@ -1,6 +1,6 @@
 /**
  * adAdapter.js
- * VERSION: FINAL FIX - Reach, Location, ID, Carousel & Page Name
+ * VERSION: FIXED - Reach, Location, Carousel Images & Real IDs
  */
 
 const CPR_CORRECTION_FACTOR = 150.0;
@@ -28,25 +28,20 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // 1. Daten entpacken
+    // 1. Daten sicher entpacken
     let item = row;
     if (row.data && typeof row.data === 'object') {
         item = { ...row.data, ...row }; 
     }
 
-    // 2. STOP-CHECK: Ist das Item schon fertig?
-    if (item.efficiency_score !== undefined && item.snapshot) {
-        return item; 
-    }
-
     if (!item || typeof item !== 'object') return null;
-    
-    // Snapshot sicherstellen
+
+    // Sicherheits-Check: Wenn das Item schon transformiert aussieht, gib es direkt zurück
+    if (item.efficiency_score !== undefined && item.transparency_regions) return item;
+
     const snap = item.snapshot || {};
     
-    // 3. ID und Plattformen
-    // FIX: Wir nehmen die ad_archive_id direkt als ID, ohne 'meta_' Prefix für die Anzeige,
-    // aber als String konvertiert.
+    // 2. ID Handling: Nutze echte ad_archive_id
     const rawId = item.ad_archive_id || item.id || `temp_${Math.random().toString(36).substr(2, 9)}`;
     const id = String(rawId);
     
@@ -54,7 +49,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     if (!platforms || platforms.length === 0) platforms = ['facebook', 'instagram'];
     platforms = platforms.map(p => p.toLowerCase());
 
-    // 4. Datum
+    // 3. Datum
     let isoDate = new Date().toISOString();
     const rawDate = item.start_date || snap.creation_time || item.startDate;
     if (rawDate) {
@@ -65,89 +60,100 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         } catch (e) {}
     }
 
-    // 5. Page Name & Content
-    // FIX: Priorität auf snap.page_name legen, da es in der JSON dort liegt
-    const pageName = snap.page_name || item.page_name || item.pageName || "Unknown Page";
+    // 4. Page Name & Content (Priorität auf Root-Level, da oft genauer)
+    const pageName = item.page_name || snap.page_name || item.pageName || "Unknown Page";
     const bodyText = (snap.body && snap.body.markup) ? snap.body.markup : (snap.body ? snap.body.text : "") || "";
     const safeBody = bodyText;
-    const safeAvatar = snap.page_profile_picture_url || null;
+    // Avatar Check
+    const safeAvatar = item.page_profile_picture_url || snap.page_profile_picture_url || null;
     const ctaText = snap.cta_text || "Learn More";
     const linkUrl = snap.link_url || "#";
 
-    // 6. Media Handling (Carousel FIX)
+    // 5. Media Handling (Carousel Fix)
+    // Wenn 'images' leer ist, aber 'cards' existieren, nimm Bilder aus den Cards
     let mediaType = 'image';
-    const videos = snap.videos || [];
-    // FIX: Wenn 'images' leer ist, aber 'cards' (Carousel) existieren, kopiere die Bilder rüber
+    let videos = snap.videos || [];
     let images = snap.images || [];
     const cards = snap.cards || [];
-    
-    if (images.length === 0 && cards.length > 0) {
-        // Carousel Bilder extrahieren, damit Preview funktioniert
-        images = cards.map(card => ({
-            resized_image_url: card.resized_image_url || card.original_image_url,
-            original_image_url: card.original_image_url
-        })).filter(img => img.resized_image_url);
+
+    if (images.length === 0 && videos.length === 0 && cards.length > 0) {
         mediaType = 'carousel';
+        // Extract images from cards
+        images = cards
+            .filter(c => c.resized_image_url || c.original_image_url)
+            .map(c => ({
+                resized_image_url: c.resized_image_url || c.original_image_url,
+                original_image_url: c.original_image_url
+            }));
+        
+        // Versuche Video aus Cards zu holen
+        const cardVideos = cards
+            .filter(c => c.video_hd_url || c.video_sd_url)
+            .map(c => ({
+                 video_hd_url: c.video_hd_url || c.video_sd_url,
+                 video_preview_image_url: c.video_preview_image_url
+            }));
+            
+        if (cardVideos.length > 0) {
+            videos = cardVideos;
+            mediaType = 'video';
+        }
     } else if (videos.length > 0) {
         mediaType = 'video';
     }
 
-    // 7. Targeting & Reach (Data Location FIX)
+    // 6. Targeting & Reach (WICHTIG: Prüft Root UND Snapshot)
     let demographics = [];
     let reach = 0;
-    // Defaults müssen leer sein, damit wir wissen, ob wir Daten gefunden haben
-    let targetLocations = [];
-    let targetAges = [];
+    let targetLocations = ['Global'];
+    let targetAges = ['18-65+'];
     let targetGender = 'All';
     let detailedBreakdown = [];
 
-    // FIX: JSON structure shows eu_transparency at root (item.eu_transparency)
-    const transparency = item.eu_transparency || snap.eu_transparency;
+    // transparency Daten können an verschiedenen Orten liegen
+    const transparency = item.eu_transparency || snap.eu_transparency || (item.transparency_by_location ? item.transparency_by_location.eu_transparency : null);
     
     if (transparency) {
         reach = transparency.eu_total_reach || 0;
         
-        // Ages
         if (transparency.age_audience) {
             const min = transparency.age_audience.min || 18;
             const max = transparency.age_audience.max || 65;
             targetAges = [`${min}-${max}${max >= 65 ? '+' : ''}`];
-        } else {
-            targetAges = ['18-65+'];
         }
 
-        // Gender
         if (transparency.gender_audience) targetGender = transparency.gender_audience;
 
-        // Locations
         if (transparency.location_audience && Array.isArray(transparency.location_audience)) {
             targetLocations = transparency.location_audience.map(l => l.name);
-        } else {
-            targetLocations = ['Global'];
         }
 
-        // Breakdown
         if (transparency.age_country_gender_reach_breakdown) {
             demographics = transparency.age_country_gender_reach_breakdown;
         }
     } else {
-        // Fallbacks
-        if (!reach) reach = item.reach_estimate || 0;
-        targetLocations = ['Global'];
-        targetAges = ['18-65+'];
+        // Fallback wenn keine Transparency Daten da sind
+        if (item.reach_estimate) reach = item.reach_estimate;
     }
 
-    // Spend Calculation
+    // 7. Spend Calculation
     let totalEstimatedSpend = 0;
     if (demographics && demographics.length > 0) {
         detailedBreakdown = demographics.flatMap(d => {
             if (d.age_gender_breakdowns) {
                 return d.age_gender_breakdowns.map(b => {
                     const segReach = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
+                    if (!segReach) return null;
+                    
                     const segmentCPR = getBenchmarkPrice(d.country, benchmarkMap);
                     totalEstimatedSpend += (segReach / 1000) * segmentCPR;
-                    return { location: d.country || 'Unknown', age_range: b.age_range, gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'), reach: segReach };
-                });
+                    return { 
+                        location: d.country || 'Unknown', 
+                        age_range: b.age_range, 
+                        gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'), 
+                        reach: segReach 
+                    };
+                }).filter(Boolean);
             }
             return [];
         });
@@ -159,7 +165,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         totalEstimatedSpend = (safeReach / 1000) * fallbackCPR;
     }
 
-    // Score
+    // 8. Viral Score
     let viralScore = 0;
     let daysActive = 1;
     try {
@@ -191,7 +197,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
       start_date: isoDate,
       page_name: pageName,
       page_profile_uri: snap.page_profile_uri || "#",
-      ad_library_url: `https://www.facebook.com/ads/library/?id=${item.ad_archive_id}`,
+      ad_library_url: `https://www.facebook.com/ads/library/?id=${id}`,
       snapshot: { ...snap, body: { text: safeBody }, images, videos, cta_text: ctaText, link_url: linkUrl }, 
       likes: 0,
       reach: safeReach, 
@@ -199,8 +205,14 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
       spend: totalEstimatedSpend,
       efficiency_score: Number(viralScore),
       demographics: demographics, 
-      targeting: { ages: targetAges, genders: [targetGender], locations: targetLocations, reach_estimate: safeReach, breakdown: detailedBreakdown },
-      // FIX: transparency_regions MUSS locations, ages, etc. enthalten, sonst bleibt das Modal leer
+      targeting: { 
+          ages: targetAges, 
+          genders: [targetGender], 
+          locations: targetLocations, 
+          reach_estimate: safeReach, 
+          breakdown: detailedBreakdown 
+      },
+      // WICHTIG: Hier füllen wir die Transparency Regions korrekt auf für das Modal
       transparency_regions: [{ 
           region: "EU", 
           breakdown: detailedBreakdown,
@@ -210,7 +222,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
           reach_estimate: safeReach,
           description: transparency?.targets_eu ? "Targeting European Union" : ""
       }],
-      advertiser_info: { about_text: item.page_name },
+      advertiser_info: { about_text: pageName },
       avatar: safeAvatar
     };
   });

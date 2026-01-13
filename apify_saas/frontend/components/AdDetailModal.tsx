@@ -18,34 +18,34 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-NORMALISIERUNG (ALTE LOGIK INTEGRIERT) ---
+// --- HELPER: DATEN-NORMALISIERUNG (KORRIGIERT) ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // 1. Rohdaten holen (wie im alten Adapter)
+    // 1. Basis-Daten initialisieren
     let demographics = ad.demographics || [];
     let locations: string[] = ad.targeting?.locations || [];
     let reach = ad.reach || ad.eu_total_reach || 0;
     
     const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
-    
-    // Fallback: Wenn demographics fehlen, aus rawInfo holen
-    if ((!demographics || demographics.length === 0) && rawInfo?.age_country_gender_reach_breakdown) {
-        demographics = rawInfo.age_country_gender_reach_breakdown;
-    }
-    
-    if (locations.length === 0 && rawInfo?.location_audience) {
-        locations = rawInfo.location_audience.map((l: any) => l.name);
-    }
-    if (!reach && rawInfo?.eu_total_reach) {
-        reach = rawInfo.eu_total_reach;
+    let breakdown = ad.targeting?.breakdown || [];
+
+    // 2. Fehlende Daten aus rawInfo ergänzen (falls vorhanden)
+    if (rawInfo) {
+        if (!demographics || demographics.length === 0) {
+            demographics = rawInfo.age_country_gender_reach_breakdown || [];
+        }
+        if (locations.length === 0 && rawInfo.location_audience) {
+            locations = rawInfo.location_audience.map((l: any) => l.name);
+        }
+        if (!reach) {
+            reach = rawInfo.eu_total_reach || 0;
+        }
     }
 
-    // 2. Breakdown generieren (Exakt die Logik aus old_adAdapter.js)
-    let breakdown = ad.targeting?.breakdown || [];
-    
-    // Wenn kein Breakdown da ist, aber Demographics -> Berechnen!
+    // 3. WICHTIG: Breakdown generieren - JETZT AUSSERHALB von if(rawInfo)
+    // Damit funktioniert es auch, wenn der Adapter 'demographics' direkt liefert aber 'aaa_info' weglässt.
     if ((!breakdown || breakdown.length === 0) && demographics.length > 0) {
         breakdown = demographics.flatMap((d: any) => {
              if (d.age_gender_breakdowns) {
@@ -60,14 +60,14 @@ const normalizeAdData = (ad: any) => {
         });
     }
 
-    // 3. Regionen Bereinigung (Das Problem beheben)
+    // 4. Regionen bauen & Zombie-Check
     let regions = ad.transparency_regions || [];
     
-    // FILTER: Entferne "leere Hüllen" vom neuen Adapter (Regionen ohne Breakdown)
-    regions = regions.filter((r: any) => r.breakdown && r.breakdown.length > 0);
+    // Prüfen, ob die existierende Region "leer" ist (vom Adapter ohne Breakdown erstellt)
+    const isRegionEmpty = regions.length > 0 && (!regions[0].breakdown || regions[0].breakdown.length === 0);
 
-    // FALLBACK: Wenn keine Region übrig blieb, aber wir Daten haben -> Region erstellen (wie old_adAdapter)
-    if (regions.length === 0 && breakdown.length > 0) {
+    // Fall 1: Keine Regionen oder leere Region -> Neu erstellen aus den berechneten Daten
+    if ((regions.length === 0 || isRegionEmpty) && breakdown.length > 0) {
         regions = [{
             region: "European Union",
             description: "Data from Transparency records.",
@@ -76,6 +76,13 @@ const normalizeAdData = (ad: any) => {
             ages: ad.targeting?.ages || ['18-65+'],
             genders: ad.targeting?.genders || ['All']
         }];
+    } 
+    // Fall 2: Region existiert, wir injizieren das berechnete Breakdown zur Sicherheit
+    else if (regions.length > 0 && breakdown.length > 0) {
+        regions = regions.map((r: any) => ({
+            ...r,
+            breakdown: (r.breakdown && r.breakdown.length > 0) ? r.breakdown : breakdown
+        }));
     }
 
     return {
@@ -167,8 +174,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
-    
-    // --- CAROUSEL STATE ---
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
@@ -221,7 +226,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
     
-    // Priorisiere Region-spezifische Daten, sonst allgemeines Targeting
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
     const breakdownData = activeTargeting?.breakdown || [];
     const demoData = ad.demographics || [];
@@ -272,11 +276,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                         <ImageIcon className="w-3 h-3" />
                                         <span>{cardIndex + 1} / {cards.length}</span>
                                     </div>
-                                    {currentTitle && currentTitle !== ad.page_name && (
-                                        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 to-transparent p-3 text-white text-xs font-medium">
-                                            {currentTitle}
-                                        </div>
-                                    )}
                                 </>
                             )}
                         </div>
@@ -702,6 +701,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 <div className="flex-1 overflow-y-auto p-8">
                      <div className="flex items-center gap-4 mb-6">
                          <img src={ad.authorMeta.avatarUrl} className="w-14 h-14 rounded-full border border-gray-100 bg-gray-50" alt="" />
+                         {/* Fix für TikTok Author */}
                          <div><h2 className="text-xl font-bold text-gray-900">{ad.authorMeta.nickName}</h2><a href={ad.authorMeta.profileUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">View Profile <ExternalLink className="w-3 h-3" /></a></div>
                      </div>
                      <div className="text-gray-800 text-lg leading-relaxed mb-8">{ad.text}</div>

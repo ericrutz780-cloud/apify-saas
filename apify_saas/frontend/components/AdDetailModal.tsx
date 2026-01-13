@@ -18,22 +18,11 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-NORMALISIERUNG (FIXED) ---
+// --- HELPER: DATEN-BRÜCKE (FIXED) ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // 1. ZOMBIE-CHECK: Wenn der Adapter eine leere Region geschickt hat, löschen wir sie,
-    // damit die untere Logik greift und die Daten neu berechnet.
-    let initialRegions = ad.transparency_regions || [];
-    if (initialRegions.length > 0) {
-        const first = initialRegions[0];
-        if (!first.breakdown || first.breakdown.length === 0) {
-            // Region ist leer -> Verwerfen, damit wir sie neu bauen können
-            initialRegions = [];
-        }
-    }
-
     let demographics = ad.demographics || [];
     let locations: string[] = ad.targeting?.locations || [];
     let reach = ad.reach || ad.eu_total_reach || 0;
@@ -41,15 +30,16 @@ const normalizeAdData = (ad: any) => {
     const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
     let breakdown = ad.targeting?.breakdown || [];
 
-    // 2. DATEN EXTRAKTION (Wie im alten Script)
+    // 1. Daten aus Rohdaten extrahieren (alte Logik)
     if (rawInfo) {
         if (!demographics || demographics.length === 0) {
             demographics = rawInfo.age_country_gender_reach_breakdown || [];
         }
         
-        // Breakdown aus Demographics generieren
-        if (breakdown.length === 0 && demographics.length > 0) {
-            breakdown = demographics.flatMap((d: any) => {
+        // Breakdown immer neu generieren, wenn Demographics da sind
+        // Das überschreibt potenziell leere Breakdowns vom Adapter
+        if (demographics.length > 0) {
+            const calculatedBreakdown = demographics.flatMap((d: any) => {
                  if (d.age_gender_breakdowns) {
                      return d.age_gender_breakdowns.map((b: any) => ({
                          location: d.country,
@@ -60,6 +50,10 @@ const normalizeAdData = (ad: any) => {
                  }
                  return [];
             });
+            // Nur überschreiben wenn wir was gefunden haben
+            if (calculatedBreakdown.length > 0) {
+                breakdown = calculatedBreakdown;
+            }
         }
 
         if (locations.length === 0 && rawInfo.location_audience) {
@@ -70,9 +64,13 @@ const normalizeAdData = (ad: any) => {
         }
     }
 
-    // 3. REGIONEN BAUEN (Fallback für Anzeige)
-    let regions = initialRegions;
-    if (regions.length === 0 && breakdown.length > 0) {
+    let regions = ad.transparency_regions || [];
+
+    // 2. REPARATUR: Prüfen ob die Regionen vom Adapter "leer" sind
+    const isRegionEmpty = regions.length > 0 && (!regions[0].breakdown || regions[0].breakdown.length === 0);
+
+    // Wenn gar keine Regionen da sind ODER die Region leer ist -> Neu bauen
+    if ((regions.length === 0 || isRegionEmpty) && breakdown.length > 0) {
         regions = [{
             region: "European Union",
             description: "Data from Transparency records.",
@@ -81,6 +79,13 @@ const normalizeAdData = (ad: any) => {
             ages: ad.targeting?.ages || ['18-65+'],
             genders: ad.targeting?.genders || ['All']
         }];
+    } 
+    // Fallback: Wenn Region da ist aber Breakdown fehlt, injizieren wir es
+    else if (regions.length > 0 && breakdown.length > 0) {
+        regions = regions.map((r: any) => ({
+            ...r,
+            breakdown: (r.breakdown && r.breakdown.length > 0) ? r.breakdown : breakdown
+        }));
     }
 
     return {
@@ -97,8 +102,6 @@ const normalizeAdData = (ad: any) => {
         transparency_regions: regions
     };
 };
-
-// --- KOMPONENTEN ---
 
 const AIAnalysisSection = () => {
     return (
@@ -152,13 +155,16 @@ const formatCompact = (num?: number) => {
     return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
 };
 
+const formatFollowerCount = (num?: number) => {
+    if (!num) return '';
+    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
+};
+
 const getDisplayId = (id: string) => {
     if (!id) return '';
     if (id.includes('_')) return id.split('_')[1];
     return id;
 };
-
-// --- VIEW COMPONENT ---
 
 interface MetaAdDetailViewProps {
     ad: any;
@@ -175,9 +181,7 @@ interface MetaAdDetailViewProps {
 const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({ 
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
-    // Hier wird die Daten-Logik angewendet
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
-    
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
@@ -231,7 +235,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const hasMultipleRegions = regions.length > 0;
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
     
-    // WICHTIG: Das Breakdown kommt jetzt sicher aus activeTargeting (dank normalizeAdData Fix)
+    // WICHTIG: Breakdown Daten sicherstellen
     const breakdownData = activeTargeting?.breakdown || [];
     const demoData = ad.demographics || [];
 
@@ -461,10 +465,10 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                          <table className="w-full text-sm text-left relative">
                                              <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200 sticky top-0">
                                                  <tr>
-                                                     <th className="px-4 py-3 whitespace-nowrap">Location</th>
-                                                     <th className="px-4 py-3 whitespace-nowrap">Age Range</th>
-                                                     <th className="px-4 py-3 whitespace-nowrap">Gender</th>
-                                                     <th className="px-4 py-3 text-right whitespace-nowrap">Reach</th>
+                                                     <th className="px-4 py-3">Location</th>
+                                                     <th className="px-4 py-3">Age Range</th>
+                                                     <th className="px-4 py-3">Gender</th>
+                                                     <th className="px-4 py-3 text-right">Reach</th>
                                                  </tr>
                                              </thead>
                                              <tbody className="divide-y divide-gray-100">
@@ -523,8 +527,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
         </div>
     );
 };
-
-// --- MAIN COMPONENT ---
 
 const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, onRemove, isSaved, group, type }) => {
   const [openTabs, setOpenTabs] = useState<string[]>([]);

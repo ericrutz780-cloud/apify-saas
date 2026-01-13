@@ -52,6 +52,21 @@ const STATUS_MESSAGES = [
     "Extracting spend estimates...", "Calculating viral efficiency...", "Finalizing report results..."
 ];
 
+// --- Helper for LocalStorage Quota ---
+const safeLocalStorageSetItem = (key: string, value: string) => {
+    try {
+        localStorage.setItem(key, value);
+    } catch (e: any) {
+        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+            console.warn(`LocalStorage quota exceeded for key "${key}". Data will not be persisted but is available in current session.`);
+            // Optional: Try to clear old search results to make space
+            // clearOldSearchResults(); 
+        } else {
+            console.error("Error saving to localStorage", e);
+        }
+    }
+};
+
 // --- Components ---
 
 const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => (
@@ -156,8 +171,8 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
         <form className="mt-8 space-y-5" onSubmit={handleLogin}>
           {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center"><AlertCircle className="w-4 h-4 mr-2" />{error}</div>}
           <div className="space-y-4">
-            <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label><input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="Enter your email" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label><input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="••••••••" /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="Enter your email" /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="••••••••" /></div>
           </div>
           <button type="submit" disabled={loading} className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-70 disabled:cursor-not-allowed transition-all">{loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Sign in'}</button>
         </form>
@@ -270,7 +285,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
             setStatusIndex(STATUS_MESSAGES.length - 1);
             
             setResult(apiResult);
-            localStorage.setItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
+            // FIX: Safe save to LocalStorage (catch QuotaExceededError)
+            safeLocalStorageSetItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
             
             await refreshUser();
             setLoading(false);

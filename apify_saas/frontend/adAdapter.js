@@ -1,6 +1,6 @@
 /**
  * adAdapter.js
- * VERSION: FIXED - safeBody definition & Reach/Location logic
+ * VERSION: FINAL ROBUST - Recursive Transparency Search & Split Rows
  */
 
 const CPR_CORRECTION_FACTOR = 150.0;
@@ -17,19 +17,29 @@ const getBenchmarkPrice = (country, priorityMap) => {
     return FALLBACK_BENCHMARKS[key] || FALLBACK_BENCHMARKS["GLOBAL_All_All"]; 
 };
 
-// Helper: Find transparency data recursively or via known keys
-const findTransparencyData = (item, snap) => {
-    // 1. Known paths
+// Helper: Aggressively find transparency data
+const findTransparencyData = (item) => {
+    // 1. Direct Root Check
     if (item.eu_transparency) return item.eu_transparency;
-    if (snap.eu_transparency) return snap.eu_transparency;
-    if (item.transparency_by_location && item.transparency_by_location.eu_transparency) return item.transparency_by_location.eu_transparency;
     
-    // 2. Scan keys for "_location" suffix (handling dynamic key names)
+    // 2. Snapshot Check
+    if (item.snapshot && item.snapshot.eu_transparency) return item.snapshot.eu_transparency;
+
+    // 3. Dynamic Location Key Check (e.g., "DE_location", "transparency_by_location")
+    // Iterate over all keys in the item object
     for (const key in item) {
-        if (key.endsWith('_location') && item[key] && typeof item[key] === 'object') {
+        // Check if value is an object and not null
+        if (item[key] && typeof item[key] === 'object') {
+            // Check if this object contains eu_transparency directly
             if (item[key].eu_transparency) return item[key].eu_transparency;
+            
+            // Check keys ending in "_location" specifically (common pattern)
+            if (key.endsWith('_location') || key === 'transparency_by_location') {
+                 if (item[key].eu_transparency) return item[key].eu_transparency;
+            }
         }
     }
+    
     return null;
 };
 
@@ -38,11 +48,14 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
 
   const processedAds = dbRows.map((row) => {
     let item = row;
+    // Unwrap 'data' if it exists
     if (row.data && typeof row.data === 'object') {
         item = { ...row.data, ...row }; 
     }
 
     if (!item || typeof item !== 'object') return null;
+    
+    // Avoid double processing
     if (item.efficiency_score !== undefined && item.transparency_regions) return item;
 
     const snap = item.snapshot || {};
@@ -64,14 +77,13 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     }
 
     const pageName = item.page_name || snap.page_name || "Unknown Page";
-    // FIX: Define safeBody correctly here
     const bodyText = (snap.body && snap.body.markup) ? snap.body.markup : (snap.body ? snap.body.text : "") || "";
     const safeBody = bodyText;
-    
     const safeAvatar = item.page_profile_picture_url || snap.page_profile_picture_url || null;
     const ctaText = snap.cta_text || "Learn More";
     const linkUrl = snap.link_url || "#";
 
+    // Media Handling
     let mediaType = 'image';
     let videos = snap.videos || [];
     let images = snap.images || [];
@@ -95,8 +107,8 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         mediaType = 'video';
     }
 
-    // --- DATA EXTRACTION ---
-    const transparency = findTransparencyData(item, snap);
+    // --- ROBUST DATA EXTRACTION ---
+    const transparency = findTransparencyData(item);
     
     let demographics = [];
     let reach = 0;
@@ -128,18 +140,25 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     
     if (targetLocations.length === 0) targetLocations = ['Global'];
 
-    // --- SPEND & BREAKDOWN CALCULATION ---
+    // --- BREAKDOWN GENERATION (SPLIT ROWS) ---
     let totalEstimatedSpend = 0;
+    
     if (demographics && demographics.length > 0) {
         detailedBreakdown = demographics.flatMap(d => {
             if (d.age_gender_breakdowns) {
                 return d.age_gender_breakdowns.flatMap(b => {
                     const rows = [];
-                    if (b.male > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Male', reach: b.male });
-                    if (b.female > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Female', reach: b.female });
-                    if (b.unknown > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Unknown', reach: b.unknown });
+                    // Ensure we check for existence and valid numbers
+                    const m = b.male || 0;
+                    const f = b.female || 0;
+                    const u = b.unknown || 0;
 
-                    const segReach = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
+                    if (m > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Male', reach: m });
+                    if (f > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Female', reach: f });
+                    if (u > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Unknown', reach: u });
+
+                    // Spend calculation
+                    const segReach = m + f + u;
                     const segmentCPR = getBenchmarkPrice(d.country, benchmarkMap);
                     totalEstimatedSpend += (segReach / 1000) * segmentCPR;
 
@@ -156,7 +175,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         totalEstimatedSpend = (safeReach / 1000) * fallbackCPR;
     }
 
-    // Score
+    // Score Calculation
     let viralScore = 0;
     let daysActive = 1;
     try {
@@ -202,6 +221,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
           reach_estimate: safeReach, 
           breakdown: detailedBreakdown 
       },
+      // IMPORTANT: Fill this for the modal view!
       transparency_regions: [{ 
           region: "EU", 
           breakdown: detailedBreakdown,

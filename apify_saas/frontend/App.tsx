@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import { api } from './services/api';
 import { User, SearchResult, MetaAd, TikTokAd, UserPlan } from './types';
 import MetaAdCard from './components/MetaAdCard';
+// TikTokAdCard Import bleibt für Saved Page Fallback, wird aber in Suche ausgeblendet
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
 import ExportModal from './components/ExportModal';
@@ -26,80 +27,46 @@ import { Register } from './Register';
 import { LandingPage } from './LandingPage';
 import { EmailConfirmed } from './EmailConfirmed';
 
-// --- Constants ---
 const COUNTRIES = [
-    { code: 'AT', name: 'Austria' },
-    { code: 'BE', name: 'Belgium' },
-    { code: 'BG', name: 'Bulgaria' },
-    { code: 'HR', name: 'Croatia' },
-    { code: 'CY', name: 'Cyprus' },
-    { code: 'CZ', name: 'Czech Republic' },
-    { code: 'DK', name: 'Denmark' },
-    { code: 'EE', name: 'Estonia' },
-    { code: 'FI', name: 'Finland' },
-    { code: 'FR', name: 'France' },
-    { code: 'DE', name: 'Germany' },
-    { code: 'GR', name: 'Greece' },
-    { code: 'HU', name: 'Hungary' },
-    { code: 'IE', name: 'Ireland' },
-    { code: 'IT', name: 'Italy' },
-    { code: 'LV', name: 'Latvia' },
-    { code: 'LT', name: 'Lithuania' },
-    { code: 'LU', name: 'Luxembourg' },
-    { code: 'MT', name: 'Malta' },
-    { code: 'NL', name: 'Netherlands' },
-    { code: 'NO', name: 'Norway' },
-    { code: 'PL', name: 'Poland' },
-    { code: 'PT', name: 'Portugal' },
-    { code: 'RO', name: 'Romania' },
-    { code: 'SK', name: 'Slovakia' },
-    { code: 'SI', name: 'Slovenia' },
-    { code: 'ES', name: 'Spain' },
-    { code: 'SE', name: 'Sweden' },
-    { code: 'CH', name: 'Switzerland' },
-    { code: 'GB', name: 'United Kingdom' },
+    { code: 'AT', name: 'Austria' }, { code: 'BE', name: 'Belgium' }, { code: 'BG', name: 'Bulgaria' },
+    { code: 'HR', name: 'Croatia' }, { code: 'CY', name: 'Cyprus' }, { code: 'CZ', name: 'Czech Republic' },
+    { code: 'DK', name: 'Denmark' }, { code: 'EE', name: 'Estonia' }, { code: 'FI', name: 'Finland' },
+    { code: 'FR', name: 'France' }, { code: 'DE', name: 'Germany' }, { code: 'GR', name: 'Greece' },
+    { code: 'HU', name: 'Hungary' }, { code: 'IE', name: 'Ireland' }, { code: 'IT', name: 'Italy' },
+    { code: 'LV', name: 'Latvia' }, { code: 'LT', name: 'Lithuania' }, { code: 'LU', name: 'Luxembourg' },
+    { code: 'MT', name: 'Malta' }, { code: 'NL', name: 'Netherlands' }, { code: 'NO', name: 'Norway' },
+    { code: 'PL', name: 'Poland' }, { code: 'PT', name: 'Portugal' }, { code: 'RO', name: 'Romania' },
+    { code: 'SK', name: 'Slovakia' }, { code: 'SI', name: 'Slovenia' }, { code: 'ES', name: 'Spain' },
+    { code: 'SE', name: 'Sweden' }, { code: 'CH', name: 'Switzerland' }, { code: 'GB', name: 'United Kingdom' },
     { code: 'US', name: 'United States' }
 ];
 
+// FIX: Agency entfernt
 const PLAN_LIMITS: Record<UserPlan, number> = {
-    'starter': 100,
-    'pro': 1000,
-    'agency': 5000,
-    'enterprise': 50000
+    'starter': 100, 'pro': 1000, 'enterprise': 50000
 };
 
 const STATUS_MESSAGES = [
-    "Spinning up scraper nodes...",
-    "Connecting to Meta Ad Library...",
-    "Authenticating secure session...",
-    "Querying ad database...",
-    "Scraping creative assets...",
-    "Analyzing targeting demographics...",
-    "Extracting spend estimates...",
-    "Calculating viral efficiency...",
-    "Finalizing report results..."
+    "Spinning up scraper nodes...", "Connecting to Meta Ad Library...", "Authenticating secure session...",
+    "Querying ad database...", "Scraping creative assets...", "Analyzing targeting demographics...",
+    "Extracting spend estimates...", "Calculating viral efficiency...", "Finalizing report results..."
 ];
 
 // --- Components ---
 
-const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => {
-    return (
-        <div className="flex flex-col gap-1.5 w-full sm:w-64 animate-in fade-in zoom-in-95 duration-300">
-            <div className="flex items-center justify-between px-0.5">
-                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider animate-pulse">{status}</span>
-                <span className="text-sm font-bold text-gray-700">{progress}%</span>
-            </div>
-            <div className="flex items-center gap-3">
-                <div className="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                        className="h-full bg-brand-500 rounded-full transition-all duration-500 ease-out" 
-                        style={{ width: `${progress}%` }}
-                    ></div>
-                </div>
+const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => (
+    <div className="flex flex-col gap-1.5 w-full sm:w-64 animate-in fade-in zoom-in-95 duration-300">
+        <div className="flex items-center justify-between px-0.5">
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider animate-pulse">{status}</span>
+            <span className="text-sm font-bold text-gray-700">{progress}%</span>
+        </div>
+        <div className="flex items-center gap-3">
+            <div className="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-brand-500 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
             </div>
         </div>
-    );
-};
+    </div>
+);
 
 const Toast = ({ message, onUndo, onClose, visible }: { message: string, onUndo?: () => void, onClose: () => void, visible: boolean }) => {
     if (!visible) return null;
@@ -108,93 +75,51 @@ const Toast = ({ message, onUndo, onClose, visible }: { message: string, onUndo?
             <div className="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4 min-w-[300px] justify-between">
                 <span className="text-sm font-medium">{message}</span>
                 <div className="flex items-center gap-3">
-                    {onUndo && (
-                        <button onClick={onUndo} className="text-brand-300 hover:text-white text-sm font-semibold flex items-center gap-1 transition-colors">
-                            <Undo2 className="w-3 h-3" /> Undo
-                        </button>
-                    )}
-                    <button onClick={onClose} className="text-gray-400 hover:text-white">
-                        <X className="w-4 h-4" />
-                    </button>
+                    {onUndo && <button onClick={onUndo} className="text-brand-300 hover:text-white text-sm font-semibold flex items-center gap-1 transition-colors"><Undo2 className="w-3 h-3" /> Undo</button>}
+                    <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
                 </div>
             </div>
         </div>
     );
 };
 
-// --- SEARCH SECTION COMPONENT (Reusable) ---
-const SearchInputSection = ({ 
-    query, setQuery, 
-    platform, setPlatform, 
-    country, setCountry, 
-    dateRange, setDateRange,
-    loading, progress, statusIndex,
-    handleSearch,
-    canAfford, cost, remainingCredits,
-    error, user
-}: any) => {
-    return (
-        <div className="w-full mb-8">
-            <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
-                <div className="flex items-center px-4">
-                    <Search className="w-6 h-6 text-gray-400 mr-3" />
-                    <input 
-                        type="text" 
-                        className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" 
-                        placeholder="e.g. 'Skincare', 'Nike'..." 
-                        value={query} 
-                        onChange={(e) => setQuery(e.target.value)} 
-                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
-                        autoFocus 
-                    />
-                </div>
-                <div className="h-px bg-gray-100 mx-4"></div>
-                <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-                    <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
-                        <div className="relative flex-1 md:flex-none">
-                            <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-200">
-                                {(['meta', 'tiktok'] as const).map((p) => (
-                                    <button key={p} onClick={() => setPlatform(p)} className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-all ${platform === p ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>{p}</button>
-                                ))}
+// TikTok Option entfernt
+const SearchInputSection = ({ query, setQuery, country, setCountry, dateRange, setDateRange, loading, progress, statusIndex, handleSearch, canAfford, cost, remainingCredits, error, user }: any) => (
+    <div className="w-full mb-8">
+        <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
+            <div className="flex items-center px-4">
+                <Search className="w-6 h-6 text-gray-400 mr-3" />
+                <input type="text" className="w-full py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent" placeholder="e.g. 'Skincare', 'Nike'..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} autoFocus />
+            </div>
+            <div className="h-px bg-gray-100 mx-4"></div>
+            <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
+                    <div className="relative flex-1 md:flex-none">
+                        {/* Static Badge instead of selector */}
+                        <div className="flex items-center gap-2">
+                            <div className="px-4 py-1.5 text-sm font-medium rounded-md bg-white text-gray-900 shadow-sm ring-1 ring-black/5 flex items-center gap-2 border border-gray-100">
+                                <Facebook className="w-4 h-4 text-[#1877F2]" />
+                                Meta Ads
                             </div>
                         </div>
-                        {(platform === 'meta') && <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />}
-                        <DateRangePicker date={dateRange} setDate={setDateRange} />
                     </div>
-                    <div className="text-right flex items-center gap-3 w-full md:w-auto justify-between md:justify-end mt-4 md:mt-0 min-h-[48px]">
-                        {loading ? (
-                            <SearchProgressBar progress={Math.floor(progress)} status={STATUS_MESSAGES[statusIndex]} />
-                        ) : (
-                            <>
-                                <div className="text-sm">
-                                    <span className="text-gray-500 mr-1">Cost:</span>
-                                    <span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span>
-                                </div>
-                                <button onClick={handleSearch} disabled={!query || !canAfford || loading} className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm flex items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                    Run Search <ArrowRight className="w-4 h-4 ml-2" />
-                                </button>
-                            </>
-                        )}
-                    </div>
+                    <CountrySelector value={country} onChange={setCountry} countries={COUNTRIES} />
+                    <DateRangePicker date={dateRange} setDate={setDateRange} />
+                </div>
+                <div className="text-right flex items-center gap-3 w-full md:w-auto justify-between md:justify-end mt-4 md:mt-0 min-h-[48px]">
+                    {loading ? <SearchProgressBar progress={Math.floor(progress)} status={STATUS_MESSAGES[statusIndex]} /> : <>
+                        <div className="text-sm"><span className="text-gray-500 mr-1">Cost:</span><span className={`font-semibold ${canAfford ? 'text-gray-900' : 'text-red-600'}`}>{cost} credits</span></div>
+                        <button onClick={handleSearch} disabled={!query || !canAfford || loading} className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-lg font-semibold text-sm shadow-sm flex items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed">Run Search <ArrowRight className="w-4 h-4 ml-2" /></button>
+                    </>}
                 </div>
             </div>
-            <div className="mt-4 flex justify-between items-start px-2">
-                    {!canAfford ? (
-                        <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100">
-                            <AlertCircle className="w-4 h-4 mr-2" />
-                            Insufficient credits. You have {user.credits}.
-                        </div>
-                    ) : (
-                        <div className="text-sm text-gray-500 flex items-center">
-                            <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
-                            You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left.
-                        </div>
-                    )}
-                    {error && <div className="text-red-600 text-sm">{error}</div>}
-            </div>
         </div>
-    );
-};
+        <div className="mt-4 flex justify-between items-start px-2">
+            {!canAfford ? <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-100"><AlertCircle className="w-4 h-4 mr-2" /> Insufficient credits. You have {user.credits}.</div> : <div className="text-sm text-gray-500 flex items-center"><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> You will have <span className="font-medium text-gray-900 mx-1">{remainingCredits}</span> credits left.</div>}
+            {error && <div className="text-red-600 text-sm bg-red-50 p-2 rounded border border-red-100 mt-2">{error}</div>}
+        </div>
+    </div>
+);
 
 // --- Pages ---
 
@@ -224,9 +149,7 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-sm border border-gray-200">
         <div className="text-center">
-           <div className="mx-auto h-12 w-12 bg-brand-600 rounded-xl flex items-center justify-center shadow-lg shadow-brand-600/20">
-             <Zap className="h-6 w-6 text-white fill-white" />
-           </div>
+           <div className="mx-auto h-12 w-12 bg-brand-600 rounded-xl flex items-center justify-center shadow-lg shadow-brand-600/20"><Zap className="h-6 w-6 text-white fill-white" /></div>
            <h2 className="mt-6 text-2xl font-semibold text-gray-900">Welcome back</h2>
            <p className="mt-2 text-sm text-gray-600">Enter your credentials to access the workspace.</p>
         </div>
@@ -253,7 +176,8 @@ const Dashboard = ({ user }: { user: User }) => {
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
     const handleRerun = (item: any) => {
-        navigate(`/search?q=${encodeURIComponent(item.query)}&platform=${item.platform || 'meta'}&country=${item.country || 'DE'}&autorun=true`);
+        // Platform fest auf 'meta' setzen
+        navigate(`/search?q=${encodeURIComponent(item.query)}&platform=meta&country=${item.country || 'DE'}&autorun=true`);
     };
 
     return (
@@ -285,27 +209,24 @@ const Dashboard = ({ user }: { user: User }) => {
     )
 }
 
-// Wrapper to handle shared state for Search and Results logic
 const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User, refreshUser: () => void, initialResultId?: string }) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     
     // Search State
     const [query, setQuery] = useState('');
-    const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta');
+    const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta'); // Default to Meta
     const [country, setCountry] = useState('DE');
     const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>(() => ({ from: undefined, to: undefined }));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
-    
-    // FIX: hasAutoRun belongs INSIDE the component
     const hasAutoRun = useRef(false);
 
     // Results State
     const [result, setResult] = useState<SearchResult | null>(null);
-    const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
+    const [activeTab, setActiveTab] = useState<'facebook' | 'instagram'>('facebook'); // TikTok removed from initial tab
     const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
     const [sortBy, setSortBy] = useState<'efficiency_score' | 'reach' | 'newest'>('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
@@ -315,13 +236,11 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const [exportData, setExportData] = useState<SearchResult | null>(null);
     const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
 
-    // Constants
     const limit = PLAN_LIMITS[user.plan] || 100;
     const cost = limit;
     const canAfford = user.credits >= cost;
     const remainingCredits = user.credits - cost;
 
-    // --- Search Handler ---
     const handleSearch = useCallback(async () => {
         if (!query || !canAfford || loading) return;
         setLoading(true); setProgress(0); setStatusIndex(0); setError('');
@@ -339,37 +258,36 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         try {
             const apiResult = await api.runSearch({ 
                 query, 
-                platform, 
+                platform: 'meta', // Force Meta
                 country, 
                 limit: cost, 
                 startDateMin: dateRange.from?.toISOString().split('T')[0], 
                 startDateMax: dateRange.to?.toISOString().split('T')[0] 
             });
-            clearInterval(progressTimer); setProgress(100); setStatusIndex(STATUS_MESSAGES.length - 1);
             
-            // FIX: Set result immediately to avoid blank screen
+            clearInterval(progressTimer); 
+            setProgress(100); 
+            setStatusIndex(STATUS_MESSAGES.length - 1);
+            
             setResult(apiResult);
             localStorage.setItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
             
             await refreshUser();
             setLoading(false);
             
-            // Use replace to avoid history stack issues, navigate to result URL
-            navigate(`/results/${apiResult.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`, { replace: true });
+            navigate(`/results/${apiResult.id}?q=${encodeURIComponent(query)}&platform=meta&country=${country}`, { replace: true });
+            
         } catch (err: any) { 
             clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
         }
-    }, [query, platform, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
+    }, [query, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
-    // Initialize state
     useEffect(() => {
         const q = searchParams.get('q');
-        const p = searchParams.get('platform');
         const c = searchParams.get('country');
         const autorun = searchParams.get('autorun');
         
         if (q && q !== query) setQuery(q);
-        if (p && (p === 'meta' || p === 'tiktok') && p !== platform) setPlatform(p as 'meta' | 'tiktok');
         if (c && c !== country) setCountry(c);
 
         if (initialResultId && !result) {
@@ -378,10 +296,10 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 const parsed = JSON.parse(stored);
                 setResult(parsed);
                 if (!q) setQuery(parsed.params.query);
-                if (parsed.params.platform) setPlatform(parsed.params.platform);
                 if (parsed.params.country) setCountry(parsed.params.country);
                 
-                if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
+                // TikTok Handling entfernt
+                setActiveTab('facebook');
             }
         }
 
@@ -392,25 +310,19 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     }, [searchParams, initialResultId, handleSearch, loading]);
 
 
-    // Results Processing Logic
     const transformedMetaAds = useMemo(() => {
         if (!result) return [];
         // @ts-ignore
         let rawAds = result.metaAds || result.data || [];
-        
-        // Ensure it's an array
         if (!Array.isArray(rawAds)) return [];
-
-        // 2. If data is already transformed (has demographics), use it directly
         // @ts-ignore
         if (rawAds.length > 0 && (rawAds[0].efficiency_score !== undefined || rawAds[0].demographics)) return rawAds; 
-        
-        // 3. Otherwise run through adapter, wrapping in {data: ...} as expected by adAdapter
         const adsToTransform = rawAds.map((ad: any) => ({ data: ad }));
         return cleanAndTransformData(adsToTransform);
     }, [result]);
 
-    const canExport = user.plan === 'pro' || user.plan === 'agency';
+    // FIX: Export Button für Pro, Agency UND Enterprise sichtbar machen
+    const canExport = user.plan === 'pro' || user.plan === 'enterprise';
 
     const groupAdsByText = (ads: MetaAd[]) => {
         const groups: { [key: string]: MetaAd[] } = {};
@@ -421,41 +333,26 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const getFilteredAndSortedAds = () => {
         if (!result) return [];
         let ads: any[] = [];
-        let isMetaTab = false;
         
-        // @ts-ignore
-        const tiktokAds = result.tikTokAds || [];
+        // TikTok Logic removed completely
+        if (activeTab === 'facebook') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'))]; }
+        else if (activeTab === 'instagram') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('instagram'))]; }
 
-        if (activeTab === 'facebook') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'))]; isMetaTab = true; }
-        else if (activeTab === 'instagram') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('instagram'))]; isMetaTab = true; }
-        else { ads = [...tiktokAds]; isMetaTab = false; }
-
-        if (isMetaTab) {
-            if (formatFilter === 'video') ads = ads.filter(ad => ad.snapshot.videos && ad.snapshot.videos.length > 0);
-            else if (formatFilter === 'image') ads = ads.filter(ad => (!ad.snapshot.videos || ad.snapshot.videos.length === 0));
-            const grouped = groupAdsByText(ads as MetaAd[]);
-            grouped.sort((a, b) => {
-                const adA = a.representative, adB = b.representative;
-                if (sortBy === 'efficiency_score') return (adB.efficiency_score || 0) - (adA.efficiency_score || 0);
-                if (sortBy === 'reach') return (adB.targeting?.reach_estimate || 0) - (adA.targeting?.reach_estimate || 0);
-                return new Date(adB.start_date).getTime() - new Date(adA.start_date).getTime();
-            });
-            return grouped;
-        } else {
-            if (formatFilter === 'image') return [];
-            ads.sort((a, b) => {
-                if (sortBy === 'efficiency_score') return b.diggCount - a.diggCount;
-                if (sortBy === 'reach') return b.playCount - a.playCount;
-                return new Date(b.createTimeISO).getTime() - new Date(a.createTimeISO).getTime();
-            });
-            return ads;
-        }
+        if (formatFilter === 'video') ads = ads.filter(ad => ad.snapshot.videos && ad.snapshot.videos.length > 0);
+        else if (formatFilter === 'image') ads = ads.filter(ad => (!ad.snapshot.videos || ad.snapshot.videos.length === 0));
+        const grouped = groupAdsByText(ads as MetaAd[]);
+        grouped.sort((a, b) => {
+            const adA = a.representative, adB = b.representative;
+            if (sortBy === 'efficiency_score') return (adB.efficiency_score || 0) - (adA.efficiency_score || 0);
+            if (sortBy === 'reach') return (adB.targeting?.reach_estimate || 0) - (adA.targeting?.reach_estimate || 0);
+            return new Date(adB.start_date).getTime() - new Date(adA.start_date).getTime();
+        });
+        return grouped;
     };
 
     const displayedItems = getFilteredAndSortedAds();
     const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
     
-    // --- Shared Handlers ---
     const showToast = (message: string, onUndo?: () => void) => { setToast({ message, visible: true, onUndo }); setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 5000); };
     const handleToggleSave = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
         if (!user) return;
@@ -474,25 +371,14 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         <div className="w-full">
             <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
             <AdDetailModal isOpen={!!selectedAdsGroup} onClose={() => setSelectedAdsGroup(null)} group={selectedAdsGroup?.data || []} type={selectedAdsGroup?.type} onSave={handleSaveAd} isSaved={isSaved} onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} />
-            <ExportModal isOpen={!!exportData} onClose={() => setExportData(null)} onExport={handleExportFile} resultCount={exportData ? (exportData.metaAds?.length || 0) + (exportData.tikTokAds?.length || 0) : 0} />
+            <ExportModal isOpen={!!exportData} onClose={() => setExportData(null)} onExport={handleExportFile} resultCount={exportData ? (exportData.metaAds?.length || 0) : 0} />
 
             <div className="w-full">
-                <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta and TikTok.</p></div>
+                <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta.</p></div>
                 
-                {/* Search Input Section is ALWAYS rendered here */}
-                <SearchInputSection 
-                    query={query} setQuery={setQuery} 
-                    platform={platform} setPlatform={setPlatform} 
-                    country={country} setCountry={setCountry}
-                    dateRange={dateRange} setDateRange={setDateRange}
-                    loading={loading} progress={progress} statusIndex={statusIndex}
-                    handleSearch={handleSearch}
-                    canAfford={canAfford} cost={cost} remainingCredits={remainingCredits}
-                    error={error} user={user}
-                />
+                <SearchInputSection query={query} setQuery={setQuery} country={country} setCountry={setCountry} dateRange={dateRange} setDateRange={setDateRange} loading={loading} progress={progress} statusIndex={statusIndex} handleSearch={handleSearch} canAfford={canAfford} cost={cost} remainingCredits={remainingCredits} error={error} user={user} />
             </div>
 
-            {/* RESULTS SECTION - Rendered conditionally below search input */}
             {result && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
                     <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
@@ -500,9 +386,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                             <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">Results for <span className="text-brand-600">"{result.params.query}"</span></h2>
                             <div className="hidden sm:block w-px h-6 bg-gray-300 mx-2"></div>
                             <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-start">
-                                {result.params.platform !== 'tiktok' && (<><button onClick={() => setActiveTab('facebook')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'facebook' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" /> Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('facebook')).length}</span></button><button onClick={() => setActiveTab('instagram')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'instagram' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Instagram className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> Instagram <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('instagram')).length}</span></button></>)}
-                                {/* @ts-ignore */}
-                                {result.params.platform !== 'meta' && (<button onClick={() => setActiveTab('tiktok')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'tiktok' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Video className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> TikTok <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{result.tikTokAds?.length || 0}</span></button>)}
+                                <button onClick={() => setActiveTab('facebook')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'facebook' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" /> Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('facebook')).length}</span></button>
+                                <button onClick={() => setActiveTab('instagram')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'instagram' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Instagram className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> Instagram <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('instagram')).length}</span></button>
                             </div>
                         </div>
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
@@ -529,9 +414,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                             const savedEntry = user.savedAds.find(s => s.data.id === ad.id && s.type === 'meta');
                             return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => setSelectedAdsGroup({data: item.group, type: 'meta'})} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => handleToggleSave(ad, 'meta')} isSaved={!!savedEntry} />;
                         })}
-                        {activeTab === 'tiktok' && displayedItems.map((ad: any) => (
-                            <TikTokAdCard key={ad.id} ad={ad} viewMode={viewMode} onClick={(data) => setSelectedAdsGroup({data: [data], type: 'tiktok'})} />
-                        ))}
                     </div>
                     {displayedItems.length === 0 && !loading && <div className="text-center py-20 text-gray-500">No results match your filters</div>}
                 </div>
@@ -558,7 +440,7 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     useEffect(() => { if (searchParams.get('mode') === 'topup') setBillingCycle('topup'); }, [searchParams]);
     const activeTab = searchParams.get('tab') || 'profile';
 
-    // Pricing Plans Data - FIX: Added missing properties to prevent crash on Topup
+    // FIX: Agency entfernt, Enterprise hinzugefügt
     const pricingPlans = [
         { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' },
         { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true },
@@ -681,6 +563,12 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     )
 }
 
+// FIX 2: User Check Wrapper to prevent Layout Crash on Login
+const ProtectedRoute = ({ user, children }: { user: User | null, children: React.ReactElement }) => {
+    if (!user) return <Navigate to="/login" replace />;
+    return <Layout user={user}>{children}</Layout>;
+};
+
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -723,7 +611,7 @@ const App = () => {
                 <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
                 
                 {/* 2. PROTECTED ROUTES (With Layout) */}
-                <Route element={user ? <Layout user={user}><Outlet /></Layout> : <Navigate to="/login" replace />}>
+                <Route element={<ProtectedRoute user={user} children={<Outlet />} />}>
                     <Route path="/dashboard" element={<Dashboard user={user!} />} />
                     <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div>} />
                     <Route path="/search" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} />} />

@@ -15,8 +15,8 @@ export interface SearchHistoryItem {
   limit: number;
 }
 
-// FIX: 'enterprise' hinzugefügt, damit App.tsx keinen Fehler wirft
-export type UserPlan = 'starter' | 'pro' | 'agency' | 'enterprise';
+// FIX: 'agency' entfernt, nur noch Starter, Pro, Enterprise
+export type UserPlan = 'starter' | 'pro' | 'enterprise';
 
 export interface User {
   id: string;
@@ -58,16 +58,16 @@ export interface MetaAdTargetingBreakdown {
 }
 
 export interface MetaAdTargeting {
-  ages: string[]; // e.g. "18-65+"
-  genders: string[]; // e.g. "All", "Female"
-  locations: string[]; // e.g. "Germany", "France", "US"
+  ages: string[];
+  genders: string[];
+  locations: string[];
   excluded_locations?: string[];
-  reach_estimate?: number; // EU Reach estimate
+  reach_estimate?: number;
   breakdown?: MetaAdTargetingBreakdown[];
 }
 
 export interface MetaAdRegionTransparency {
-    region: string; // e.g. "European Union", "United Kingdom"
+    region: string;
     description: string;
     ages: string[];
     genders: string[];
@@ -109,22 +109,22 @@ export interface MetaAd {
   page_profile_uri: string;
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
-  // Metrics
   likes: number;
   impressions: number;
   spend: number;
-  efficiency_score?: number; // Viral Score (0-100)
-  // New Targeting Data
+  efficiency_score?: number;
   targeting?: MetaAdTargeting;
   transparency_regions?: MetaAdRegionTransparency[];
-  page_categories?: string[]; // e.g. "Clothing Store"
-  disclaimer?: string; // "Paid for by..."
+  page_categories?: string[];
+  disclaimer?: string;
   advertiser_info?: MetaAdAdvertiserInfo;
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
+  // FIX: Avatar Feld hinzugefügt
+  avatar?: string | null;
 }
 
-// TikTok Ad Models
+// TikTok Ad Models (bleiben als Typ erhalten, falls alte Daten existieren)
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;
@@ -143,7 +143,7 @@ export interface TikTokAd {
   webVideoUrl: string;
   text: string;
   createTimeISO: string;
-  diggCount: number; // Likes
+  diggCount: number;
   shareCount: number;
   playCount: number;
   commentCount: number;
@@ -160,4 +160,5 @@ export interface SearchResult {
   metaAds: MetaAd[];
   tikTokAds: TikTokAd[];
   cost: number;
+  data?: any[]; 
 }

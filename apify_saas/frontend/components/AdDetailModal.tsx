@@ -18,11 +18,22 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-NORMALISIERUNG ---
+// --- HELPER: DATEN-NORMALISIERUNG (FIXED) ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
+    // 1. ZOMBIE-CHECK: Wenn der Adapter eine leere Region geschickt hat, löschen wir sie,
+    // damit die untere Logik greift und die Daten neu berechnet.
+    let initialRegions = ad.transparency_regions || [];
+    if (initialRegions.length > 0) {
+        const first = initialRegions[0];
+        if (!first.breakdown || first.breakdown.length === 0) {
+            // Region ist leer -> Verwerfen, damit wir sie neu bauen können
+            initialRegions = [];
+        }
+    }
+
     let demographics = ad.demographics || [];
     let locations: string[] = ad.targeting?.locations || [];
     let reach = ad.reach || ad.eu_total_reach || 0;
@@ -30,12 +41,13 @@ const normalizeAdData = (ad: any) => {
     const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
     let breakdown = ad.targeting?.breakdown || [];
 
+    // 2. DATEN EXTRAKTION (Wie im alten Script)
     if (rawInfo) {
         if (!demographics || demographics.length === 0) {
             demographics = rawInfo.age_country_gender_reach_breakdown || [];
         }
         
-        // Breakdown aus Demographics generieren (falls leer)
+        // Breakdown aus Demographics generieren
         if (breakdown.length === 0 && demographics.length > 0) {
             breakdown = demographics.flatMap((d: any) => {
                  if (d.age_gender_breakdowns) {
@@ -58,8 +70,8 @@ const normalizeAdData = (ad: any) => {
         }
     }
 
-    let regions = ad.transparency_regions || [];
-    // Fallback-Region erstellen
+    // 3. REGIONEN BAUEN (Fallback für Anzeige)
+    let regions = initialRegions;
     if (regions.length === 0 && breakdown.length > 0) {
         regions = [{
             region: "European Union",
@@ -69,15 +81,6 @@ const normalizeAdData = (ad: any) => {
             ages: ad.targeting?.ages || ['18-65+'],
             genders: ad.targeting?.genders || ['All']
         }];
-    } 
-    // Falls Region existiert aber leer ist -> Inject Breakdown
-    else if (regions.length > 0 && breakdown.length > 0) {
-        regions = regions.map((r: any) => {
-            if (!r.breakdown || r.breakdown.length === 0) {
-                return { ...r, breakdown: breakdown };
-            }
-            return r;
-        });
     }
 
     return {
@@ -94,6 +97,8 @@ const normalizeAdData = (ad: any) => {
         transparency_regions: regions
     };
 };
+
+// --- KOMPONENTEN ---
 
 const AIAnalysisSection = () => {
     return (
@@ -147,16 +152,13 @@ const formatCompact = (num?: number) => {
     return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
 };
 
-const formatFollowerCount = (num?: number) => {
-    if (!num) return '';
-    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
-};
-
 const getDisplayId = (id: string) => {
     if (!id) return '';
     if (id.includes('_')) return id.split('_')[1];
     return id;
 };
+
+// --- VIEW COMPONENT ---
 
 interface MetaAdDetailViewProps {
     ad: any;
@@ -173,7 +175,9 @@ interface MetaAdDetailViewProps {
 const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({ 
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
+    // Hier wird die Daten-Logik angewendet
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
+    
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
@@ -226,6 +230,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
+    
+    // WICHTIG: Das Breakdown kommt jetzt sicher aus activeTargeting (dank normalizeAdData Fix)
     const breakdownData = activeTargeting?.breakdown || [];
     const demoData = ad.demographics || [];
 
@@ -369,6 +375,53 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                              </div>
                          )}
 
+                         {(hasMultipleRegions ? regions[activeRegionIndex].description : null) && (
+                             <p className="text-sm text-gray-600 leading-relaxed">{regions[activeRegionIndex].description}</p>
+                         )}
+
+                         <div>
+                             <h4 className="text-sm font-bold text-gray-800 mb-4">EU ad audience</h4>
+                             <div className="mb-6">
+                                 <div className="flex items-center gap-2 mb-2"><h5 className="text-sm font-bold text-gray-900">Location</h5><Info className="w-3.5 h-3.5 text-gray-400" /></div>
+                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                     <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
+                                                <tr>
+                                                    <th className="px-4 py-3 whitespace-nowrap">Location</th>
+                                                    <th className="px-4 py-3 whitespace-nowrap">Type</th>
+                                                    <th className="px-4 py-3 whitespace-nowrap">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {(activeTargeting?.excluded_locations || []).map((loc: string, idx: number) => (
+                                                    <tr key={`ex-${idx}`} className="bg-white hover:bg-gray-50">
+                                                        <td className="px-4 py-3 font-medium text-gray-900">{loc}</td>
+                                                        <td className="px-4 py-3 text-gray-500">Region</td>
+                                                        <td className="px-4 py-3 text-gray-500">Excluded</td>
+                                                    </tr>
+                                                ))}
+                                                {(activeTargeting?.locations || ['Global']).map((loc: string, idx: number) => (
+                                                    <tr key={`in-${idx}`} className="bg-white hover:bg-gray-50">
+                                                        <td className="px-4 py-3 font-medium text-gray-900">{loc}</td>
+                                                        <td className="px-4 py-3 text-gray-500">Region</td>
+                                                        <td className="px-4 py-3 text-gray-500">Included</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                     </div>
+                                 </div>
+                             </div>
+
+                             <div className="space-y-4">
+                                 <div className="p-4 border border-gray-200 rounded-lg"><div className="flex items-center gap-2 mb-1"><h5 className="text-sm font-bold text-gray-900">Age</h5></div><div className="text-2xl font-normal text-gray-900 mb-1">{activeTargeting?.ages?.join(', ') || '18-65+'}</div></div>
+                                 <div className="p-4 border border-gray-200 rounded-lg"><div className="flex items-center gap-2 mb-1"><h5 className="text-sm font-bold text-gray-900">Gender</h5></div><div className="text-2xl font-normal text-gray-900 mb-1">{activeTargeting?.genders?.join(', ') || 'All'}</div></div>
+                             </div>
+                         </div>
+
+                         <div className="h-px bg-gray-200"></div>
+
                          <div>
                              <h4 className="text-sm font-bold text-gray-800 mb-4">EU ad delivery</h4>
                              <div className="p-4 border border-gray-200 rounded-lg mb-6">
@@ -408,10 +461,10 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                          <table className="w-full text-sm text-left relative">
                                              <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200 sticky top-0">
                                                  <tr>
-                                                     <th className="px-4 py-3">Location</th>
-                                                     <th className="px-4 py-3">Age Range</th>
-                                                     <th className="px-4 py-3">Gender</th>
-                                                     <th className="px-4 py-3 text-right">Reach</th>
+                                                     <th className="px-4 py-3 whitespace-nowrap">Location</th>
+                                                     <th className="px-4 py-3 whitespace-nowrap">Age Range</th>
+                                                     <th className="px-4 py-3 whitespace-nowrap">Gender</th>
+                                                     <th className="px-4 py-3 text-right whitespace-nowrap">Reach</th>
                                                  </tr>
                                              </thead>
                                              <tbody className="divide-y divide-gray-100">
@@ -470,6 +523,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
         </div>
     );
 };
+
+// --- MAIN COMPONENT ---
 
 const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, onRemove, isSaved, group, type }) => {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
@@ -607,6 +662,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                          <tbody className="divide-y divide-gray-100">
                                              {sortedGroup.map((rawAd: any) => {
                                                  const ad = normalizeAdData(rawAd);
+                                                 // Thumbnail Logic inkl. Carousel Check
                                                  let thumbUrl = null;
                                                  if (ad.snapshot?.images?.length > 0) thumbUrl = ad.snapshot.images[0].resized_image_url;
                                                  else if (ad.snapshot?.cards?.length > 0) thumbUrl = ad.snapshot.cards[0].resized_image_url || ad.snapshot.cards[0].original_image_url;
@@ -657,6 +713,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 <div className="flex-1 overflow-y-auto p-8">
                      <div className="flex items-center gap-4 mb-6">
                          <img src={ad.authorMeta.avatarUrl} className="w-14 h-14 rounded-full border border-gray-100 bg-gray-50" alt="" />
+                         {/* Fix für TikTok Author */}
                          <div><h2 className="text-xl font-bold text-gray-900">{ad.authorMeta.nickName}</h2><a href={ad.authorMeta.profileUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">View Profile <ExternalLink className="w-3 h-3" /></a></div>
                      </div>
                      <div className="text-gray-800 text-lg leading-relaxed mb-8">{ad.text}</div>

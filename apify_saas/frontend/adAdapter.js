@@ -4,15 +4,8 @@
  */
 
 const CPR_CORRECTION_FACTOR = 150.0;
-
-const SEGMENT_BASELINES = {
-    CTA: { 'SHOP_NOW': 15, 'LEARN_MORE': 25, 'SIGN_UP': 20, 'DEFAULT': 20 }
-};
-
-const FALLBACK_BENCHMARKS = {
-    "GLOBAL_All_All": 4.50, "DE_All_All": 6.00, "US_All_All": 12.00,
-    "CH_All_All": 10.00, "AT_All_All": 5.50, "FR_All_All": 5.00, "GB_All_All": 7.00
-};
+const SEGMENT_BASELINES = { CTA: { 'SHOP_NOW': 15, 'LEARN_MORE': 25, 'SIGN_UP': 20, 'DEFAULT': 20 } };
+const FALLBACK_BENCHMARKS = { "GLOBAL_All_All": 4.50, "DE_All_All": 6.00, "US_All_All": 12.00, "CH_All_All": 10.00, "AT_All_All": 5.50, "FR_All_All": 5.00, "GB_All_All": 7.00 };
 
 const getBenchmarkPrice = (country, priorityMap) => {
     const key = `${country}_All_All`;
@@ -64,13 +57,11 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     const pageName = item.page_name || snap.page_name || item.pageName || "Unknown Page";
     const bodyText = (snap.body && snap.body.markup) ? snap.body.markup : (snap.body ? snap.body.text : "") || "";
     const safeBody = bodyText;
-    // Avatar Check
     const safeAvatar = item.page_profile_picture_url || snap.page_profile_picture_url || null;
     const ctaText = snap.cta_text || "Learn More";
     const linkUrl = snap.link_url || "#";
 
-    // 5. Media Handling (Carousel Fix)
-    // Wenn 'images' leer ist, aber 'cards' existieren, nimm Bilder aus den Cards
+    // 5. Media Handling (Carousel Fix - Holt Bilder aus Cards wenn nötig)
     let mediaType = 'image';
     let videos = snap.videos || [];
     let images = snap.images || [];
@@ -102,7 +93,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         mediaType = 'video';
     }
 
-    // 6. Targeting & Reach (WICHTIG: Prüft Root UND Snapshot)
+    // 6. Targeting & Reach (WICHTIG: Prüft transparency_by_location zuerst!)
     let demographics = [];
     let reach = 0;
     let targetLocations = ['Global'];
@@ -110,8 +101,15 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     let targetGender = 'All';
     let detailedBreakdown = [];
 
-    // transparency Daten können an verschiedenen Orten liegen
-    const transparency = item.eu_transparency || snap.eu_transparency || (item.transparency_by_location ? item.transparency_by_location.eu_transparency : null);
+    // FIX: Explizite Suche nach transparency_by_location.eu_transparency
+    let transparency = null;
+    if (item.transparency_by_location && item.transparency_by_location.eu_transparency) {
+        transparency = item.transparency_by_location.eu_transparency;
+    } else if (item.eu_transparency) {
+        transparency = item.eu_transparency;
+    } else if (snap.eu_transparency) {
+        transparency = snap.eu_transparency;
+    }
     
     if (transparency) {
         reach = transparency.eu_total_reach || 0;
@@ -143,7 +141,8 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
             if (d.age_gender_breakdowns) {
                 return d.age_gender_breakdowns.map(b => {
                     const segReach = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
-                    if (!segReach) return null;
+                    // Prevent NaN but keep 0 if valid
+                    if (segReach === undefined || segReach === null) return null;
                     
                     const segmentCPR = getBenchmarkPrice(d.country, benchmarkMap);
                     totalEstimatedSpend += (segReach / 1000) * segmentCPR;
@@ -153,7 +152,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
                         gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'), 
                         reach: segReach 
                     };
-                }).filter(Boolean);
+                }).filter(x => x !== null);
             }
             return [];
         });
@@ -178,6 +177,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
 
     const dailyMediaValue = totalEstimatedSpend / daysActive;
     const ctaKey = (ctaText || "DEFAULT").toUpperCase().replace(/\s+/g, '_');
+    
     const baseExpectation = SEGMENT_BASELINES.CTA[ctaKey] || SEGMENT_BASELINES.CTA.DEFAULT;
     
     const performanceRatio = dailyMediaValue / baseExpectation;

@@ -15,7 +15,6 @@ export interface SearchHistoryItem {
   limit: number;
 }
 
-// FIX: 'agency' entfernt, nur noch Starter, Pro, Enterprise
 export type UserPlan = 'starter' | 'pro' | 'enterprise';
 
 export interface User {
@@ -39,7 +38,6 @@ export interface SearchParams {
   startDateMax?: string;
 }
 
-// Meta Ad Models
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
@@ -47,7 +45,7 @@ export interface MetaAdSnapshot {
     text: string;
   };
   images: Array<{ resized_image_url: string }>;
-  videos: Array<{ video_hd_url: string }>;
+  videos: Array<{ video_hd_url: string; video_preview_image_url?: string }>;
 }
 
 export interface MetaAdTargetingBreakdown {
@@ -120,11 +118,9 @@ export interface MetaAd {
   advertiser_info?: MetaAdAdvertiserInfo;
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
-  // FIX: Avatar Feld hinzugefügt
   avatar?: string | null;
 }
 
-// TikTok Ad Models (bleiben als Typ erhalten, falls alte Daten existieren)
 export interface TikTokVideoMeta {
   coverUrl: string;
   duration: number;

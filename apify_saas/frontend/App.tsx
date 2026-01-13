@@ -4,7 +4,7 @@ import Layout from './components/Layout';
 import { api } from './services/api';
 import { User, SearchResult, MetaAd, TikTokAd, UserPlan } from './types';
 import MetaAdCard from './components/MetaAdCard';
-// TikTokAdCard Import bleibt für Saved Page Fallback, wird aber in Suche ausgeblendet
+// TikTokAdCard remains for saved ads fallback, but removed from search UI
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
 import ExportModal from './components/ExportModal';
@@ -41,7 +41,7 @@ const COUNTRIES = [
     { code: 'US', name: 'United States' }
 ];
 
-// FIX: Agency entfernt, Enterprise bleibt
+// FIX: Agency entfernt
 const PLAN_LIMITS: Record<UserPlan, number> = {
     'starter': 100, 'pro': 1000, 'enterprise': 50000
 };
@@ -52,7 +52,7 @@ const STATUS_MESSAGES = [
     "Extracting spend estimates...", "Calculating viral efficiency...", "Finalizing report results..."
 ];
 
-// --- Helper: Safe LocalStorage (Fixes QuotaExceededError Crash) ---
+// --- Helper for LocalStorage Quota ---
 const safeLocalStorageSetItem = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);

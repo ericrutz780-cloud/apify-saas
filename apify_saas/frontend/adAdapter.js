@@ -1,6 +1,6 @@
 /**
  * adAdapter.js
- * VERSION: FIXED - Reach, Location, Carousel Images & Real IDs
+ * VERSION: BREAKDOWN FIX - Splits Gender/Age rows correctly
  */
 
 const CPR_CORRECTION_FACTOR = 150.0;
@@ -17,24 +17,35 @@ const getBenchmarkPrice = (country, priorityMap) => {
     return FALLBACK_BENCHMARKS[key] || FALLBACK_BENCHMARKS["GLOBAL_All_All"]; 
 };
 
+// Helper: Find transparency data recursively or via known keys
+const findTransparencyData = (item, snap) => {
+    // 1. Known paths
+    if (item.eu_transparency) return item.eu_transparency;
+    if (snap.eu_transparency) return snap.eu_transparency;
+    if (item.transparency_by_location && item.transparency_by_location.eu_transparency) return item.transparency_by_location.eu_transparency;
+    
+    // 2. Scan keys for "_location" suffix (handling dynamic key names)
+    for (const key in item) {
+        if (key.endsWith('_location') && item[key] && typeof item[key] === 'object') {
+            if (item[key].eu_transparency) return item[key].eu_transparency;
+        }
+    }
+    return null;
+};
+
 export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
   if (!dbRows || !Array.isArray(dbRows)) return [];
 
   const processedAds = dbRows.map((row) => {
-    // 1. Daten sicher entpacken
     let item = row;
     if (row.data && typeof row.data === 'object') {
         item = { ...row.data, ...row }; 
     }
 
     if (!item || typeof item !== 'object') return null;
-
-    // Sicherheits-Check: Wenn das Item schon transformiert aussieht, gib es direkt zurück
     if (item.efficiency_score !== undefined && item.transparency_regions) return item;
 
     const snap = item.snapshot || {};
-    
-    // 2. ID Handling: Nutze echte ad_archive_id
     const rawId = item.ad_archive_id || item.id || `temp_${Math.random().toString(36).substr(2, 9)}`;
     const id = String(rawId);
     
@@ -42,7 +53,6 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     if (!platforms || platforms.length === 0) platforms = ['facebook', 'instagram'];
     platforms = platforms.map(p => p.toLowerCase());
 
-    // 3. Datum
     let isoDate = new Date().toISOString();
     const rawDate = item.start_date || snap.creation_time || item.startDate;
     if (rawDate) {
@@ -53,15 +63,12 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         } catch (e) {}
     }
 
-    // 4. Page Name & Content (Priorität auf Root-Level, da oft genauer)
-    const pageName = item.page_name || snap.page_name || item.pageName || "Unknown Page";
+    const pageName = item.page_name || snap.page_name || "Unknown Page";
     const bodyText = (snap.body && snap.body.markup) ? snap.body.markup : (snap.body ? snap.body.text : "") || "";
-    const safeBody = bodyText;
     const safeAvatar = item.page_profile_picture_url || snap.page_profile_picture_url || null;
     const ctaText = snap.cta_text || "Learn More";
     const linkUrl = snap.link_url || "#";
 
-    // 5. Media Handling (Carousel Fix - Holt Bilder aus Cards wenn nötig)
     let mediaType = 'image';
     let videos = snap.videos || [];
     let images = snap.images || [];
@@ -69,22 +76,14 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
 
     if (images.length === 0 && videos.length === 0 && cards.length > 0) {
         mediaType = 'carousel';
-        // Extract images from cards
-        images = cards
-            .filter(c => c.resized_image_url || c.original_image_url)
-            .map(c => ({
-                resized_image_url: c.resized_image_url || c.original_image_url,
-                original_image_url: c.original_image_url
-            }));
-        
-        // Versuche Video aus Cards zu holen
-        const cardVideos = cards
-            .filter(c => c.video_hd_url || c.video_sd_url)
-            .map(c => ({
-                 video_hd_url: c.video_hd_url || c.video_sd_url,
-                 video_preview_image_url: c.video_preview_image_url
-            }));
-            
+        images = cards.filter(c => c.resized_image_url || c.original_image_url).map(c => ({
+            resized_image_url: c.resized_image_url || c.original_image_url,
+            original_image_url: c.original_image_url
+        }));
+        const cardVideos = cards.filter(c => c.video_hd_url || c.video_sd_url).map(c => ({
+             video_hd_url: c.video_hd_url || c.video_sd_url,
+             video_preview_image_url: c.video_preview_image_url
+        }));
         if (cardVideos.length > 0) {
             videos = cardVideos;
             mediaType = 'video';
@@ -93,24 +92,16 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         mediaType = 'video';
     }
 
-    // 6. Targeting & Reach (WICHTIG: Prüft transparency_by_location zuerst!)
+    // --- DATA EXTRACTION ---
+    const transparency = findTransparencyData(item, snap);
+    
     let demographics = [];
     let reach = 0;
-    let targetLocations = ['Global'];
+    let targetLocations = [];
     let targetAges = ['18-65+'];
     let targetGender = 'All';
     let detailedBreakdown = [];
 
-    // FIX: Explizite Suche nach transparency_by_location.eu_transparency
-    let transparency = null;
-    if (item.transparency_by_location && item.transparency_by_location.eu_transparency) {
-        transparency = item.transparency_by_location.eu_transparency;
-    } else if (item.eu_transparency) {
-        transparency = item.eu_transparency;
-    } else if (snap.eu_transparency) {
-        transparency = snap.eu_transparency;
-    }
-    
     if (transparency) {
         reach = transparency.eu_total_reach || 0;
         
@@ -119,9 +110,8 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
             const max = transparency.age_audience.max || 65;
             targetAges = [`${min}-${max}${max >= 65 ? '+' : ''}`];
         }
-
         if (transparency.gender_audience) targetGender = transparency.gender_audience;
-
+        
         if (transparency.location_audience && Array.isArray(transparency.location_audience)) {
             targetLocations = transparency.location_audience.map(l => l.name);
         }
@@ -130,29 +120,54 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
             demographics = transparency.age_country_gender_reach_breakdown;
         }
     } else {
-        // Fallback wenn keine Transparency Daten da sind
         if (item.reach_estimate) reach = item.reach_estimate;
     }
+    
+    if (targetLocations.length === 0) targetLocations = ['Global'];
 
-    // 7. Spend Calculation
+    // --- SPEND & BREAKDOWN CALCULATION ---
     let totalEstimatedSpend = 0;
     if (demographics && demographics.length > 0) {
+        // FIX: Use flatMap to create separate rows for Male, Female, Unknown
         detailedBreakdown = demographics.flatMap(d => {
             if (d.age_gender_breakdowns) {
-                return d.age_gender_breakdowns.map(b => {
+                return d.age_gender_breakdowns.flatMap(b => {
+                    const rows = [];
+                    // Add row for Male
+                    if (b.male > 0) {
+                        rows.push({
+                            location: d.country || 'Unknown',
+                            age_range: b.age_range,
+                            gender: 'Male',
+                            reach: b.male
+                        });
+                    }
+                    // Add row for Female
+                    if (b.female > 0) {
+                        rows.push({
+                            location: d.country || 'Unknown',
+                            age_range: b.age_range,
+                            gender: 'Female',
+                            reach: b.female
+                        });
+                    }
+                    // Add row for Unknown
+                    if (b.unknown > 0) {
+                        rows.push({
+                            location: d.country || 'Unknown',
+                            age_range: b.age_range,
+                            gender: 'Unknown',
+                            reach: b.unknown
+                        });
+                    }
+
+                    // Spend calculation still uses the sum
                     const segReach = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
-                    // Prevent NaN but keep 0 if valid
-                    if (segReach === undefined || segReach === null) return null;
-                    
                     const segmentCPR = getBenchmarkPrice(d.country, benchmarkMap);
                     totalEstimatedSpend += (segReach / 1000) * segmentCPR;
-                    return { 
-                        location: d.country || 'Unknown', 
-                        age_range: b.age_range, 
-                        gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'), 
-                        reach: segReach 
-                    };
-                }).filter(x => x !== null);
+
+                    return rows;
+                });
             }
             return [];
         });
@@ -164,7 +179,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
         totalEstimatedSpend = (safeReach / 1000) * fallbackCPR;
     }
 
-    // 8. Viral Score
+    // Score
     let viralScore = 0;
     let daysActive = 1;
     try {
@@ -177,7 +192,6 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
 
     const dailyMediaValue = totalEstimatedSpend / daysActive;
     const ctaKey = (ctaText || "DEFAULT").toUpperCase().replace(/\s+/g, '_');
-    
     const baseExpectation = SEGMENT_BASELINES.CTA[ctaKey] || SEGMENT_BASELINES.CTA.DEFAULT;
     
     const performanceRatio = dailyMediaValue / baseExpectation;
@@ -199,7 +213,6 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
       page_profile_uri: snap.page_profile_uri || "#",
       ad_library_url: `https://www.facebook.com/ads/library/?id=${id}`,
       snapshot: { ...snap, body: { text: safeBody }, images, videos, cta_text: ctaText, link_url: linkUrl }, 
-      likes: 0,
       reach: safeReach, 
       impressions: safeReach,
       spend: totalEstimatedSpend,
@@ -210,9 +223,8 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
           genders: [targetGender], 
           locations: targetLocations, 
           reach_estimate: safeReach, 
-          breakdown: detailedBreakdown 
+          breakdown: detailedBreakdown // Now contains split rows
       },
-      // WICHTIG: Hier füllen wir die Transparency Regions korrekt auf für das Modal
       transparency_regions: [{ 
           region: "EU", 
           breakdown: detailedBreakdown,

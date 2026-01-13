@@ -4,7 +4,7 @@ import Layout from './components/Layout';
 import { api } from './services/api';
 import { User, SearchResult, MetaAd, TikTokAd, UserPlan } from './types';
 import MetaAdCard from './components/MetaAdCard';
-// TikTokAdCard remains for saved ads fallback, but removed from search UI
+// TikTokAdCard Import bleibt für Saved Page Fallback, wird aber in Suche ausgeblendet
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
 import ExportModal from './components/ExportModal';
@@ -57,7 +57,6 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        // Fang Fehler ab, wenn LocalStorage voll ist (QuotaExceededError)
         if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
             console.warn(`LocalStorage quota exceeded for key "${key}". Data will not be persisted but is available in current session.`);
         } else {
@@ -109,7 +108,6 @@ const SearchInputSection = ({ query, setQuery, country, setCountry, dateRange, s
             <div className="p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
                 <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto items-center">
                     <div className="relative flex-1 md:flex-none">
-                        {/* Static Badge instead of selector */}
                         <div className="flex items-center gap-2">
                             <div className="px-4 py-1.5 text-sm font-medium rounded-md bg-white text-gray-900 shadow-sm ring-1 ring-black/5 flex items-center gap-2 border border-gray-100">
                                 <Facebook className="w-4 h-4 text-[#1877F2]" />

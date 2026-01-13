@@ -1,6 +1,6 @@
 /**
  * adAdapter.js
- * VERSION: BREAKDOWN FIX - Splits Gender/Age rows correctly
+ * VERSION: FIXED - safeBody definition & Reach/Location logic
  */
 
 const CPR_CORRECTION_FACTOR = 150.0;
@@ -64,7 +64,10 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     }
 
     const pageName = item.page_name || snap.page_name || "Unknown Page";
+    // FIX: Define safeBody correctly here
     const bodyText = (snap.body && snap.body.markup) ? snap.body.markup : (snap.body ? snap.body.text : "") || "";
+    const safeBody = bodyText;
+    
     const safeAvatar = item.page_profile_picture_url || snap.page_profile_picture_url || null;
     const ctaText = snap.cta_text || "Learn More";
     const linkUrl = snap.link_url || "#";
@@ -128,40 +131,14 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     // --- SPEND & BREAKDOWN CALCULATION ---
     let totalEstimatedSpend = 0;
     if (demographics && demographics.length > 0) {
-        // FIX: Use flatMap to create separate rows for Male, Female, Unknown
         detailedBreakdown = demographics.flatMap(d => {
             if (d.age_gender_breakdowns) {
                 return d.age_gender_breakdowns.flatMap(b => {
                     const rows = [];
-                    // Add row for Male
-                    if (b.male > 0) {
-                        rows.push({
-                            location: d.country || 'Unknown',
-                            age_range: b.age_range,
-                            gender: 'Male',
-                            reach: b.male
-                        });
-                    }
-                    // Add row for Female
-                    if (b.female > 0) {
-                        rows.push({
-                            location: d.country || 'Unknown',
-                            age_range: b.age_range,
-                            gender: 'Female',
-                            reach: b.female
-                        });
-                    }
-                    // Add row for Unknown
-                    if (b.unknown > 0) {
-                        rows.push({
-                            location: d.country || 'Unknown',
-                            age_range: b.age_range,
-                            gender: 'Unknown',
-                            reach: b.unknown
-                        });
-                    }
+                    if (b.male > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Male', reach: b.male });
+                    if (b.female > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Female', reach: b.female });
+                    if (b.unknown > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Unknown', reach: b.unknown });
 
-                    // Spend calculation still uses the sum
                     const segReach = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
                     const segmentCPR = getBenchmarkPrice(d.country, benchmarkMap);
                     totalEstimatedSpend += (segReach / 1000) * segmentCPR;
@@ -223,7 +200,7 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
           genders: [targetGender], 
           locations: targetLocations, 
           reach_estimate: safeReach, 
-          breakdown: detailedBreakdown // Now contains split rows
+          breakdown: detailedBreakdown 
       },
       transparency_regions: [{ 
           region: "EU", 

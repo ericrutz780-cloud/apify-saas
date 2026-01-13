@@ -81,7 +81,6 @@ const STATUS_MESSAGES = [
 ];
 
 // --- Components ---
-// FIX: hasAutoRun removed from here. It must be inside a component.
 
 const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => {
     return (
@@ -287,9 +286,6 @@ const Dashboard = ({ user }: { user: User }) => {
 }
 
 // Wrapper to handle shared state for Search and Results logic
-// ... (Imports und andere Komponenten bleiben gleich) ...
-
-// Wrapper to handle shared state for Search and Results logic
 const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User, refreshUser: () => void, initialResultId?: string }) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -304,17 +300,17 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
     
-    // FIX 1: useRef MUSS hier drinnen sein
+    // FIX: hasAutoRun belongs INSIDE the component
     const hasAutoRun = useRef(false);
 
     // Results State
-    const [result, setResult] = useState<SearchResult | null>(null); // <--- HIER MUSS DAS ERGEBNIS REIN
+    const [result, setResult] = useState<SearchResult | null>(null);
     const [activeTab, setActiveTab] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
     const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
     const [sortBy, setSortBy] = useState<'efficiency_score' | 'reach' | 'newest'>('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
     
-    // ... (Modal & Export State bleiben gleich) ...
+    // Modal & Export State
     const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
     const [exportData, setExportData] = useState<SearchResult | null>(null);
     const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
@@ -341,7 +337,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
         }, 100);
 
         try {
-            console.log("🚀 Starting Search for:", query);
             const apiResult = await api.runSearch({ 
                 query, 
                 platform, 
@@ -350,76 +345,56 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                 startDateMin: dateRange.from?.toISOString().split('T')[0], 
                 startDateMax: dateRange.to?.toISOString().split('T')[0] 
             });
+            clearInterval(progressTimer); setProgress(100); setStatusIndex(STATUS_MESSAGES.length - 1);
             
-            clearInterval(progressTimer); 
-            setProgress(100); 
-            setStatusIndex(STATUS_MESSAGES.length - 1);
-            
-            console.log("✅ Search Complete. Result:", apiResult); // DEBUG
-
-            // FIX 3: Ergebnis SOFORT setzen, nicht erst nach Reload!
+            // FIX: Set result immediately to avoid blank screen
             setResult(apiResult);
             localStorage.setItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
             
             await refreshUser();
             setLoading(false);
             
-            // URL aktualisieren, aber ohne Reload, damit der State erhalten bleibt
+            // Use replace to avoid history stack issues, navigate to result URL
             navigate(`/results/${apiResult.id}?q=${encodeURIComponent(query)}&platform=${platform}&country=${country}`, { replace: true });
-            
         } catch (err: any) { 
-            console.error("❌ Search Failed:", err);
-            clearInterval(progressTimer); 
-            setLoading(false); 
-            setError(err.message || 'Search failed.'); 
+            clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
         }
     }, [query, platform, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
-    // Initialize state (Nur beim ersten Laden oder wenn ID sich ändert)
+    // Initialize state
     useEffect(() => {
         const q = searchParams.get('q');
         const p = searchParams.get('platform');
         const c = searchParams.get('country');
         const autorun = searchParams.get('autorun');
         
-        // Inputs syncen
         if (q && q !== query) setQuery(q);
         if (p && (p === 'meta' || p === 'tiktok') && p !== platform) setPlatform(p as 'meta' | 'tiktok');
         if (c && c !== country) setCountry(c);
 
-        // Daten laden, falls ID vorhanden und noch kein Ergebnis im State
         if (initialResultId && !result) {
             const stored = localStorage.getItem(`search_${initialResultId}`);
             if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    console.log("📥 Loaded result from LocalStorage:", parsed);
-                    setResult(parsed);
-                    
-                    // Sync Tabs basierend auf geladenen Daten
-                    if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
-                } catch (e) {
-                    console.error("Error parsing stored result", e);
-                }
+                const parsed = JSON.parse(stored);
+                setResult(parsed);
+                if (!q) setQuery(parsed.params.query);
+                if (parsed.params.platform) setPlatform(parsed.params.platform);
+                if (parsed.params.country) setCountry(parsed.params.country);
+                
+                if (parsed.params.platform === 'tiktok') setActiveTab('tiktok'); else setActiveTab('facebook');
             }
         }
-        
-        // Auto-Run Logik
+
         if (autorun === 'true' && q && !hasAutoRun.current && !loading && !initialResultId) {
-            console.log("🔄 Auto-Run triggered via URL");
             hasAutoRun.current = true;
             handleSearch();
         }
-        // Wir nutzen eine Ref, um Endlosschleifen zu verhindern
-        // const hasAutoRun = useRef(false); <--- Dies muss oben in der Komponente definiert sein!
-    }, [initialResultId, searchParams]); // Abhängigkeiten reduziert, um Loops zu vermeiden
+    }, [searchParams, initialResultId, handleSearch, loading]);
 
 
-    // Results Processing Logic - DATA HANDLING FIX
+    // Results Processing Logic
     const transformedMetaAds = useMemo(() => {
         if (!result) return [];
-        
-        // 1. Get raw ads from either metaAds (structured) or data (flat/backend response)
         // @ts-ignore
         let rawAds = result.metaAds || result.data || [];
         
@@ -583,16 +558,16 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     useEffect(() => { if (searchParams.get('mode') === 'topup') setBillingCycle('topup'); }, [searchParams]);
     const activeTab = searchParams.get('tab') || 'profile';
 
-    // Pricing Plans Data
+    // Pricing Plans Data - FIX: Added missing properties to prevent crash on Topup
     const pricingPlans = [
         { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' },
         { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true },
         { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '50,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' }
     ];
     const creditTopupPlans = [
-        { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits' },
-        { name: 'Pro', id: 'pro_topup', price: '10 €', unit: '/ 1k Credits' },
-        { name: 'Enterprise', id: 'enterprise_topup', price: '5 €', unit: '/ 1k Credits' }
+        { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },
+        { name: 'Pro', id: 'pro_topup', price: '10 €', unit: '/ 1k Credits', features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], popular: true, buttonText: 'Buy Credits' },
+        { name: 'Enterprise', id: 'enterprise_topup', price: '5 €', unit: '/ 1k Credits', features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], buttonText: 'Buy Credits' }
     ];
 
     const [isEditing, setIsEditing] = useState(false);
@@ -706,12 +681,6 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     )
 }
 
-// FIX 2: User Check Wrapper to prevent Layout Crash on Login
-const ProtectedRoute = ({ user, children }: { user: User | null, children: React.ReactElement }) => {
-    if (!user) return <Navigate to="/login" replace />;
-    return <Layout user={user}>{children}</Layout>;
-};
-
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -754,7 +723,7 @@ const App = () => {
                 <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
                 
                 {/* 2. PROTECTED ROUTES (With Layout) */}
-                <Route element={<ProtectedRoute user={user} children={<Outlet />} />}>
+                <Route element={user ? <Layout user={user}><Outlet /></Layout> : <Navigate to="/login" replace />}>
                     <Route path="/dashboard" element={<Dashboard user={user!} />} />
                     <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div>} />
                     <Route path="/search" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} />} />

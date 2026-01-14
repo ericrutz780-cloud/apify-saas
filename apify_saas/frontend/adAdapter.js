@@ -1,6 +1,6 @@
 /**
  * adAdapter.js
- * VERSION: FIXED - Preserve Demographics from Backend
+ * VERSION: FIXED - Carousel Priority & Card Image Fallback
  */
 
 const CPR_CORRECTION_FACTOR = 150.0;
@@ -70,7 +70,13 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     const safeBody = bodyText;
     const safeAvatar = item.page_profile_picture_url || snap.page_profile_picture_url || null;
     const ctaText = snap.cta_text || "Learn More";
-    const linkUrl = snap.link_url || "#";
+    
+    // FIX: Link Domain Check
+    let linkUrl = snap.link_url || "#";
+    const isPlatformLink = (url) => {
+        if (!url) return true;
+        return url.includes('facebook.com') || url.includes('instagram.com') || url === '#';
+    };
 
     // Media Handling
     let mediaType = 'image';
@@ -78,29 +84,46 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     let images = snap.images || [];
     const cards = snap.cards || [];
 
-    if (images.length === 0 && videos.length === 0 && cards.length > 0) {
+    // --- FIX: Carousel Detection & Image Extraction ---
+    if (cards.length > 0) {
         mediaType = 'carousel';
-        images = cards.filter(c => c.resized_image_url || c.original_image_url).map(c => ({
-            resized_image_url: c.resized_image_url || c.original_image_url,
-            original_image_url: c.original_image_url
-        }));
+        
+        // Wir holen Bilder aus ALLEN möglichen Quellen in der Karte
+        const cardImages = cards
+            .filter(c => c.resized_image_url || c.original_image_url || c.video_preview_image_url)
+            .map(c => ({
+                resized_image_url: c.resized_image_url || c.original_image_url || c.video_preview_image_url,
+                original_image_url: c.original_image_url || c.resized_image_url || c.video_preview_image_url
+            }));
+
+        if (cardImages.length > 0) {
+            images = cardImages; 
+        }
+
         const cardVideos = cards.filter(c => c.video_hd_url || c.video_sd_url).map(c => ({
              video_hd_url: c.video_hd_url || c.video_sd_url,
-             video_preview_image_url: c.video_preview_image_url
+             video_preview_image_url: c.video_preview_image_url || c.resized_image_url
         }));
+        
         if (cardVideos.length > 0) {
             videos = cardVideos;
-            mediaType = 'video';
+            mediaType = 'video'; 
         }
+        
+        if (isPlatformLink(linkUrl)) {
+            const betterLink = cards.find(c => c.link_url && !isPlatformLink(c.link_url));
+            if (betterLink) linkUrl = betterLink.link_url;
+        }
+
     } else if (videos.length > 0) {
         mediaType = 'video';
     }
+    // --------------------------------------------------
 
     // --- ROBUST DATA EXTRACTION ---
     const transparency = findTransparencyData(item);
     
-    // FIX: Wir übernehmen die demographics vom Item, falls vorhanden!
-    // Vorher war hier: let demographics = []; (Das hat die Daten gelöscht)
+    // FIX: Bestehende Demographics retten!
     let demographics = item.demographics || [];
     
     let reach = 0;
@@ -123,7 +146,8 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
             targetLocations = transparency.location_audience.map(l => l.name);
         }
 
-        if (transparency.age_country_gender_reach_breakdown) {
+        // Nur überschreiben, wenn wir hier bessere Daten haben und demographics leer war
+        if (transparency.age_country_gender_reach_breakdown && demographics.length === 0) {
             demographics = transparency.age_country_gender_reach_breakdown;
         }
     } else {

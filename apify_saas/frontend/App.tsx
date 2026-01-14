@@ -188,8 +188,8 @@ const Dashboard = ({ user }: { user: User }) => {
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
     const handleRerun = (item: any) => {
-        // Platform fest auf 'meta' setzen
-        navigate(`/search?q=${encodeURIComponent(item.query)}&platform=meta&country=${item.country || 'DE'}&autorun=true`);
+        // FIX: Rerun springt jetzt zur Results-Page mit ID!
+        navigate(`/results/${item.id}`);
     };
 
     return (
@@ -214,14 +214,14 @@ const Dashboard = ({ user }: { user: User }) => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th><th className="relative px-6 py-3"><span className="sr-only">Actions</span></th></tr></thead>
                         <tbody className="bg-white divide-y divide-gray-200">{user.searchHistory.length > 0 ? (user.searchHistory.slice(0, 5).map((search) => (<tr key={search.id} className="hover:bg-gray-50 transition-colors"><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{search.query}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{search.country ? (COUNTRIES.find(c => c.code === search.country)?.name || search.country) : 'Global'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(search.timestamp).toLocaleDateString()}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleRerun(search)} className="text-brand-600 hover:text-brand-900">Rerun</button></td></tr>))) : (<tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">No searches yet</td></tr>)}</tbody></table>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(search.timestamp).toLocaleDateString()}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleRerun(search)} className="text-brand-600 hover:text-brand-900 font-medium">Rerun</button></td></tr>))) : (<tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">No searches yet</td></tr>)}</tbody></table>
                 </div>
             </div>
         </div>
     )
 }
 
-const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User, refreshUser: () => void, initialResultId?: string }) => {
+const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     
@@ -295,6 +295,38 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
             clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
         }
     }, [query, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
+
+    // --- FIX: RERUN / LOAD HISTORY LOGIC ---
+    useEffect(() => {
+        const loadHistory = async (id: string) => {
+            setLoading(true); setStatusIndex(8); setProgress(90); 
+            try {
+                // Versuche erst LocalStorage
+                const stored = localStorage.getItem(`search_${id}`);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    setResult(parsed);
+                    if (!query) setQuery(parsed.params.query);
+                    if (parsed.params.country) setCountry(parsed.params.country);
+                } else {
+                    // Fallback: API Call (DB via api.getSearchHistory)
+                    const historyResult = await api.getSearchHistory(id);
+                    setResult(historyResult);
+                    setQuery(historyResult.params.query);
+                    setCountry(historyResult.params.country || 'DE');
+                }
+            } catch (e) {
+                console.error(e);
+                setError("Could not load search history.");
+            } finally {
+                setLoading(false); setProgress(100);
+            }
+        };
+
+        if (initialResultId && !result && !loading) {
+            loadHistory(initialResultId);
+        }
+    }, [initialResultId]);
 
     useEffect(() => {
         const q = searchParams.get('q');
@@ -426,7 +458,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId }: { user: User
                         {isMetaActive && displayedItems.map((item: any) => {
                             const ad = item.representative;
                             const savedEntry = user.savedAds.find(s => s.data.id === ad.id && s.type === 'meta');
-                            return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => setSelectedAdsGroup({data: item.group, type: 'meta'})} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => handleToggleSave(ad, 'meta')} isSaved={!!savedEntry} />;
+                            // WICHTIG: onOpenModal wird hier verwendet!
+                            return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => onOpenModal(item.group, 'meta')} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => handleToggleSave(ad, 'meta')} isSaved={!!savedEntry} />;
                         })}
                     </div>
                     {displayedItems.length === 0 && !loading && <div className="text-center py-20 text-gray-500">No results match your filters</div>}
@@ -587,36 +620,52 @@ const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const refreshUser = async () => {
-    try {
-      const userData = await api.getUser();
-      setUser(userData);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-    }
+  // FIX: Modal State & Handlers moved to App Level
+  const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
+  const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
+  
+  const refreshUser = async () => { try { const userData = await api.getUser(); setUser(userData); } catch (error) { console.error("User fetch error", error); } };
+  
+  const showToast = (message: string, onUndo?: () => void) => { setToast({ message, visible: true, onUndo }); setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 5000); };
+  
+  const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
+      try { await api.saveAd(ad, type); await refreshUser(); showToast("Ad saved!"); } catch (e) { console.error("Save failed", e); }
+  };
+  const handleRemoveAd = async (id: string) => {
+      try { await api.removeSavedAd(id); await refreshUser(); showToast("Ad removed!"); } catch (e) { console.error("Remove failed", e); }
+  };
+  
+  // Wrapper für Save/Remove im Modal
+  const handleModalSave = (ad: any, type: any) => {
+      // Check if saved
+      const savedEntry = user?.savedAds.find(s => s.data.id === ad.id);
+      if (savedEntry) handleRemoveAd(savedEntry.id); else handleSaveAd(ad, type);
   };
 
-  useEffect(() => {
-    const init = async () => {
-      await refreshUser();
-      setLoading(false);
-    };
-    init();
-  }, []);
+  useEffect(() => { const init = async () => { await refreshUser(); setLoading(false); }; init(); }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
 
   return (
     <ErrorBoundary>
         <Router>
+            {/* Modal & Toast on Top Level */}
+            <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
+            <AdDetailModal 
+                isOpen={!!selectedAdsGroup} 
+                onClose={() => setSelectedAdsGroup(null)} 
+                group={selectedAdsGroup?.data || []} 
+                type={selectedAdsGroup?.type} 
+                onSave={(ad) => handleSaveAd(ad, 'meta')} 
+                onRemove={() => { 
+                    const ad = selectedAdsGroup?.data[0];
+                    const saved = user?.savedAds.find(s => s.data.id === ad.id);
+                    if(saved) handleRemoveAd(saved.id);
+                }}
+                isSaved={!!selectedAdsGroup?.data[0] && !!user?.savedAds.find(s => s.data.id === selectedAdsGroup.data[0].id)}
+            />
+
             <Routes>
-                {/* 1. PUBLIC ROUTES (No Layout) - Fixes White Screen Crash */}
                 <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/demo" element={<DemoPage />} />
@@ -624,17 +673,16 @@ const App = () => {
                 <Route path="/email-confirmed" element={<EmailConfirmed />} />
                 <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
                 
-                {/* 2. PROTECTED ROUTES (With Layout) */}
                 <Route element={<ProtectedRoute user={user} children={<Outlet />} />}>
                     <Route path="/dashboard" element={<Dashboard user={user!} />} />
-                    <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Live Ad Feed</h1></div><AdFeed /></div>} />
-                    <Route path="/search" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} />} />
-                    <Route path="/results/:id" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} />} />
-                    <Route path="/saved" element={<SavedPage user={user!} refreshUser={refreshUser} onOpenModal={() => {}} onRemove={() => {}} />} />
+                    <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold">Live Ad Feed</h1></div><AdFeed /></div>} />
+                    {/* FIX: Passing onOpenModal correctly */}
+                    <Route path="/search" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
+                    <Route path="/results/:id" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
+                    {/* FIX: Passing onOpenModal and onRemove correctly for Saved Page */}
+                    <Route path="/saved" element={<SavedPage user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} />} />
                     <Route path="/account" element={<Account user={user!} refreshUser={refreshUser} />} />
                 </Route>
-
-                {/* Catch all */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </Router>

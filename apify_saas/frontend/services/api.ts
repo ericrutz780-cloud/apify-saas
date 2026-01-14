@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd, SearchHistoryItem, UserPlan } from '../types';
-import { MOCK_USER } from './mockData'; // Nur als Fallback für User-Struktur
+import { MOCK_USER } from './mockData'; 
 // @ts-ignore
 import { cleanAndTransformData } from '../adAdapter';
 // @ts-ignore
@@ -30,7 +30,6 @@ class ApiService {
     localStorage.setItem('adspy_local_history', JSON.stringify(updated));
   }
 
-  // --- NEU: REGISTER FUNKTION (Hinzugefügt für Payment Flow) ---
   async register(email: string, password: string): Promise<any> {
     const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
@@ -44,7 +43,6 @@ class ApiService {
     }
     return await response.json();
   }
-  // -------------------------------------------------------------
 
   async login(email: string, password: string): Promise<User> {
     try {
@@ -85,7 +83,6 @@ class ApiService {
 
         const localHistory = this._getLocalHistory();
 
-        // Wir mischen die echte User-ID mit der Struktur, die das neue Design erwartet
         this.user = { 
             ...MOCK_USER, 
             ...profileData, 
@@ -107,16 +104,62 @@ class ApiService {
       return this.user!;
   }
 
+  // --- NEU & WICHTIG: Rerun Funktion ---
+  async getSearchHistory(searchId: string): Promise<SearchResult> {
+    if (!this.user) throw new Error("Login required");
+    
+    // 1. Benchmarks laden
+    const benchmarkResult = await supabase.from('benchmark_cpr_cache').select('*');
+    const benchmarkMap: Record<string, number> = {};
+    if (benchmarkResult.data) {
+        benchmarkResult.data.forEach((row: any) => {
+            const key = `${row.country}_${row.gender}_${row.age_group}`;
+            benchmarkMap[key] = row.cpr_value;
+        });
+    }
+
+    // 2. Daten vom Backend holen
+    const response = await fetch(`${API_URL}/search/history/${searchId}?user_id=${this.user.id}`);
+    if (!response.ok) throw new Error("History load failed");
+    
+    const body = await response.json();
+    const rawAds = body.data || [];
+
+    // 3. Transformieren (Damit Bilder & Stats stimmen)
+    let cleanedMetaAds: any[] = [];
+    
+    // Wir filtern nach Meta Ads
+    const metaRaw = rawAds.filter((ad: any) => !ad.platform || ad.platform === 'meta' || ad.publisher_platform);
+    
+    if (metaRaw.length > 0) {
+         const rowsToTransform = metaRaw.map((item: any) => ({ data: item }));
+         cleanedMetaAds = cleanAndTransformData(rowsToTransform, benchmarkMap);
+    }
+    
+    const tikTokAds = rawAds.filter((ad: any) => ad.platform === 'tiktok');
+
+    return {
+        id: searchId,
+        params: { 
+            query: body.meta.query, 
+            platform: 'meta', 
+            country: 'DE', 
+            limit: body.meta.count 
+        },
+        timestamp: new Date().toISOString(),
+        status: 'completed',
+        metaAds: cleanedMetaAds,
+        tikTokAds: tikTokAds,
+        cost: 0
+    };
+  }
+
   async runSearch(params: SearchParams): Promise<SearchResult> {
     if (!this.user) throw new Error("Unauthorized: Bitte einloggen.");
 
     const cleanCountry = (!params.country || params.country === 'ALL') ? 'US' : params.country;
-
-    // --- FIX START: Gemeinsame ID generieren ---
     const sharedSearchId = Math.random().toString(36).substring(7);
-    // --- FIX END ---
 
-    // Mapping: Frontend (camelCase) -> Backend (snake_case)
     const payload = {
         keyword: params.query,
         platform: params.platform === 'both' ? 'meta' : params.platform,
@@ -128,10 +171,7 @@ class ApiService {
         active_status: 'active'
     };
 
-    console.log("🚀 Sende echte Anfrage an Backend:", payload);
-
-    // --- NEU: Benchmarks laden (Parallel zum Search-Request) ---
-    // Wir holen die Search-Results UND die Benchmarks gleichzeitig
+    // Parallel Benchmarks & Search laden
     const [response, benchmarkResult] = await Promise.all([
         fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
             method: 'POST',
@@ -141,7 +181,6 @@ class ApiService {
         supabase.from('benchmark_cpr_cache').select('*')
     ]);
 
-    // Benchmark Map erstellen
     const benchmarkMap: Record<string, number> = {};
     if (benchmarkResult.data) {
         benchmarkResult.data.forEach((row: any) => {
@@ -158,7 +197,6 @@ class ApiService {
     const responseBody = await response.json();
     let rawAdList = responseBody.data || [];
 
-    // Daten für das Frontend aufbereiten
     let cleanedMetaAds: any[] = [];
     let tikTokAds: any[] = [];
 
@@ -166,7 +204,6 @@ class ApiService {
         const metaRaw = rawAdList.filter((ad: any) => !ad.platform || ad.platform === 'meta' || ad.publisher_platform);
         if (metaRaw.length > 0) {
              const rowsToTransform = metaRaw.map((item: any) => ({ data: item }));
-             // --- HIER: Map übergeben! ---
              cleanedMetaAds = cleanAndTransformData(rowsToTransform, benchmarkMap);
         }
     }
@@ -175,12 +212,11 @@ class ApiService {
         tikTokAds = rawAdList.filter((ad: any) => ad.platform === 'tiktok');
     }
 
-    // Credits abziehen (Lokal aktualisieren)
     if (this.user) {
         this.user.credits -= params.limit;
         
         const newHistoryItem: SearchHistoryItem = {
-            id: sharedSearchId, // <--- HIER: Nutzen der shared ID
+            id: sharedSearchId,
             query: params.query,
             platform: params.platform,
             timestamp: new Date().toISOString(),
@@ -193,7 +229,7 @@ class ApiService {
     }
 
     return {
-      id: sharedSearchId, // <--- HIER: Nutzen der shared ID
+      id: sharedSearchId,
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',

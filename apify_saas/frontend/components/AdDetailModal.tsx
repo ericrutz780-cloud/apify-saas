@@ -18,30 +18,19 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-NORMALISIERUNG (ROBUST & AGGRESSIV) ---
+// --- HELPER: DATEN-NORMALISIERUNG (ROBUST) ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // 1. DEMOGRAPHICS SUCHEN (Überall wo sie sein könnten)
+    // 1. Demographics
     let demographics = ad.demographics;
-
-    // Fallback 1: Alte Struktur
-    if (!demographics || demographics.length === 0) {
-        demographics = ad.aaa_info?.age_country_gender_reach_breakdown;
-    }
-    // Fallback 2: Neue Raw Struktur (Root)
-    if (!demographics || demographics.length === 0) {
-        demographics = ad.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown;
-    }
-    // Fallback 3: Neue Raw Struktur (Snapshot)
-    if (!demographics || demographics.length === 0) {
-        demographics = snapshot?.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown;
-    }
-    
+    if (!demographics || demographics.length === 0) demographics = ad.aaa_info?.age_country_gender_reach_breakdown;
+    if (!demographics || demographics.length === 0) demographics = ad.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown;
+    if (!demographics || demographics.length === 0) demographics = snapshot?.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown;
     demographics = demographics || [];
 
-    // 2. LOCATIONS SUCHEN
+    // 2. Locations
     let locations = ad.targeting?.locations || [];
     if (locations.length === 0) {
          const rawLocs = ad.aaa_info?.location_audience || 
@@ -50,7 +39,7 @@ const normalizeAdData = (ad: any) => {
          if (rawLocs) locations = rawLocs.map((l: any) => l.name);
     }
 
-    // 3. REACH SUCHEN
+    // 3. Reach
     let reach = ad.reach || ad.eu_total_reach || 0;
     if (!reach) {
         reach = ad.aaa_info?.eu_total_reach || 
@@ -58,26 +47,22 @@ const normalizeAdData = (ad: any) => {
                 snapshot?.transparency_by_location?.eu_transparency?.eu_total_reach || 0;
     }
     
-    // 4. BREAKDOWN BERECHNEN (Für die untere Tabelle)
-    // Wir ignorieren existierende Breakdowns und berechnen neu, um das Format zu garantieren.
+    // 4. Breakdown Berechnung (für Liste unten)
     let breakdown: any[] = [];
-    
     if (demographics.length > 0) {
         breakdown = demographics.flatMap((d: any) => {
              if (d.age_gender_breakdowns) {
                  return d.age_gender_breakdowns.flatMap((b: any) => {
                      const rows = [];
-                     // Split Rows Logic: Männlich / Weiblich / Unbekannt separat für korrekte Tabelle
+                     // Split Rows Logic
                      if (b.male > 0) rows.push({ location: d.country, age_range: b.age_range, gender: 'Male', reach: b.male });
                      if (b.female > 0) rows.push({ location: d.country, age_range: b.age_range, gender: 'Female', reach: b.female });
                      if (b.unknown > 0) rows.push({ location: d.country, age_range: b.age_range, gender: 'Unknown', reach: b.unknown });
                      
-                     // Fallback für aggregierte Daten
+                     // Fallback Aggregated
                      if (rows.length === 0) {
                          const sum = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
-                         if (sum > 0) {
-                             rows.push({ location: d.country, age_range: b.age_range, gender: 'Mixed', reach: sum });
-                         }
+                         if (sum > 0) rows.push({ location: d.country, age_range: b.age_range, gender: 'Mixed', reach: sum });
                      }
                      return rows;
                  });
@@ -86,10 +71,8 @@ const normalizeAdData = (ad: any) => {
         });
     }
 
-    // 5. REGIONEN BAUEN
+    // 5. Regionen bauen
     let regions = ad.transparency_regions || [];
-    
-    // Wenn die Region keine Breakdown-Daten hat, füllen wir sie auf
     const isRegionEmpty = regions.length > 0 && (!regions[0].breakdown || regions[0].breakdown.length === 0);
 
     if ((regions.length === 0 || isRegionEmpty) && breakdown.length > 0) {
@@ -102,7 +85,6 @@ const normalizeAdData = (ad: any) => {
             genders: ad.targeting?.genders || ['All']
         }];
     } else if (regions.length > 0 && breakdown.length > 0) {
-        // Update existing region
         regions = regions.map((r: any) => ({ ...r, breakdown }));
     }
 
@@ -110,12 +92,12 @@ const normalizeAdData = (ad: any) => {
         ...ad,
         page_name: pageName,
         snapshot,
-        demographics, // WICHTIG für Tabelle 1 (Visuell)
+        demographics, 
         reach: Number(reach),
         targeting: {
             ...ad.targeting,
             locations,
-            breakdown // WICHTIG für Tabelle 2 (Liste)
+            breakdown 
         },
         transparency_regions: regions
     };
@@ -195,8 +177,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
-    
-    // --- CAROUSEL STATE ---
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
@@ -251,9 +231,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
     
-    // TABELLE 2: Detaillierte Liste
+    // Daten für Tabellen
     const breakdownData = activeTargeting?.breakdown || [];
-    // TABELLE 1: Visuelle Übersicht
     const demoData = ad.demographics || [];
 
     const nextCard = () => setCardIndex((prev) => (prev + 1) % cards.length);
@@ -302,11 +281,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                         <ImageIcon className="w-3 h-3" />
                                         <span>{cardIndex + 1} / {cards.length}</span>
                                     </div>
-                                    {currentTitle && currentTitle !== ad.page_name && (
-                                        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 to-transparent p-3 text-white text-xs font-medium">
-                                            {currentTitle}
-                                        </div>
-                                    )}
                                 </>
                             )}
                         </div>
@@ -353,7 +327,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Ad Details</h2>
-                
                 <AIAnalysisSection />
 
                 <div className="mb-6 space-y-4">
@@ -404,36 +377,18 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                          <div>
                              <h4 className="text-sm font-bold text-gray-800 mb-4">EU ad audience</h4>
                              <div className="mb-6">
-                                 <div className="flex items-center gap-2 mb-2"><h5 className="text-sm font-bold text-gray-900">Location</h5><Info className="w-3.5 h-3.5 text-gray-400" /></div>
-                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                                                <tr>
-                                                    <th className="px-4 py-3 whitespace-nowrap">Location</th>
-                                                    <th className="px-4 py-3 whitespace-nowrap">Type</th>
-                                                    <th className="px-4 py-3 whitespace-nowrap">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {(activeTargeting?.excluded_locations || []).map((loc: string, idx: number) => (
-                                                    <tr key={`ex-${idx}`} className="bg-white hover:bg-gray-50">
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{loc}</td>
-                                                        <td className="px-4 py-3 text-gray-500">Region</td>
-                                                        <td className="px-4 py-3 text-gray-500">Excluded</td>
-                                                    </tr>
-                                                ))}
-                                                {(activeTargeting?.locations || ['Global']).map((loc: string, idx: number) => (
-                                                    <tr key={`in-${idx}`} className="bg-white hover:bg-gray-50">
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{loc}</td>
-                                                        <td className="px-4 py-3 text-gray-500">Region</td>
-                                                        <td className="px-4 py-3 text-gray-500">Included</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                     </div>
+                                 <div className="flex items-center gap-2 mb-2"><h5 className="text-sm font-bold text-gray-900">Locations</h5><Info className="w-3.5 h-3.5 text-gray-400" /></div>
+                                 
+                                 {/* --- FIX: Location Liste als Badges (statt Tabelle) --- */}
+                                 <div className="flex flex-wrap gap-2">
+                                     {(activeTargeting?.locations || ['Global']).map((loc: string, idx: number) => (
+                                         <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-md bg-green-50 text-green-700 text-xs font-medium border border-green-100">{loc}</span>
+                                     ))}
+                                     {(activeTargeting?.excluded_locations || []).map((loc: string, idx: number) => (
+                                         <span key={`ex-${idx}`} className="inline-flex items-center px-2.5 py-1 rounded-md bg-red-50 text-red-700 text-xs font-medium border border-red-100 line-through decoration-red-400 decoration-2">Excluded: {loc}</span>
+                                     ))}
                                  </div>
+                                 {/* ---------------------------------------------------- */}
                              </div>
 
                              <div className="space-y-4">
@@ -452,7 +407,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                  <div className="text-xs text-gray-500">Accounts Center accounts in the EU that saw this ad at least once.</div>
                              </div>
 
-                             {/* --- TABELLE 1: VISUELLE AUFSCHLÜSSELUNG (WIEDER DA!) --- */}
+                             {/* --- AUDIENCE BREAKDOWN (VISUAL) - WIEDER DA! --- */}
                              {demoData.length > 0 && (
                                  <div className="mb-6">
                                      <h4 className="text-sm font-bold text-gray-800 mb-3">Audience Breakdown</h4>
@@ -467,7 +422,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                                         <div key={j} className="flex justify-between text-xs bg-white p-1.5 rounded border border-gray-100 shadow-sm">
                                                             <span className="text-gray-500">{d.age_range}</span>
                                                             <span className="font-medium text-[10px]">
-                                                                {((d.female || 0) > (d.male || 0)) ? `FEMALE ${formatCompact(d.female || 0)}` : `MALE ${formatCompact(d.male || 0)}`}
+                                                                {((d.female || 0) > (d.male || 0)) ? `FEM ${formatCompact(d.female || 0)}` : `MALE ${formatCompact(d.male || 0)}`}
                                                             </span>
                                                         </div>
                                                     ))}
@@ -477,9 +432,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                      </div>
                                  </div>
                              )}
-                             {/* -------------------------------------------------------- */}
 
-                             {/* --- TABELLE 2: DETAILLIERTE LISTE --- */}
+                             {/* --- DETAILED LIST TABLE --- */}
                              {breakdownData.length > 0 ? (
                                  <div className="border border-gray-200 rounded-lg overflow-hidden">
                                      <div className="max-h-60 overflow-y-auto">
@@ -510,7 +464,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                     No detailed breakdown available for this region.
                                 </div>
                              )}
-                             {/* -------------------------------------- */}
                          </div>
                      </div>
                 </CollapsibleSection>
@@ -667,10 +620,11 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 </div>
 
                 <div className="flex-1 overflow-hidden relative bg-white">
+                    {/* OVERVIEW TAB: FIX - Removed Analyze column & Export button */}
                     {activeTabId === 'overview' && (
                         <div className="h-full overflow-y-auto p-6 animate-in fade-in duration-300">
                              <div className="max-w-5xl mx-auto">
-                                 <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-gray-900">Version History & Performance</h3><div className="flex gap-2"><button className="text-sm text-gray-600 bg-white border border-gray-300 px-3 py-1.5 rounded-lg shadow-sm hover:bg-gray-50">Export CSV</button></div></div>
+                                 <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-gray-900">Version History & Performance</h3></div>
                                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
                                      <table className="w-full text-sm text-left">
                                          <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
@@ -680,7 +634,6 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                                  <th className="px-6 py-4">Targeting</th>
                                                  <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors select-none group" onClick={() => handleSort('reach')}><div className="flex items-center justify-end gap-1">Reach Est.{renderSortIcon('reach')}</div></th>
                                                  <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors select-none group" onClick={() => handleSort('score')}><div className="flex items-center justify-end gap-1">Viral Score{renderSortIcon('score')}</div></th>
-                                                 <th className="px-6 py-4 text-right">Action</th>
                                              </tr>
                                          </thead>
                                          <tbody className="divide-y divide-gray-100">
@@ -699,7 +652,6 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                                                      <td className="px-6 py-4 text-gray-600">{ad.targeting?.locations?.length ? (ad.targeting.locations.length > 3 ? `${ad.targeting.locations.length} Countries` : ad.targeting.locations.join(', ')) : 'Global'}</td>
                                                      <td className="px-6 py-4 text-gray-900 font-medium text-right">{formatReach(ad.reach)}</td>
                                                      <td className="px-6 py-4 text-right">{ad.efficiency_score && <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ad.efficiency_score >= 80 ? 'bg-green-100 text-green-800' : ad.efficiency_score >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>{ad.efficiency_score}</span>}</td>
-                                                     <td className="px-6 py-4 text-right"><button onClick={(e) => { e.stopPropagation(); handleOpenAd(ad.id); }} className="text-brand-600 hover:text-brand-700 font-semibold text-sm hover:underline">Analyze</button></td>
                                                  </tr>
                                              )})}
                                          </tbody>

@@ -1,10 +1,53 @@
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from app.models.api_requests import SearchRequest
 from app.services import apify_meta, apify_tiktok
-from app.services.supabase_service import save_search_results
+# WICHTIG: Wir importieren 'supabase' hier direkt, um Daten abzurufen
+from app.services.supabase_service import save_search_results, supabase
 
 router = APIRouter()
 
+# --- NEU: RERUN FUNKTION ---
+# Dieser Endpunkt holt alte Ergebnisse aus der Datenbank
+@router.get("/history/{search_id}")
+async def get_search_history(
+    search_id: str,
+    user_id: str = Query(..., description="User ID")
+):
+    print(f"API ROUTER: Rerun Search ID '{search_id}' for User: {user_id}")
+    
+    try:
+        # Wir suchen in der Tabelle 'search_results' nach dem Eintrag mit der ID
+        # HINWEIS: Stelle sicher, dass deine Tabelle in Supabase 'search_results' heißt 
+        # und eine Spalte 'id' sowie 'ads_data' (JSON) hat.
+        response = supabase.table("search_results").select("*").eq("id", search_id).execute()
+        
+        # Prüfen ob Daten gefunden wurden
+        if not response.data or len(response.data) == 0:
+            print(f"❌ Search ID {search_id} not found in DB.")
+            raise HTTPException(status_code=404, detail="Search result not found in history")
+            
+        saved_entry = response.data[0]
+        results = saved_entry.get("ads_data", [])
+        
+        print(f"✅ Loaded {len(results)} ads from history.")
+        
+        return {
+            "status": "success",
+            "data": results,
+            "meta": {
+                "count": len(results),
+                "query": saved_entry.get("keyword", ""),
+                "sort": "history_replay",
+                "source": "database"
+            }
+        }
+
+    except Exception as e:
+        print(f"History Fetch Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+
+
+# --- BESTEHENDE LIVE-SUCHE ---
 @router.post("/")
 async def search_ads(
     request: SearchRequest,

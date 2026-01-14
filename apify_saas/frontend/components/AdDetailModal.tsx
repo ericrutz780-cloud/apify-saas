@@ -18,49 +18,23 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-NORMALISIERUNG (ALTE LOGIK ERZWINGEN) ---
+// --- HELPER: DATEN-BRÜCKE ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // 1. ROBUSTES DATEN-SAMMELN (Egal wo sie versteckt sind)
-    let demographics = ad.demographics || [];
-    
-    // Fallback: Suche in Raw-Pfaden (alt & neu)
-    if (!demographics || demographics.length === 0) {
-        if (ad.aaa_info?.age_country_gender_reach_breakdown) {
-            demographics = ad.aaa_info.age_country_gender_reach_breakdown;
-        } else if (ad.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown) {
-            demographics = ad.transparency_by_location.eu_transparency.age_country_gender_reach_breakdown;
-        } else if (snapshot.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown) {
-            demographics = snapshot.transparency_by_location.eu_transparency.age_country_gender_reach_breakdown;
-        }
-    }
-
+    // Da wir adAdapter.js gefixt haben, sollten die Daten jetzt hier sein:
+    let breakdown = ad.targeting?.breakdown || [];
     let locations = ad.targeting?.locations || [];
-    // Locations Fallback
-    if (locations.length === 0) {
-         const rawLocs = ad.aaa_info?.location_audience || ad.transparency_by_location?.eu_transparency?.location_audience;
-         if (rawLocs) locations = rawLocs.map((l: any) => l.name);
-    }
-
     let reach = ad.reach || ad.eu_total_reach || 0;
-    // Reach Fallback
-    if (!reach) {
-        reach = ad.aaa_info?.eu_total_reach || ad.transparency_by_location?.eu_transparency?.eu_total_reach || 0;
-    }
-
-    // 2. BREAKDOWN BERECHNUNG (Alte Logik erzwingen)
-    // Wir ignorieren das existierende 'ad.targeting.breakdown', da es fehlerhaft sein könnte
-    let breakdown: any[] = [];
     
-    if (demographics && demographics.length > 0) {
-        breakdown = demographics.flatMap((d: any) => {
+    // Fallback auf demographics, falls adAdapter.js noch nicht aktiv ist (Cache)
+    if (breakdown.length === 0 && ad.demographics && ad.demographics.length > 0) {
+        breakdown = ad.demographics.flatMap((d: any) => {
              if (d.age_gender_breakdowns) {
                  return d.age_gender_breakdowns.map((b: any) => ({
                      location: d.country,
                      age_range: b.age_range,
-                     // Alte Logik: Aggregierte Zeile pro Altersgruppe
                      gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
                      reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
                  }));
@@ -69,27 +43,27 @@ const normalizeAdData = (ad: any) => {
         });
     }
 
-    // 3. REGIONEN ZUSAMMENBAUEN
-    // Wir bauen die Region IMMER neu, um sicherzugehen, dass die Tabelle angezeigt wird.
-    let regions = [{
-        region: "European Union",
-        description: "Data from Transparency records.",
-        breakdown: breakdown, // Das frisch berechnete Breakdown
-        locations: locations,
-        ages: ad.targeting?.ages || ['18-65+'],
-        genders: ad.targeting?.genders || ['All']
-    }];
+    // Regionen für Anzeige
+    let regions = ad.transparency_regions || [];
+    
+    // Wenn Region leer ist oder fehlt -> Bauen!
+    if (regions.length === 0 || (regions[0] && (!regions[0].breakdown || regions[0].breakdown.length === 0))) {
+        regions = [{
+            region: "European Union",
+            description: "Data from Transparency records.",
+            breakdown: breakdown,
+            locations: locations
+        }];
+    }
 
     return {
         ...ad,
         page_name: pageName,
         snapshot,
-        demographics,
         reach: Number(reach),
         targeting: {
             ...ad.targeting,
-            locations,
-            breakdown // Daten hier auch aktualisieren
+            breakdown
         },
         transparency_regions: regions
     };
@@ -167,9 +141,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
-    useEffect(() => {
-        setCardIndex(0);
-    }, [ad.id]);
+    useEffect(() => { setCardIndex(0); }, [ad.id]);
 
     const sortedSiblings = React.useMemo(() => {
         return [...group].sort((a, b) => {
@@ -216,7 +188,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
     
-    // Datenquelle für die Anzeige
+    // Datenquelle für die Tabelle
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
     const breakdownData = activeTargeting?.breakdown || [];
 
@@ -285,7 +257,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                         <span className="text-sm font-medium opacity-90">Library ID</span>
                         <span className="font-mono font-bold tracking-wide">{getDisplayId(ad.id)}</span>
                     </div>
-
+                    
                     {group.length > 1 && (
                         <div className="pt-4 border-t border-gray-200">
                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Quick Switch Version</h4>
@@ -317,6 +289,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
 
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-white p-6">
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Ad Details</h2>
+                
                 <AIAnalysisSection />
 
                 <div className="mb-6 space-y-4">
@@ -671,7 +644,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 <div className="flex-1 overflow-y-auto p-8">
                      <div className="flex items-center gap-4 mb-6">
                          <img src={ad.authorMeta.avatarUrl} className="w-14 h-14 rounded-full border border-gray-100 bg-gray-50" alt="" />
-                         {/* Fix für TikTok Author */}
+                         {/* Fix für TikTokAuthorMeta: Nutzung von nickName statt name */}
                          <div><h2 className="text-xl font-bold text-gray-900">{ad.authorMeta.nickName}</h2><a href={ad.authorMeta.profileUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">View Profile <ExternalLink className="w-3 h-3" /></a></div>
                      </div>
                      <div className="text-gray-800 text-lg leading-relaxed mb-8">{ad.text}</div>

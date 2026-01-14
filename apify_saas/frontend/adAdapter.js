@@ -1,6 +1,6 @@
 /**
  * adAdapter.js
- * VERSION: FINAL ROBUST - Recursive Transparency Search & Split Rows
+ * VERSION: FIXED - Robust Breakdown Extraction
  */
 
 const CPR_CORRECTION_FACTOR = 150.0;
@@ -19,27 +19,17 @@ const getBenchmarkPrice = (country, priorityMap) => {
 
 // Helper: Aggressively find transparency data
 const findTransparencyData = (item) => {
-    // 1. Direct Root Check
     if (item.eu_transparency) return item.eu_transparency;
-    
-    // 2. Snapshot Check
+    if (item.transparency_by_location && item.transparency_by_location.eu_transparency) return item.transparency_by_location.eu_transparency;
     if (item.snapshot && item.snapshot.eu_transparency) return item.snapshot.eu_transparency;
-
-    // 3. Dynamic Location Key Check (e.g., "DE_location", "transparency_by_location")
-    // Iterate over all keys in the item object
+    
+    // Deep search for transparency_by_location inside snapshot or root keys
     for (const key in item) {
-        // Check if value is an object and not null
         if (item[key] && typeof item[key] === 'object') {
-            // Check if this object contains eu_transparency directly
             if (item[key].eu_transparency) return item[key].eu_transparency;
-            
-            // Check keys ending in "_location" specifically (common pattern)
-            if (key.endsWith('_location') || key === 'transparency_by_location') {
-                 if (item[key].eu_transparency) return item[key].eu_transparency;
-            }
+            if (key === 'transparency_by_location' && item[key].eu_transparency) return item[key].eu_transparency;
         }
     }
-    
     return null;
 };
 
@@ -48,7 +38,6 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
 
   const processedAds = dbRows.map((row) => {
     let item = row;
-    // Unwrap 'data' if it exists
     if (row.data && typeof row.data === 'object') {
         item = { ...row.data, ...row }; 
     }
@@ -110,7 +99,8 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     // --- ROBUST DATA EXTRACTION ---
     const transparency = findTransparencyData(item);
     
-    let demographics = [];
+    // WICHTIG: Hier holen wir die Rohdaten für die Demografie
+    let rawDemographics = [];
     let reach = 0;
     let targetLocations = [];
     let targetAges = ['18-65+'];
@@ -131,8 +121,9 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
             targetLocations = transparency.location_audience.map(l => l.name);
         }
 
+        // HIER: Sicherstellen, dass wir das Array bekommen
         if (transparency.age_country_gender_reach_breakdown) {
-            demographics = transparency.age_country_gender_reach_breakdown;
+            rawDemographics = transparency.age_country_gender_reach_breakdown;
         }
     } else {
         if (item.reach_estimate) reach = item.reach_estimate;
@@ -140,29 +131,29 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
     
     if (targetLocations.length === 0) targetLocations = ['Global'];
 
-    // --- BREAKDOWN GENERATION (SPLIT ROWS) ---
+    // --- BREAKDOWN GENERATION ---
     let totalEstimatedSpend = 0;
     
-    if (demographics && demographics.length > 0) {
-        detailedBreakdown = demographics.flatMap(d => {
+    // Wir bauen das Breakdown direkt hier, damit es sauber im 'targeting' Objekt landet
+    if (rawDemographics && rawDemographics.length > 0) {
+        detailedBreakdown = rawDemographics.flatMap(d => {
             if (d.age_gender_breakdowns) {
-                return d.age_gender_breakdowns.flatMap(b => {
-                    const rows = [];
-                    // Ensure we check for existence and valid numbers
+                return d.age_gender_breakdowns.map(b => {
                     const m = b.male || 0;
                     const f = b.female || 0;
                     const u = b.unknown || 0;
-
-                    if (m > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Male', reach: m });
-                    if (f > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Female', reach: f });
-                    if (u > 0) rows.push({ location: d.country || 'Unknown', age_range: b.age_range, gender: 'Unknown', reach: u });
-
-                    // Spend calculation
                     const segReach = m + f + u;
+                    
+                    // Spend calculation (nur intern für Score)
                     const segmentCPR = getBenchmarkPrice(d.country, benchmarkMap);
                     totalEstimatedSpend += (segReach / 1000) * segmentCPR;
 
-                    return rows;
+                    return { 
+                        location: d.country || 'Unknown', 
+                        age_range: b.age_range, 
+                        gender: 'Mixed', // Vereinfacht für die Tabelle im Modal
+                        reach: segReach
+                    };
                 });
             }
             return [];
@@ -213,23 +204,22 @@ export const cleanAndTransformData = (dbRows, benchmarkMap = null) => {
       impressions: safeReach,
       spend: totalEstimatedSpend,
       efficiency_score: Number(viralScore),
-      demographics: demographics, 
+      demographics: rawDemographics, // WICHTIG: Rohdaten weitergeben für Modal-Fallback
       targeting: { 
           ages: targetAges, 
           genders: [targetGender], 
           locations: targetLocations, 
           reach_estimate: safeReach, 
-          breakdown: detailedBreakdown 
+          breakdown: detailedBreakdown // Das berechnete Breakdown
       },
-      // IMPORTANT: Fill this for the modal view!
       transparency_regions: [{ 
-          region: "EU", 
-          breakdown: detailedBreakdown,
+          region: "European Union", 
+          breakdown: detailedBreakdown, // Hier auch rein
           locations: targetLocations,
           ages: targetAges,
           genders: [targetGender],
           reach_estimate: safeReach,
-          description: transparency?.targets_eu ? "Targeting European Union" : ""
+          description: transparency?.targets_eu ? "Data from Transparency records." : ""
       }],
       advertiser_info: { about_text: pageName },
       avatar: safeAvatar

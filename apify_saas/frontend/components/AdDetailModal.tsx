@@ -18,52 +18,104 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-BRÜCKE ---
+// --- HELPER: DATEN-NORMALISIERUNG (ROBUST & AGGRESSIV) ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // Da wir adAdapter.js gefixt haben, sollten die Daten jetzt hier sein:
-    let breakdown = ad.targeting?.breakdown || [];
-    let locations = ad.targeting?.locations || [];
-    let reach = ad.reach || ad.eu_total_reach || 0;
+    // 1. DEMOGRAPHICS SUCHEN (Überall wo sie sein könnten)
+    let demographics = ad.demographics;
+
+    // Fallback 1: Alte Struktur
+    if (!demographics || demographics.length === 0) {
+        demographics = ad.aaa_info?.age_country_gender_reach_breakdown;
+    }
+    // Fallback 2: Neue Raw Struktur (Root)
+    if (!demographics || demographics.length === 0) {
+        demographics = ad.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown;
+    }
+    // Fallback 3: Neue Raw Struktur (Snapshot)
+    if (!demographics || demographics.length === 0) {
+        demographics = snapshot?.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown;
+    }
     
-    // Fallback auf demographics, falls adAdapter.js noch nicht aktiv ist (Cache)
-    if (breakdown.length === 0 && ad.demographics && ad.demographics.length > 0) {
-        breakdown = ad.demographics.flatMap((d: any) => {
+    demographics = demographics || [];
+
+    // 2. LOCATIONS SUCHEN
+    let locations = ad.targeting?.locations || [];
+    if (locations.length === 0) {
+         const rawLocs = ad.aaa_info?.location_audience || 
+                         ad.transparency_by_location?.eu_transparency?.location_audience ||
+                         snapshot?.transparency_by_location?.eu_transparency?.location_audience;
+         if (rawLocs) locations = rawLocs.map((l: any) => l.name);
+    }
+
+    // 3. REACH SUCHEN
+    let reach = ad.reach || ad.eu_total_reach || 0;
+    if (!reach) {
+        reach = ad.aaa_info?.eu_total_reach || 
+                ad.transparency_by_location?.eu_transparency?.eu_total_reach || 
+                snapshot?.transparency_by_location?.eu_transparency?.eu_total_reach || 0;
+    }
+    
+    // 4. BREAKDOWN BERECHNEN (Für die untere Tabelle)
+    // Wir ignorieren existierende Breakdowns und berechnen neu, um das Format zu garantieren.
+    let breakdown: any[] = [];
+    
+    if (demographics.length > 0) {
+        breakdown = demographics.flatMap((d: any) => {
              if (d.age_gender_breakdowns) {
-                 return d.age_gender_breakdowns.map((b: any) => ({
-                     location: d.country,
-                     age_range: b.age_range,
-                     gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
-                     reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
-                 }));
+                 return d.age_gender_breakdowns.flatMap((b: any) => {
+                     const rows = [];
+                     // Split Rows Logic: Männlich / Weiblich / Unbekannt separat für korrekte Tabelle
+                     if (b.male > 0) rows.push({ location: d.country, age_range: b.age_range, gender: 'Male', reach: b.male });
+                     if (b.female > 0) rows.push({ location: d.country, age_range: b.age_range, gender: 'Female', reach: b.female });
+                     if (b.unknown > 0) rows.push({ location: d.country, age_range: b.age_range, gender: 'Unknown', reach: b.unknown });
+                     
+                     // Fallback für aggregierte Daten
+                     if (rows.length === 0) {
+                         const sum = (b.male || 0) + (b.female || 0) + (b.unknown || 0);
+                         if (sum > 0) {
+                             rows.push({ location: d.country, age_range: b.age_range, gender: 'Mixed', reach: sum });
+                         }
+                     }
+                     return rows;
+                 });
              }
              return [];
         });
     }
 
-    // Regionen für Anzeige
+    // 5. REGIONEN BAUEN
     let regions = ad.transparency_regions || [];
     
-    // Wenn Region leer ist oder fehlt -> Bauen!
-    if (regions.length === 0 || (regions[0] && (!regions[0].breakdown || regions[0].breakdown.length === 0))) {
+    // Wenn die Region keine Breakdown-Daten hat, füllen wir sie auf
+    const isRegionEmpty = regions.length > 0 && (!regions[0].breakdown || regions[0].breakdown.length === 0);
+
+    if ((regions.length === 0 || isRegionEmpty) && breakdown.length > 0) {
         regions = [{
             region: "European Union",
             description: "Data from Transparency records.",
             breakdown: breakdown,
-            locations: locations
+            locations: locations,
+            ages: ad.targeting?.ages || ['18-65+'],
+            genders: ad.targeting?.genders || ['All']
         }];
+    } else if (regions.length > 0 && breakdown.length > 0) {
+        // Update existing region
+        regions = regions.map((r: any) => ({ ...r, breakdown }));
     }
 
     return {
         ...ad,
         page_name: pageName,
         snapshot,
+        demographics, // WICHTIG für Tabelle 1 (Visuell)
         reach: Number(reach),
         targeting: {
             ...ad.targeting,
-            breakdown
+            locations,
+            breakdown // WICHTIG für Tabelle 2 (Liste)
         },
         transparency_regions: regions
     };
@@ -116,6 +168,11 @@ const formatReach = (num?: number | null) => {
     return new Intl.NumberFormat('en-US').format(num);
 };
 
+const formatCompact = (num?: number) => {
+    if (!num) return '';
+    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
+};
+
 const getDisplayId = (id: string) => {
     if (!id) return '';
     if (id.includes('_')) return id.split('_')[1];
@@ -138,10 +195,14 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
+    
+    // --- CAROUSEL STATE ---
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
-    useEffect(() => { setCardIndex(0); }, [ad.id]);
+    useEffect(() => {
+        setCardIndex(0);
+    }, [ad.id]);
 
     const sortedSiblings = React.useMemo(() => {
         return [...group].sort((a, b) => {
@@ -188,9 +249,12 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
     
-    // Datenquelle für die Tabelle
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
+    
+    // TABELLE 2: Detaillierte Liste
     const breakdownData = activeTargeting?.breakdown || [];
+    // TABELLE 1: Visuelle Übersicht
+    const demoData = ad.demographics || [];
 
     const nextCard = () => setCardIndex((prev) => (prev + 1) % cards.length);
     const prevCard = () => setCardIndex((prev) => (prev - 1 + cards.length) % cards.length);
@@ -257,7 +321,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                         <span className="text-sm font-medium opacity-90">Library ID</span>
                         <span className="font-mono font-bold tracking-wide">{getDisplayId(ad.id)}</span>
                     </div>
-                    
+
                     {group.length > 1 && (
                         <div className="pt-4 border-t border-gray-200">
                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Quick Switch Version</h4>
@@ -388,6 +452,34 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                  <div className="text-xs text-gray-500">Accounts Center accounts in the EU that saw this ad at least once.</div>
                              </div>
 
+                             {/* --- TABELLE 1: VISUELLE AUFSCHLÜSSELUNG (WIEDER DA!) --- */}
+                             {demoData.length > 0 && (
+                                 <div className="mb-6">
+                                     <h4 className="text-sm font-bold text-gray-800 mb-3">Audience Breakdown</h4>
+                                     <div className="space-y-4">
+                                         {/* @ts-ignore */}
+                                         {demoData.slice(0, 3).map((countryData: any, i: number) => (
+                                            <div key={i} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
+                                                <p className="text-xs font-bold text-gray-700 mb-2 uppercase flex items-center gap-2"><MapPin className="w-3 h-3"/> {countryData.country}</p>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {/* @ts-ignore */}
+                                                    {countryData.age_gender_breakdowns.slice(0, 4).map((d: any, j: number) => (
+                                                        <div key={j} className="flex justify-between text-xs bg-white p-1.5 rounded border border-gray-100 shadow-sm">
+                                                            <span className="text-gray-500">{d.age_range}</span>
+                                                            <span className="font-medium text-[10px]">
+                                                                {((d.female || 0) > (d.male || 0)) ? `FEMALE ${formatCompact(d.female || 0)}` : `MALE ${formatCompact(d.male || 0)}`}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                         ))}
+                                     </div>
+                                 </div>
+                             )}
+                             {/* -------------------------------------------------------- */}
+
+                             {/* --- TABELLE 2: DETAILLIERTE LISTE --- */}
                              {breakdownData.length > 0 ? (
                                  <div className="border border-gray-200 rounded-lg overflow-hidden">
                                      <div className="max-h-60 overflow-y-auto">
@@ -418,6 +510,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                     No detailed breakdown available for this region.
                                 </div>
                              )}
+                             {/* -------------------------------------- */}
                          </div>
                      </div>
                 </CollapsibleSection>
@@ -644,7 +737,6 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 <div className="flex-1 overflow-y-auto p-8">
                      <div className="flex items-center gap-4 mb-6">
                          <img src={ad.authorMeta.avatarUrl} className="w-14 h-14 rounded-full border border-gray-100 bg-gray-50" alt="" />
-                         {/* Fix für TikTokAuthorMeta: Nutzung von nickName statt name */}
                          <div><h2 className="text-xl font-bold text-gray-900">{ad.authorMeta.nickName}</h2><a href={ad.authorMeta.profileUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">View Profile <ExternalLink className="w-3 h-3" /></a></div>
                      </div>
                      <div className="text-gray-800 text-lg leading-relaxed mb-8">{ad.text}</div>

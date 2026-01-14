@@ -18,42 +18,49 @@ interface AdDetailModalProps {
   type: 'meta' | 'tiktok' | undefined;
 }
 
-// --- HELPER: DATEN-NORMALISIERUNG (MANUELL KORRIGIERT) ---
+// --- HELPER: DATEN-NORMALISIERUNG (ALTE LOGIK ERZWINGEN) ---
 const normalizeAdData = (ad: any) => {
     const snapshot = ad.snapshot || {};
     const pageName = ad.page_name || snapshot.page_name || "Unknown";
     
-    // 1. Daten aus dem Adapter holen (diese sind da!)
+    // 1. ROBUSTES DATEN-SAMMELN (Egal wo sie versteckt sind)
     let demographics = ad.demographics || [];
-    let locations: string[] = ad.targeting?.locations || [];
-    let reach = ad.reach || ad.eu_total_reach || 0;
     
-    // Fallback: Nur versuchen, wenn wir noch das alte Datenformat haben
-    const rawInfo = ad.aaa_info || ad.transparency_by_location?.eu_transparency;
-
-    if (rawInfo) {
-        if (!demographics || demographics.length === 0) {
-            demographics = rawInfo.age_country_gender_reach_breakdown || [];
-        }
-        if (locations.length === 0 && rawInfo.location_audience) {
-            locations = rawInfo.location_audience.map((l: any) => l.name);
-        }
-        if (!reach) {
-            reach = rawInfo.eu_total_reach || 0;
+    // Fallback: Suche in Raw-Pfaden (alt & neu)
+    if (!demographics || demographics.length === 0) {
+        if (ad.aaa_info?.age_country_gender_reach_breakdown) {
+            demographics = ad.aaa_info.age_country_gender_reach_breakdown;
+        } else if (ad.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown) {
+            demographics = ad.transparency_by_location.eu_transparency.age_country_gender_reach_breakdown;
+        } else if (snapshot.transparency_by_location?.eu_transparency?.age_country_gender_reach_breakdown) {
+            demographics = snapshot.transparency_by_location.eu_transparency.age_country_gender_reach_breakdown;
         }
     }
 
-    let breakdown = ad.targeting?.breakdown || [];
+    let locations = ad.targeting?.locations || [];
+    // Locations Fallback
+    if (locations.length === 0) {
+         const rawLocs = ad.aaa_info?.location_audience || ad.transparency_by_location?.eu_transparency?.location_audience;
+         if (rawLocs) locations = rawLocs.map((l: any) => l.name);
+    }
 
-    // 2. BREAKDOWN BERECHNUNG (JETZT UNABHÄNGIG VON rawInfo)
-    // Wenn wir Demographics haben, aber kein Breakdown (oder ein leeres), berechnen wir es hier.
-    // Das fixt das Problem, dass die Tabelle leer bleibt.
-    if ((!breakdown || breakdown.length === 0) && demographics.length > 0) {
+    let reach = ad.reach || ad.eu_total_reach || 0;
+    // Reach Fallback
+    if (!reach) {
+        reach = ad.aaa_info?.eu_total_reach || ad.transparency_by_location?.eu_transparency?.eu_total_reach || 0;
+    }
+
+    // 2. BREAKDOWN BERECHNUNG (Alte Logik erzwingen)
+    // Wir ignorieren das existierende 'ad.targeting.breakdown', da es fehlerhaft sein könnte
+    let breakdown: any[] = [];
+    
+    if (demographics && demographics.length > 0) {
         breakdown = demographics.flatMap((d: any) => {
              if (d.age_gender_breakdowns) {
                  return d.age_gender_breakdowns.map((b: any) => ({
                      location: d.country,
                      age_range: b.age_range,
+                     // Alte Logik: Aggregierte Zeile pro Altersgruppe
                      gender: b.unknown ? 'Mixed' : (b.female ? 'Female' : 'Male'),
                      reach: (b.male || 0) + (b.female || 0) + (b.unknown || 0)
                  }));
@@ -62,31 +69,16 @@ const normalizeAdData = (ad: any) => {
         });
     }
 
-    // 3. REGIONEN UPDATEN
-    // Wir stellen sicher, dass die "Transparency Regions" auch die berechneten Daten enthalten.
-    let regions = ad.transparency_regions || [];
-    
-    // Check: Ist die Region vom Adapter evtl. leer (kein Breakdown)?
-    const isRegionEmpty = regions.length > 0 && (!regions[0].breakdown || regions[0].breakdown.length === 0);
-
-    // Fall A: Keine Region oder leere Region -> Wir bauen eine neue mit unseren Daten
-    if ((regions.length === 0 || isRegionEmpty) && breakdown.length > 0) {
-        regions = [{
-            region: "European Union",
-            description: "Data from Transparency records.",
-            breakdown: breakdown,
-            locations: locations,
-            ages: ad.targeting?.ages || ['18-65+'],
-            genders: ad.targeting?.genders || ['All']
-        }];
-    } 
-    // Fall B: Region ist da, wir injizieren sicherheitshalber das Breakdown
-    else if (regions.length > 0 && breakdown.length > 0) {
-        regions = regions.map((r: any) => ({
-            ...r,
-            breakdown: (r.breakdown && r.breakdown.length > 0) ? r.breakdown : breakdown
-        }));
-    }
+    // 3. REGIONEN ZUSAMMENBAUEN
+    // Wir bauen die Region IMMER neu, um sicherzugehen, dass die Tabelle angezeigt wird.
+    let regions = [{
+        region: "European Union",
+        description: "Data from Transparency records.",
+        breakdown: breakdown, // Das frisch berechnete Breakdown
+        locations: locations,
+        ages: ad.targeting?.ages || ['18-65+'],
+        genders: ad.targeting?.genders || ['All']
+    }];
 
     return {
         ...ad,
@@ -97,7 +89,7 @@ const normalizeAdData = (ad: any) => {
         targeting: {
             ...ad.targeting,
             locations,
-            breakdown // Hier sind die Daten jetzt drin
+            breakdown // Daten hier auch aktualisieren
         },
         transparency_regions: regions
     };
@@ -150,11 +142,6 @@ const formatReach = (num?: number | null) => {
     return new Intl.NumberFormat('en-US').format(num);
 };
 
-const formatFollowerCount = (num?: number) => {
-    if (!num) return '';
-    return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(num);
-};
-
 const getDisplayId = (id: string) => {
     if (!id) return '';
     if (id.includes('_')) return id.split('_')[1];
@@ -177,8 +164,6 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     ad: rawAd, group, isActiveView, openTabs, activeTabId, onOpenAd, onSave, onRemove, isSaved 
 }) => {
     const ad = useMemo(() => normalizeAdData(rawAd), [rawAd]);
-    
-    // --- CAROUSEL STATE ---
     const [activeRegionIndex, setActiveRegionIndex] = useState(0);
     const [cardIndex, setCardIndex] = useState(0);
 
@@ -231,9 +216,8 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const regions = transparency_regions || [];
     const hasMultipleRegions = regions.length > 0;
     
-    // FIX: Priorisiere Region-spezifische Daten
+    // Datenquelle für die Anzeige
     const activeTargeting = hasMultipleRegions ? regions[activeRegionIndex] : targeting;
-    // WICHTIG: Das Breakdown ist jetzt garantiert da
     const breakdownData = activeTargeting?.breakdown || [];
 
     const nextCard = () => setCardIndex((prev) => (prev + 1) % cards.length);
@@ -687,6 +671,7 @@ const AdDetailModal: React.FC<AdDetailModalProps> = ({ isOpen, onClose, onSave, 
                 <div className="flex-1 overflow-y-auto p-8">
                      <div className="flex items-center gap-4 mb-6">
                          <img src={ad.authorMeta.avatarUrl} className="w-14 h-14 rounded-full border border-gray-100 bg-gray-50" alt="" />
+                         {/* Fix für TikTok Author */}
                          <div><h2 className="text-xl font-bold text-gray-900">{ad.authorMeta.nickName}</h2><a href={ad.authorMeta.profileUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-500 hover:text-gray-900 flex items-center gap-1">View Profile <ExternalLink className="w-3 h-3" /></a></div>
                      </div>
                      <div className="text-gray-800 text-lg leading-relaxed mb-8">{ad.text}</div>

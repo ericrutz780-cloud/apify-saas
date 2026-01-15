@@ -7,7 +7,8 @@ class SearchRequest(BaseModel):
     platform: Literal['meta', 'tiktok', 'both'] = Field(..., example="meta")
     
     # --- OPTIONALE FELDER & FILTER ---
-    limit: int = Field(20, ge=1, le=100, example=20)
+    # FIX: Limit erhöht von 100 auf 50000, damit der Pro Plan (1000) nicht blockiert wird.
+    limit: int = Field(20, ge=1, le=50000, example=20)
     
     # Frontend sendet Ländercodes wie "US", "DE"
     country: str = Field("US", min_length=2, max_length=2, pattern="^[A-Z]{2}$", example="US")

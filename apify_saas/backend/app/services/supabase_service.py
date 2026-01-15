@@ -122,8 +122,6 @@ def save_search_details(search_id: str, platform: str, results: list):
 def get_user_profile_data(user_id: str):
     client = get_supabase()
     try:
-        # FIX: Select "*" ist sicherer. Es lädt alles, was da ist.
-        # Wenn 'plan' fehlt, stürzt es nicht ab.
         p_res = client.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
         profile = p_res.data if p_res and p_res.data else {}
         
@@ -135,20 +133,28 @@ def get_user_profile_data(user_id: str):
                     "id": item['id'], "type": item['type'], "data": item['data'], "savedAt": item['created_at']
                 })
 
+        # Fallback Logic für search_limit, falls DB Feld leer ist (für alte Datensätze)
+        plan = profile.get("plan", "starter")
+        limit = profile.get("search_limit")
+        
+        if not limit:
+            if plan == 'pro': limit = 1000
+            elif plan == 'enterprise': limit = 5000
+            else: limit = 100
+
         return {
             "id": user_id,
             "email": profile.get("email", ""),
             "name": profile.get("first_name", "User"),
             "credits": profile.get("credits", 0),
-            # Hier nutzen wir den Default "starter", falls die Spalte noch fehlt
-            "plan": profile.get("plan", "starter"),
+            "plan": plan,
+            "searchLimit": limit, # <--- HIER: Das neue dynamische Limit
             "savedAds": saved_ads,
             "searchHistory": [] 
         }
     except Exception as e:
         print(f"⚠️ Profile Load Error: {e}")
-        # Nur im echten Fehlerfall gibt es 0 Credits
-        return {"id": user_id, "credits": 0, "plan": "starter", "savedAds": [], "searchHistory": []}
+        return {"id": user_id, "credits": 0, "plan": "starter", "searchLimit": 100, "savedAds": [], "searchHistory": []}
 
 def add_saved_ad(user_id: str, ad_data: dict, ad_type: str):
     client = get_supabase()
@@ -158,5 +164,4 @@ def delete_saved_ad(user_id: str, ad_id: str):
     client = get_supabase()
     return client.table("saved_ads").delete().eq("id", ad_id).eq("user_id", user_id).execute()
 
-# WICHTIG:
 supabase = get_supabase()

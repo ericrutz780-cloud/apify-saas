@@ -38,7 +38,6 @@ class ApiService {
 
     if (!response.ok) {
         const err = await response.json();
-        // FIX: Bessere Fehlerbehandlung
         const msg = err.detail ? (typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)) : 'Registration failed';
         throw new Error(msg);
     }
@@ -88,9 +87,14 @@ class ApiService {
 
         const localHistory = this._getLocalHistory();
 
-        // FIX: Plan normalisieren (lowercase), damit 'Pro' und 'pro' funktionieren
         const rawPlan = profileData.plan || 'starter';
         const normalizedPlan = rawPlan.toLowerCase() as UserPlan;
+        
+        // FIX: Search Limit aus Profil laden oder Fallback berechnen
+        let limit = profileData.searchLimit;
+        if (!limit) {
+            limit = normalizedPlan === 'pro' ? 1000 : (normalizedPlan === 'enterprise' ? 5000 : 100);
+        }
 
         this.user = { 
             id: storedId,
@@ -98,6 +102,7 @@ class ApiService {
             name: profileData.name || 'User',
             plan: normalizedPlan,
             credits: profileData.credits || 0,
+            searchLimit: limit, // <--- Speichern im User-Objekt
             savedAds: profileData.savedAds || [],
             searchHistory: localHistory.length > 0 ? localHistory : (profileData.searchHistory || [])
         };
@@ -137,7 +142,6 @@ class ApiService {
     const response = await fetch(`${API_URL}/search/history/${cleanId}?user_id=${this.user.id}`);
     
     if (!response.ok) {
-        // FIX: Handle 404/500 cleanly
         const err = await response.json().catch(() => ({ detail: "Network Error" }));
         const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
         throw new Error(msg);
@@ -175,10 +179,13 @@ class ApiService {
 
     const cleanCountry = (!params.country || params.country === 'ALL') ? 'US' : params.country;
 
+    // FIX: Limit direkt aus den User-Einstellungen nehmen!
+    const limit = this.user.searchLimit || 100;
+
     const payload = {
         keyword: params.query,
         platform: params.platform === 'both' ? 'meta' : params.platform,
-        limit: params.limit,
+        limit: limit, // <--- HIER: Dynamisches Limit
         country: cleanCountry,
         start_date_min: params.startDateMin, 
         start_date_max: params.startDateMax,
@@ -205,7 +212,6 @@ class ApiService {
 
     if (!response.ok) {
         const err = await response.json();
-        // FIX: [object Object] Fehler beheben -> JSON stringify für Details
         const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
         throw new Error(msg);
     }
@@ -230,8 +236,7 @@ class ApiService {
     }
 
     if (this.user) {
-        // Optimistic Credit Update
-        this.user.credits -= params.limit;
+        this.user.credits -= limit;
         
         const newHistoryItem: SearchHistoryItem = {
             id: searchId, 
@@ -239,7 +244,7 @@ class ApiService {
             platform: params.platform,
             timestamp: new Date().toISOString(),
             resultsCount: cleanedMetaAds.length + tikTokAds.length,
-            limit: params.limit,
+            limit: limit,
             country: cleanCountry
         };
         this.user.searchHistory = [newHistoryItem, ...this.user.searchHistory];
@@ -253,7 +258,7 @@ class ApiService {
       status: 'completed',
       metaAds: cleanedMetaAds,
       tikTokAds: tikTokAds,
-      cost: params.limit
+      cost: limit
     };
   }
 

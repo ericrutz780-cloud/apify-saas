@@ -1,3 +1,6 @@
+export type Platform = 'meta' | 'tiktok' | 'both';
+export type UserPlan = 'starter' | 'pro' | 'enterprise';
+
 export interface SavedAd {
   id: string;
   type: 'meta' | 'tiktok';
@@ -15,19 +18,17 @@ export interface SearchHistoryItem {
   limit: number;
 }
 
-export type UserPlan = 'starter' | 'pro' | 'enterprise';
-
 export interface User {
   id: string;
   email: string;
   name: string;
   credits: number;
   plan: UserPlan;
+  // WICHTIG: Für Enterprise-Limits notwendig
+  searchLimit: number; 
   savedAds: SavedAd[];
   searchHistory: SearchHistoryItem[];
 }
-
-export type Platform = 'meta' | 'tiktok' | 'both';
 
 export interface SearchParams {
   query: string;
@@ -38,14 +39,30 @@ export interface SearchParams {
   startDateMax?: string;
 }
 
+// --- META ADS ---
+
 export interface MetaAdSnapshot {
   cta_text: string;
   link_url: string;
+  title: string;
   body: {
     text: string;
   };
-  images: Array<{ resized_image_url: string }>;
-  videos: Array<{ video_hd_url: string; video_preview_image_url?: string }>;
+  images: Array<{ 
+      resized_image_url: string; 
+      original_image_url?: string; 
+  }>;
+  videos: Array<{ 
+      video_hd_url: string; 
+      video_sd_url?: string;
+      video_preview_image_url?: string; 
+  }>;
+  // WICHTIG: Für Carousel-Anzeigen notwendig
+  cards?: any[]; 
+  page_name?: string;
+  page_profile_picture_url?: string;
+  transparency_by_location?: any;
+  creation_time?: string;
 }
 
 export interface MetaAdTargetingBreakdown {
@@ -100,18 +117,25 @@ export interface MetaAdBeneficiaryPayer {
 
 export interface MetaAd {
   id: string;
+  // WICHTIG: Oft als Key verwendet
+  ad_archive_id: string; 
   isActive: boolean;
   publisher_platform: string[];
   start_date: string;
+  end_date?: string;
   page_name: string;
-  page_profile_uri: string;
+  page_profile_uri?: string;
   ad_library_url: string;
   snapshot: MetaAdSnapshot;
-  likes: number;
-  impressions: number;
-  spend: number;
+  likes?: number;
+  impressions?: number;
+  spend?: number;
+  currency?: string;
+  reach?: number;
+  eu_total_reach?: number;
   efficiency_score?: number;
   targeting?: MetaAdTargeting;
+  demographics?: any[]; 
   transparency_regions?: MetaAdRegionTransparency[];
   page_categories?: string[];
   disclaimer?: string;
@@ -119,10 +143,14 @@ export interface MetaAd {
   about_disclaimer?: MetaAdAboutDisclaimer;
   beneficiary_payer?: MetaAdBeneficiaryPayer;
   avatar?: string | null;
+  aaa_info?: any;
 }
+
+// --- TIKTOK ADS ---
 
 export interface TikTokVideoMeta {
   coverUrl: string;
+  downloadUrl?: string;
   duration: number;
   height: number;
   width: number;
@@ -138,12 +166,13 @@ export interface TikTokAd {
   id: string;
   webVideoUrl: string;
   text: string;
-  createTimeISO: string;
+  createTimeISO?: string;
+  createdTime?: number;
   diggCount: number;
   shareCount: number;
   playCount: number;
   commentCount: number;
-  collectCount: number;
+  collectCount?: number;
   videoMeta: TikTokVideoMeta;
   authorMeta: TikTokAuthorMeta;
 }

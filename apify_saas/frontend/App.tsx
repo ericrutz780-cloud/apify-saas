@@ -41,11 +41,6 @@ const COUNTRIES = [
     { code: 'US', name: 'United States' }
 ];
 
-// FIX: Agency entfernt
-const PLAN_LIMITS: Record<UserPlan, number> = {
-    'starter': 100, 'pro': 1000, 'enterprise': 50000
-};
-
 const STATUS_MESSAGES = [
     "Spinning up scraper nodes...", "Connecting to Meta Ad Library...", "Authenticating secure session...",
     "Querying ad database...", "Scraping creative assets...", "Analyzing targeting demographics...",
@@ -96,7 +91,6 @@ const Toast = ({ message, onUndo, onClose, visible }: { message: string, onUndo?
     );
 };
 
-// TikTok Option entfernt
 const SearchInputSection = ({ query, setQuery, country, setCountry, dateRange, setDateRange, loading, progress, statusIndex, handleSearch, canAfford, cost, remainingCredits, error, user }: any) => (
     <div className="w-full mb-8">
         <div className="bg-white p-2 rounded-2xl border border-gray-200 shadow-sm relative transition-all focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:border-brand-500 w-full">
@@ -234,8 +228,8 @@ const Dashboard = ({ user }: { user: User }) => {
                 </div>
             </div>
         </div>
-    )
-}
+    );
+};
 
 // FIX: Komponente wieder in SearchLogicWrapper umbenannt
 const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
@@ -255,10 +249,16 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
     const hasAutoRun = useRef(false);
 
-    const limit = PLAN_LIMITS[user.plan] || 100;
+    // FIX: Modal State für Export
+    const [exportData, setExportData] = useState<SearchResult | null>(null);
+
+    const limit = user.searchLimit || 100;
     const cost = limit;
     const canAfford = user.credits >= cost;
     const remainingCredits = user.credits - cost;
+
+    // FIX: Prüfen auf Pro oder Enterprise für Export
+    const canExport = user.plan === 'pro' || user.plan === 'enterprise';
 
     // --- FIX: RERUN / LOAD HISTORY LOGIC ---
     useEffect(() => {
@@ -350,8 +350,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
         return cleanAndTransformData(adsToTransform);
     }, [result]);
 
-    const canExport = user.plan === 'pro' || user.plan === 'enterprise';
-
     const groupAdsByText = (ads: MetaAd[]) => {
         const groups: { [key: string]: MetaAd[] } = {};
         ads.forEach(ad => { const key = ad.snapshot.body.text ? ad.snapshot.body.text.trim() : ad.id; if (!groups[key]) groups[key] = []; groups[key].push(ad); });
@@ -387,11 +385,53 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
         else await onOpenModal([ad], type); // Placeholder
     };
 
-    const handleExportFile = (format: 'csv' | 'json') => { if (!exportData) return; const fileName = `stella_ads_${new Date().toISOString()}.${format}`; console.log(`Downloading ${fileName}...`); setExportData(null); };
-    const [exportData, setExportData] = useState<SearchResult | null>(null);
+    // --- FIX: ECHTE EXPORT FUNKTION ---
+    const handleExportFile = (format: 'csv' | 'json') => {
+        if (!exportData) return;
+        
+        const dataToExport = exportData.metaAds || []; // TikTok support ggf. später
+        const fileName = `stella_ads_export_${new Date().toISOString().split('T')[0]}.${format}`;
+
+        if (format === 'json') {
+            const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        } else {
+            // CSV Generation
+            const headers = ['ID', 'Platform', 'Page', 'Text', 'Link', 'Start Date', 'Reach', 'Score', 'Media URL'];
+            const rows = dataToExport.map((ad: any) => {
+                const escape = (text: string) => `"${(text || '').replace(/"/g, '""')}"`;
+                return [
+                    ad.id,
+                    'Meta',
+                    escape(ad.page_name),
+                    escape(ad.snapshot?.body?.text),
+                    ad.snapshot?.link_url || '',
+                    ad.start_date || '',
+                    ad.reach || 0,
+                    ad.efficiency_score || 0,
+                    ad.snapshot?.images?.[0]?.resized_image_url || ad.snapshot?.videos?.[0]?.video_hd_url || ''
+                ].join(',');
+            });
+            const csvContent = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        setExportData(null);
+    };
 
     return (
         <div className="w-full">
+            {/* FIX: Export Modal hier eingebunden */}
             <ExportModal isOpen={!!exportData} onClose={() => setExportData(null)} onExport={handleExportFile} resultCount={exportData ? (exportData.metaAds?.length || 0) : 0} />
 
             <div className="w-full">
@@ -488,7 +528,20 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                 <button onClick={() => setSearchParams({ tab: 'privacy' })} className={`pb-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'privacy' ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>Legal & Privacy</button>
              </div>
              
-             {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300"><div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div><div className="p-6"><div className="flex items-start space-x-6"><div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div><div className="flex-1 space-y-4 max-w-lg"><div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div></div></div></div><div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div></div>
+             {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300">
+                 <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                     <div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div>
+                     <div className="p-6">
+                         <div className="flex items-start space-x-6">
+                             <div className="h-16 w-16 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-xl font-bold border border-brand-100">{formData.name.charAt(0)}</div>
+                             <div className="flex-1 space-y-4 max-w-lg">
+                                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" disabled={!isEditing} value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div>
+                                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" disabled={!isEditing} value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className={`block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm ${!isEditing ? 'bg-gray-50 text-gray-500' : 'bg-white'}`} /></div>
+                             </div>
+                         </div>
+                     </div>
+                     <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div>
+                 </div>
              
              {/* Contact Us Section */}
              <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">

@@ -228,7 +228,9 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
     if start_date_min: search_url += f"&start_date[min]={start_date_min}"
     if start_date_max: search_url += f"&start_date[max]={start_date_max}"
 
-    POOL_SIZE = 100
+    # FIX: Hier verwenden wir jetzt das dynamische 'limit' statt fester 100
+    POOL_SIZE = limit
+    
     run_input = {
         "urls": [{"url": search_url}],
         "count": POOL_SIZE,
@@ -246,7 +248,7 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
             memory_mbytes=512,
-            timeout_secs=300 # Erhöht auf 5 Min
+            timeout_secs=480 # Etwas mehr Zeit für größere Limits
         ))
         
         if not run:
@@ -273,7 +275,6 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
                         seen_ids.add(norm['id'])
                         results_pool.append(norm)
                     else:
-                        # Optional: Logging warum Item ignoriert wurde (nur die ersten 5)
                         if i < 5: logger.warning(f"Skipped item {i}: Normalization failed or no ID.")
                 except Exception as e:
                     logger.error(f"❌ Error processing item {i}: {str(e)}")
@@ -285,7 +286,7 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
                 logger.warning("⚠️ No valid ads found after normalization.")
                 return []
 
-            # --- SCORING LOGIK (Unverändert, aber sicher) ---
+            # --- SCORING LOGIK (Unverändert) ---
             cohort_buckets = {}
             for ad in results_pool:
                 cat_cluster = get_ad_cluster(ad)

@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from app.models.api_requests import SearchRequest
 from app.services import apify_meta, apify_tiktok
+# Importiert jetzt korrekt
 from app.services.supabase_service import create_search_record, save_search_details, supabase
 
 router = APIRouter()
 
-# --- RERUN ENDPOINT (Lädt Cache/History) ---
+# --- RERUN ENDPOINT (Nur hier wird der Cache geladen) ---
 @router.get("/history/{search_id}")
 async def get_search_history(
     search_id: str,
@@ -14,15 +15,14 @@ async def get_search_history(
     print(f"API ROUTER: Rerun Search ID '{search_id}' for User: {user_id}")
     
     try:
-        # Holt den Parent-Eintrag um Query-Metadaten zu bekommen
+        # 1. Metadaten (Query, Country) laden
         parent_res = supabase.table("search_cache").select("*").eq("id", search_id).execute()
         if not parent_res.data:
-             # Fallback: Vielleicht existiert die ID nicht, Fehlermeldung
              raise HTTPException(status_code=404, detail="Search history not found")
         
         search_meta = parent_res.data[0]
         
-        # Holt die Ergebnisse
+        # 2. Ergebnisse laden
         response = supabase.table("ad_results").select("data").eq("search_ref", search_id).execute()
         results = [row['data'] for row in response.data] if response.data else []
         
@@ -45,7 +45,7 @@ async def get_search_history(
         raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
 
 
-# --- LIVE SEARCH ENDPOINT (Immer Live, kein Auto-Cache) ---
+# --- LIVE SEARCH ENDPOINT (Führt IMMER eine neue Suche aus) ---
 @router.post("/")
 async def search_ads(
     request: SearchRequest,
@@ -54,10 +54,12 @@ async def search_ads(
 ):
     print(f"API ROUTER: Live Search '{request.keyword}' | Country: {request.country}")
 
+    # HIER KEIN CACHE CHECK MEHR!
+
     results = []
 
     try:
-        # 1. META / FACEBOOK SEARCH (Immer Live)
+        # 1. META / FACEBOOK SEARCH
         if request.platform == "meta" or request.platform == "both":
             meta_results = await apify_meta.search_meta_ads(
                 query=request.keyword,
@@ -82,14 +84,13 @@ async def search_ads(
             )
             results.extend(tiktok_results)
         
-        # 3. DB SAVE & RETURN ID
-        # Wir erstellen den DB-Eintrag sofort, um die ID zu bekommen
+        # 3. SPEICHERN & ID ERSTELLEN
         search_id = None
         if results:
-            # Synchron: ID holen
+            # Synchron: ID für das Frontend erstellen
             search_id = create_search_record(request.platform, request.keyword, request.country)
             
-            # Asynchron: Details speichern
+            # Asynchron: Die eigentlichen Daten speichern
             if search_id:
                 background_tasks.add_task(
                     save_search_details, 
@@ -106,7 +107,7 @@ async def search_ads(
                 "query": request.keyword,
                 "sort": request.sort_by,
                 "source": "live",
-                "search_id": search_id # WICHTIG: Frontend braucht diese ID für Rerun!
+                "search_id": search_id # Diese ID wird für den Rerun-Button gebraucht
             }
         }
 

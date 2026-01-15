@@ -38,7 +38,9 @@ class ApiService {
 
     if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || 'Registration failed');
+        // FIX: Bessere Fehlerbehandlung
+        const msg = err.detail ? (typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)) : 'Registration failed';
+        throw new Error(msg);
     }
     return await response.json();
   }
@@ -59,7 +61,6 @@ class ApiService {
         const data = await response.json();
         this.token = data.access_token;
         
-        // WICHTIG: Email auch speichern, falls Profil noch nicht existiert
         localStorage.setItem('adspy_user_id', data.user.id);
         localStorage.setItem('adspy_user_email', data.user.email || email);
 
@@ -87,12 +88,15 @@ class ApiService {
 
         const localHistory = this._getLocalHistory();
 
-        // FIX: Keine Mock-Daten mehr! Wir bauen das User-Objekt aus echten Daten.
+        // FIX: Plan normalisieren (lowercase), damit 'Pro' und 'pro' funktionieren
+        const rawPlan = profileData.plan || 'starter';
+        const normalizedPlan = rawPlan.toLowerCase() as UserPlan;
+
         this.user = { 
             id: storedId,
             email: profileData.email || storedEmail,
             name: profileData.name || 'User',
-            plan: profileData.plan || 'starter',
+            plan: normalizedPlan,
             credits: profileData.credits || 0,
             savedAds: profileData.savedAds || [],
             searchHistory: localHistory.length > 0 ? localHistory : (profileData.searchHistory || [])
@@ -108,7 +112,6 @@ class ApiService {
   async updateUser(data: Partial<User>): Promise<User> {
       if (this.user) {
           this.user = { ...this.user, ...data };
-          // Hier müsste eigentlich auch ein Backend-Call hin, um den Namen dauerhaft zu speichern
       }
       return this.user!;
   }
@@ -116,7 +119,6 @@ class ApiService {
   async getSearchHistory(searchId: string): Promise<SearchResult> {
     if (!this.user) throw new Error("Login required");
     
-    // FIX: Expliziter Schutz vor falscher ID "dashboard"
     if (!searchId || searchId === 'dashboard' || searchId === 'feed' || searchId.includes('undefined')) {
         throw new Error("Invalid search ID ignored"); 
     }
@@ -134,7 +136,12 @@ class ApiService {
 
     const response = await fetch(`${API_URL}/search/history/${cleanId}?user_id=${this.user.id}`);
     
-    if (!response.ok) throw new Error("History load failed");
+    if (!response.ok) {
+        // FIX: Handle 404/500 cleanly
+        const err = await response.json().catch(() => ({ detail: "Network Error" }));
+        const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+        throw new Error(msg);
+    }
     
     const body = await response.json();
     const rawAds = body.data || [];
@@ -198,7 +205,9 @@ class ApiService {
 
     if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || "Search failed");
+        // FIX: [object Object] Fehler beheben -> JSON stringify für Details
+        const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+        throw new Error(msg);
     }
 
     const responseBody = await response.json();
@@ -221,6 +230,7 @@ class ApiService {
     }
 
     if (this.user) {
+        // Optimistic Credit Update
         this.user.credits -= params.limit;
         
         const newHistoryItem: SearchHistoryItem = {

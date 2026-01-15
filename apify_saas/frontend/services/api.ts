@@ -1,6 +1,5 @@
 /// <reference types="vite/client" />
 import { SearchParams, SearchResult, User, MetaAd, TikTokAd, SavedAd, SearchHistoryItem, UserPlan } from '../types';
-import { MOCK_USER } from './mockData'; 
 // @ts-ignore
 import { cleanAndTransformData } from '../adAdapter';
 // @ts-ignore
@@ -25,7 +24,8 @@ class ApiService {
 
   private _saveLocalHistory(item: SearchHistoryItem) {
     const history = this._getLocalHistory();
-    const updated = [item, ...history].slice(0, 50);
+    const filtered = history.filter(h => h.id !== item.id);
+    const updated = [item, ...filtered].slice(0, 50);
     localStorage.setItem('adspy_local_history', JSON.stringify(updated));
   }
 
@@ -58,7 +58,10 @@ class ApiService {
 
         const data = await response.json();
         this.token = data.access_token;
+        
+        // WICHTIG: Email auch speichern, falls Profil noch nicht existiert
         localStorage.setItem('adspy_user_id', data.user.id);
+        localStorage.setItem('adspy_user_email', data.user.email || email);
 
         await this.getUser();
         return this.user!;
@@ -70,11 +73,13 @@ class ApiService {
 
   async getUser(): Promise<User | null> {
     const storedId = localStorage.getItem('adspy_user_id');
+    const storedEmail = localStorage.getItem('adspy_user_email') || '';
+    
     if (!storedId) return null;
 
     try {
         const response = await fetch(`${API_URL}/user/me?user_id=${storedId}`);
-        let profileData = {};
+        let profileData: any = {};
         
         if (response.ok) {
             profileData = await response.json();
@@ -82,11 +87,15 @@ class ApiService {
 
         const localHistory = this._getLocalHistory();
 
+        // FIX: Keine Mock-Daten mehr! Wir bauen das User-Objekt aus echten Daten.
         this.user = { 
-            ...MOCK_USER, 
-            ...profileData, 
             id: storedId,
-            searchHistory: localHistory.length > 0 ? localHistory : (MOCK_USER.searchHistory || [])
+            email: profileData.email || storedEmail,
+            name: profileData.name || 'User',
+            plan: profileData.plan || 'starter',
+            credits: profileData.credits || 0,
+            savedAds: profileData.savedAds || [],
+            searchHistory: localHistory.length > 0 ? localHistory : (profileData.searchHistory || [])
         };
         
         return this.user;
@@ -99,15 +108,19 @@ class ApiService {
   async updateUser(data: Partial<User>): Promise<User> {
       if (this.user) {
           this.user = { ...this.user, ...data };
+          // Hier müsste eigentlich auch ein Backend-Call hin, um den Namen dauerhaft zu speichern
       }
       return this.user!;
   }
 
-  // --- RERUN / HISTORY LOAD ---
   async getSearchHistory(searchId: string): Promise<SearchResult> {
     if (!this.user) throw new Error("Login required");
     
-    // 1. Benchmarks laden
+    // FIX: Expliziter Schutz vor falscher ID "dashboard"
+    if (!searchId || searchId === 'dashboard' || searchId === 'feed' || searchId.includes('undefined')) {
+        throw new Error("Invalid search ID ignored"); 
+    }
+
     const benchmarkResult = await supabase.from('benchmark_cpr_cache').select('*');
     const benchmarkMap: Record<string, number> = {};
     if (benchmarkResult.data) {
@@ -117,10 +130,8 @@ class ApiService {
         });
     }
 
-    // FIX: ID bereinigen (entfernt ?q=... falls vorhanden)
     const cleanId = searchId.split('?')[0];
 
-    // 2. Daten vom Backend holen
     const response = await fetch(`${API_URL}/search/history/${cleanId}?user_id=${this.user.id}`);
     
     if (!response.ok) throw new Error("History load failed");
@@ -128,15 +139,12 @@ class ApiService {
     const body = await response.json();
     const rawAds = body.data || [];
 
-    // 3. Transformieren
     let cleanedMetaAds: any[] = [];
-    
     const metaRaw = rawAds.filter((ad: any) => !ad.platform || ad.platform === 'meta' || ad.publisher_platform);
     if (metaRaw.length > 0) {
          const rowsToTransform = metaRaw.map((item: any) => ({ data: item }));
          cleanedMetaAds = cleanAndTransformData(rowsToTransform, benchmarkMap);
     }
-    
     const tikTokAds = rawAds.filter((ad: any) => ad.platform === 'tiktok');
 
     return {
@@ -171,7 +179,6 @@ class ApiService {
         active_status: 'active'
     };
 
-    // Parallel Benchmarks & Search laden
     const [response, benchmarkResult] = await Promise.all([
         fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
             method: 'POST',
@@ -195,8 +202,6 @@ class ApiService {
     }
 
     const responseBody = await response.json();
-    
-    // WICHTIG: ID vom Backend nehmen
     const searchId = responseBody.meta?.search_id || Math.random().toString(36).substring(7);
     
     let rawAdList = responseBody.data || [];
@@ -219,7 +224,7 @@ class ApiService {
         this.user.credits -= params.limit;
         
         const newHistoryItem: SearchHistoryItem = {
-            id: searchId, // Hier ist die echte DB ID!
+            id: searchId, 
             query: params.query,
             platform: params.platform,
             timestamp: new Date().toISOString(),
@@ -245,22 +250,32 @@ class ApiService {
   async saveAd(ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok'): Promise<SavedAd> {
     if (!this.user) throw new Error("Login required");
 
-    await fetch(`${API_URL}/user/saved-ads`, {
+    const response = await fetch(`${API_URL}/user/saved-ads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: this.user.id, type, data: ad })
     });
 
+    if (!response.ok) throw new Error("Failed to save");
+
     const savedAd: SavedAd = {
-      id: Math.random().toString(36).substring(7),
-      type, data: ad, savedAt: new Date().toISOString()
+      id: "temp", 
+      type, 
+      data: ad, 
+      savedAt: new Date().toISOString()
     };
-    this.user.savedAds.unshift(savedAd);
+    
     return savedAd;
   }
 
   async removeSavedAd(id: string): Promise<void> {
       if (!this.user) return;
+      
+      if (id.length < 10) {
+          this.user.savedAds = this.user.savedAds.filter(ad => ad.id !== id);
+          return;
+      }
+
       await fetch(`${API_URL}/user/saved-ads/${id}?user_id=${this.user.id}`, { method: 'DELETE' });
       this.user.savedAds = this.user.savedAds.filter(ad => ad.id !== id);
   }

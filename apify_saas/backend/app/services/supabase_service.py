@@ -137,7 +137,8 @@ def save_search_details(search_id: str, platform: str, results: list):
 def get_user_profile_data(user_id: str):
     client = get_supabase()
     try:
-        p_res = client.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
+        # HIER: Plan mit abfragen
+        p_res = client.table("profiles").select("email, first_name, credits, plan").eq("id", user_id).maybe_single().execute()
         profile = p_res.data if p_res and p_res.data else {}
         
         s_res = client.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
@@ -153,12 +154,14 @@ def get_user_profile_data(user_id: str):
             "email": profile.get("email", ""),
             "name": profile.get("first_name", "User"),
             "credits": profile.get("credits", 0),
+            "plan": profile.get("plan", "starter"),  # <--- HIER: Plan hinzufügen (Default 'starter')
             "savedAds": saved_ads,
             "searchHistory": [] 
         }
     except Exception as e:
         print(f"⚠️ Profile Load Error: {e}")
-        return {"id": user_id, "credits": 0, "savedAds": [], "searchHistory": []}
+        # Auch im Fehlerfall 'plan': 'starter' zurückgeben
+        return {"id": user_id, "credits": 0, "plan": "starter", "savedAds": [], "searchHistory": []}
 
 def add_saved_ad(user_id: str, ad_data: dict, ad_type: str):
     client = get_supabase()

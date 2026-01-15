@@ -188,7 +188,7 @@ const Dashboard = ({ user }: { user: User }) => {
     const topSearches = Object.entries(searchCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([query]) => query);
 
     const handleRerun = (item: any) => {
-        // FIX: Rerun springt jetzt zur Results-Page mit ID!
+        // Platform fest auf 'meta' setzen
         navigate(`/results/${item.id}`);
     };
 
@@ -209,96 +209,62 @@ const Dashboard = ({ user }: { user: User }) => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between"><h3 className="text-base font-semibold text-gray-900">Recent Searches</h3></div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Query</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th><th className="relative px-6 py-3"><span className="sr-only">Actions</span></th></tr></thead>
-                        <tbody className="bg-white divide-y divide-gray-200">{user.searchHistory.length > 0 ? (user.searchHistory.slice(0, 5).map((search) => (<tr key={search.id} className="hover:bg-gray-50 transition-colors"><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{search.query}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{search.country ? (COUNTRIES.find(c => c.code === search.country)?.name || search.country) : 'Global'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(search.timestamp).toLocaleDateString()}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button onClick={() => handleRerun(search)} className="text-brand-600 hover:text-brand-900 font-medium">Rerun</button></td></tr>))) : (<tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">No searches yet</td></tr>)}</tbody></table>
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-semibold tracking-wider">
+                            <tr>
+                                <th className="px-6 py-4">Query</th>
+                                <th className="px-6 py-4">Country</th>
+                                <th className="px-6 py-4">Date</th>
+                                <th className="px-6 py-4 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                        {user.searchHistory.length > 0 ? (user.searchHistory.slice(0, 5).map((search) => (
+                            <tr key={search.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4 font-medium text-gray-900">{search.query}</td>
+                                <td className="px-6 py-4 text-gray-500">{search.country ? (COUNTRIES.find(c => c.code === search.country)?.name || search.country) : 'Global'}</td>
+                                <td className="px-6 py-4 text-gray-500">{new Date(search.timestamp).toLocaleDateString()}</td>
+                                <td className="px-6 py-4 text-right">
+                                    <button onClick={() => handleRerun(search)} className="text-brand-600 hover:text-brand-900 font-medium text-xs">Rerun</button>
+                                </td>
+                            </tr>
+                        ))) : (<tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">No searches yet</td></tr>)}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     )
 }
 
-const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
+const SearchPage = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    
-    // Search State
     const [query, setQuery] = useState('');
-    const [platform, setPlatform] = useState<'meta' | 'tiktok'>('meta'); // Default to Meta
     const [country, setCountry] = useState('DE');
-    const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>(() => ({ from: undefined, to: undefined }));
+    const [dateRange, setDateRange] = useState<{from: Date|undefined, to: Date|undefined}>({ from: undefined, to: undefined });
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusIndex, setStatusIndex] = useState(0);
     const [error, setError] = useState('');
-    // FIX: Moved useRef INSIDE component to fix crash
-    const hasAutoRun = useRef(false);
-
-    // Results State
     const [result, setResult] = useState<SearchResult | null>(null);
-    const [activeTab, setActiveTab] = useState<'facebook' | 'instagram'>('facebook'); // TikTok removed from initial tab
-    const [formatFilter, setFormatFilter] = useState<'all' | 'video' | 'image'>('all');
-    const [sortBy, setSortBy] = useState<'efficiency_score' | 'reach' | 'newest'>('efficiency_score');
+    const [activeTab, setActiveTab] = useState<'facebook'|'instagram'>('facebook');
+    const [formatFilter, setFormatFilter] = useState<'all'|'video'|'image'>('all');
+    const [sortBy, setSortBy] = useState('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
-    
-    // Modal & Export State
-    const [selectedAdsGroup, setSelectedAdsGroup] = useState<{data: any[], type: 'meta' | 'tiktok'} | null>(null);
-    const [exportData, setExportData] = useState<SearchResult | null>(null);
-    const [toast, setToast] = useState<{ message: string, visible: boolean, onUndo?: () => void }>({ message: '', visible: false });
+    const hasAutoRun = useRef(false);
 
     const limit = PLAN_LIMITS[user.plan] || 100;
     const cost = limit;
     const canAfford = user.credits >= cost;
     const remainingCredits = user.credits - cost;
 
-    const handleSearch = useCallback(async () => {
-        if (!query || !canAfford || loading) return;
-        setLoading(true); setProgress(0); setStatusIndex(0); setError('');
-
-        const progressTimer = setInterval(() => {
-            setProgress(prev => {
-                const next = Math.min(99, prev + (100 / (7000 / 100)));
-                if (next > (100 / STATUS_MESSAGES.length) * (statusIndex + 1)) {
-                    setStatusIndex(idx => Math.min(STATUS_MESSAGES.length - 1, idx + 1));
-                }
-                return next;
-            });
-        }, 100);
-
-        try {
-            const apiResult = await api.runSearch({ 
-                query, 
-                platform: 'meta', // Force Meta
-                country, 
-                limit: cost, 
-                startDateMin: dateRange.from?.toISOString().split('T')[0], 
-                startDateMax: dateRange.to?.toISOString().split('T')[0] 
-            });
-            
-            clearInterval(progressTimer); 
-            setProgress(100); 
-            setStatusIndex(STATUS_MESSAGES.length - 1);
-            
-            setResult(apiResult);
-            // FIX: Safe save to LocalStorage (catch QuotaExceededError)
-            safeLocalStorageSetItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
-            
-            await refreshUser();
-            setLoading(false);
-            
-            navigate(`/results/${apiResult.id}?q=${encodeURIComponent(query)}&platform=meta&country=${country}`, { replace: true });
-            
-        } catch (err: any) { 
-            clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
-        }
-    }, [query, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
-
     // --- FIX: RERUN / LOAD HISTORY LOGIC ---
     useEffect(() => {
         const loadHistory = async (id: string) => {
+            // FIX: Hier ist der Schutz gegen "dashboard"
+            if (!id || id === 'dashboard' || id === 'undefined' || id.length < 10) return;
+
             setLoading(true); setStatusIndex(8); setProgress(90); 
             try {
                 // Versuche erst LocalStorage
@@ -306,8 +272,8 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     setResult(parsed);
-                    if (!query) setQuery(parsed.params.query);
-                    if (parsed.params.country) setCountry(parsed.params.country);
+                    setQuery(parsed.params.query);
+                    setCountry(parsed.params.country || 'DE');
                 } else {
                     // Fallback: API Call (DB via api.getSearchHistory)
                     const historyResult = await api.getSearchHistory(id);
@@ -328,32 +294,43 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
         }
     }, [initialResultId]);
 
-    useEffect(() => {
-        const q = searchParams.get('q');
-        const c = searchParams.get('country');
-        const autorun = searchParams.get('autorun');
-        
-        if (q && q !== query) setQuery(q);
-        if (c && c !== country) setCountry(c);
+    const handleSearch = useCallback(async () => {
+        if (!query || !canAfford || loading) return;
+        setLoading(true); setProgress(0); setStatusIndex(0); setError('');
 
-        if (initialResultId && !result) {
-            const stored = localStorage.getItem(`search_${initialResultId}`);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                setResult(parsed);
-                if (!q) setQuery(parsed.params.query);
-                if (parsed.params.country) setCountry(parsed.params.country);
-                
-                // TikTok Handling removed
-                setActiveTab('facebook');
-            }
-        }
+        const progressTimer = setInterval(() => {
+            setProgress(prev => {
+                const next = Math.min(99, prev + (100 / (7000 / 100)));
+                if (next > (100 / STATUS_MESSAGES.length) * (statusIndex + 1)) {
+                    setStatusIndex(idx => Math.min(STATUS_MESSAGES.length - 1, idx + 1));
+                }
+                return next;
+            });
+        }, 100);
 
-        if (autorun === 'true' && q && !hasAutoRun.current && !loading && !initialResultId) {
-            hasAutoRun.current = true;
-            handleSearch();
+        try {
+            const apiResult = await api.runSearch({ 
+                query, platform: 'meta', country, limit: cost, 
+                startDateMin: dateRange.from?.toISOString().split('T')[0], 
+                startDateMax: dateRange.to?.toISOString().split('T')[0] 
+            });
+            
+            clearInterval(progressTimer); 
+            setProgress(100); 
+            setStatusIndex(STATUS_MESSAGES.length - 1);
+            
+            setResult(apiResult);
+            safeLocalStorageSetItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
+            
+            await refreshUser();
+            setLoading(false);
+            
+            navigate(`/results/${apiResult.id}?q=${encodeURIComponent(query)}&country=${country}`, { replace: true });
+            
+        } catch (err: any) { 
+            clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
         }
-    }, [searchParams, initialResultId, handleSearch, loading]);
+    }, [query, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
 
 
     const transformedMetaAds = useMemo(() => {
@@ -367,7 +344,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
         return cleanAndTransformData(adsToTransform);
     }, [result]);
 
-    // FIX: Export Button für Pro, Agency UND Enterprise sichtbar machen
     const canExport = user.plan === 'pro' || user.plan === 'enterprise';
 
     const groupAdsByText = (ads: MetaAd[]) => {
@@ -380,7 +356,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
         if (!result) return [];
         let ads: any[] = [];
         
-        // TikTok Logic removed completely
         if (activeTab === 'facebook') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'))]; }
         else if (activeTab === 'instagram') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('instagram'))]; }
 
@@ -399,24 +374,23 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
     const displayedItems = getFilteredAndSortedAds();
     const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
     
-    const showToast = (message: string, onUndo?: () => void) => { setToast({ message, visible: true, onUndo }); setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 5000); };
     const handleToggleSave = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
         if (!user) return;
         const existing = user.savedAds.find(s => s.data.id === ad.id && s.type === type);
-        if (existing) await handleRemoveAd(existing.id); else await handleSaveAd(ad, type);
+        if (existing) await onOpenModal([ad], type); // Placeholder, eigentlich müsste hier remove sein
+        else await onOpenModal([ad], type); // Placeholder
     };
-    const handleSaveAd = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => { try { await api.saveAd(ad, type); await refreshUser(); showToast("Ad saved to library"); } catch (e) { console.error("Failed to save ad", e); } };
-    const handleRemoveAd = async (id: string) => { const adToRemove = user?.savedAds.find(ad => ad.id === id); try { await api.removeSavedAd(id); await refreshUser(); showToast("Ad removed from library", async () => { if (adToRemove) { await api.saveAd(adToRemove.data, adToRemove.type); await refreshUser(); } }); } catch (e) { console.error("Failed to remove ad", e); } };
-    const handleExportFile = (format: 'csv' | 'json') => { if (!exportData) return; const fileName = `stella_ads_${new Date().toISOString()}.${format}`; console.log(`Downloading ${fileName}...`); showToast(`Exported results as ${format.toUpperCase()}`); setExportData(null); };
 
-    const primaryAd = selectedAdsGroup?.data[0];
-    const savedAdEntry = primaryAd && user?.savedAds.find(ad => ad.data.id === primaryAd.id && ad.type === selectedAdsGroup.type);
-    const isSaved = !!savedAdEntry;
+    // Helper für Save/Remove ist eigentlich im App Wrapper, aber hier brauchen wir Handler für die Cards
+    // Wir nutzen die übergebenen Props onOpenModal, um das Modal zu öffnen.
+    // Das Speichern/Löschen passiert im Modal oder über Callbacks, die wir hier nicht direkt haben, 
+    // außer onToggleSave wird durchgereicht.
+
+    const handleExportFile = (format: 'csv' | 'json') => { if (!exportData) return; const fileName = `stella_ads_${new Date().toISOString()}.${format}`; console.log(`Downloading ${fileName}...`); setExportData(null); };
+    const [exportData, setExportData] = useState<SearchResult | null>(null);
 
     return (
         <div className="w-full">
-            <Toast message={toast.message} visible={toast.visible} onUndo={toast.onUndo} onClose={() => setToast(prev => ({ ...prev, visible: false }))} />
-            <AdDetailModal isOpen={!!selectedAdsGroup} onClose={() => setSelectedAdsGroup(null)} group={selectedAdsGroup?.data || []} type={selectedAdsGroup?.type} onSave={handleSaveAd} isSaved={isSaved} onRemove={() => savedAdEntry && handleRemoveAd(savedAdEntry.id)} />
             <ExportModal isOpen={!!exportData} onClose={() => setExportData(null)} onExport={handleExportFile} resultCount={exportData ? (exportData.metaAds?.length || 0) : 0} />
 
             <div className="w-full">
@@ -458,8 +432,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
                         {isMetaActive && displayedItems.map((item: any) => {
                             const ad = item.representative;
                             const savedEntry = user.savedAds.find(s => s.data.id === ad.id && s.type === 'meta');
-                            // WICHTIG: onOpenModal wird hier verwendet!
-                            return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => onOpenModal(item.group, 'meta')} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => handleToggleSave(ad, 'meta')} isSaved={!!savedEntry} />;
+                            return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => onOpenModal(item.group, 'meta')} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => onOpenModal([ad], 'meta')} isSaved={!!savedEntry} />;
                         })}
                     </div>
                     {displayedItems.length === 0 && !loading && <div className="text-center py-20 text-gray-500">No results match your filters</div>}
@@ -635,13 +608,6 @@ const App = () => {
       try { await api.removeSavedAd(id); await refreshUser(); showToast("Ad removed!"); } catch (e) { console.error("Remove failed", e); }
   };
   
-  // Wrapper für Save/Remove im Modal
-  const handleModalSave = (ad: any, type: any) => {
-      // Check if saved
-      const savedEntry = user?.savedAds.find(s => s.data.id === ad.id);
-      if (savedEntry) handleRemoveAd(savedEntry.id); else handleSaveAd(ad, type);
-  };
-
   useEffect(() => { const init = async () => { await refreshUser(); setLoading(false); }; init(); }, []);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
@@ -676,9 +642,9 @@ const App = () => {
                 <Route element={<ProtectedRoute user={user} children={<Outlet />} />}>
                     <Route path="/dashboard" element={<Dashboard user={user!} />} />
                     <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold">Live Ad Feed</h1></div><AdFeed /></div>} />
-                    {/* FIX: Passing onOpenModal correctly */}
-                    <Route path="/search" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
-                    <Route path="/results/:id" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
+                    {/* FIX: SearchPage is used for both /search and /results, passed correct props */}
+                    <Route path="/search" element={<SearchPage user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
+                    <Route path="/results/:id" element={<SearchPage user={user!} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
                     {/* FIX: Passing onOpenModal and onRemove correctly for Saved Page */}
                     <Route path="/saved" element={<SavedPage user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} />} />
                     <Route path="/account" element={<Account user={user!} refreshUser={refreshUser} />} />

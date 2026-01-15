@@ -129,8 +129,7 @@ const SearchInputSection = ({ query, setQuery, country, setCountry, dateRange, s
 
 // --- Pages ---
 
-const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
-  const navigate = useNavigate();
+const Login = ({ onLoginSuccess }: { onLoginSuccess: () => Promise<void> }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [email, setEmail] = useState('');
@@ -142,11 +141,9 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => void }) => {
     setError('');
     try {
         await api.login(email, password);
-        onLoginSuccess();
-        navigate('/dashboard');
+        await onLoginSuccess();
     } catch (err: any) {
         setError('Login failed. Please check email and password.');
-    } finally {
         setLoading(false);
     }
   };
@@ -686,7 +683,10 @@ const App = () => {
             />
 
             <Routes>
-                <Route path="/login" element={<Login onLoginSuccess={refreshUser} />} />
+                <Route path="/login" element={
+                    user ? <Navigate to="/dashboard" replace /> : <Login onLoginSuccess={refreshUser} />
+                } />
+                
                 <Route path="/register" element={<Register />} />
                 <Route path="/demo" element={<DemoPage />} />
                 <Route path="/pricing" element={<PricingPage />} />

@@ -237,7 +237,8 @@ const Dashboard = ({ user }: { user: User }) => {
     )
 }
 
-const SearchPage = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
+// FIX: Komponente wieder in SearchLogicWrapper umbenannt
+const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [query, setQuery] = useState('');
@@ -262,10 +263,13 @@ const SearchPage = ({ user, refreshUser, initialResultId, onOpenModal }: any) =>
     // --- FIX: RERUN / LOAD HISTORY LOGIC ---
     useEffect(() => {
         const loadHistory = async (id: string) => {
-            // FIX: Hier ist der Schutz gegen "dashboard"
+            // FIX: Hier ist der Schutz gegen "dashboard" und andere ungültige IDs
             if (!id || id === 'dashboard' || id === 'undefined' || id.length < 10) return;
 
+            // FIX: Reset Result damit der Effekt feuert (auch beim 3. mal)
+            setResult(null); 
             setLoading(true); setStatusIndex(8); setProgress(90); 
+            
             try {
                 // Versuche erst LocalStorage
                 const stored = localStorage.getItem(`search_${id}`);
@@ -289,10 +293,12 @@ const SearchPage = ({ user, refreshUser, initialResultId, onOpenModal }: any) =>
             }
         };
 
-        if (initialResultId && !result && !loading) {
+        // FIX: Wir prüfen nur auf initialResultId und loading, nicht mehr auf !result
+        // Das erlaubt das Neuladen, auch wenn schon was da ist.
+        if (initialResultId && !loading) {
             loadHistory(initialResultId);
         }
-    }, [initialResultId]);
+    }, [initialResultId]); 
 
     const handleSearch = useCallback(async () => {
         if (!query || !canAfford || loading) return;
@@ -380,11 +386,6 @@ const SearchPage = ({ user, refreshUser, initialResultId, onOpenModal }: any) =>
         if (existing) await onOpenModal([ad], type); // Placeholder, eigentlich müsste hier remove sein
         else await onOpenModal([ad], type); // Placeholder
     };
-
-    // Helper für Save/Remove ist eigentlich im App Wrapper, aber hier brauchen wir Handler für die Cards
-    // Wir nutzen die übergebenen Props onOpenModal, um das Modal zu öffnen.
-    // Das Speichern/Löschen passiert im Modal oder über Callbacks, die wir hier nicht direkt haben, 
-    // außer onToggleSave wird durchgereicht.
 
     const handleExportFile = (format: 'csv' | 'json') => { if (!exportData) return; const fileName = `stella_ads_${new Date().toISOString()}.${format}`; console.log(`Downloading ${fileName}...`); setExportData(null); };
     const [exportData, setExportData] = useState<SearchResult | null>(null);
@@ -642,9 +643,9 @@ const App = () => {
                 <Route element={<ProtectedRoute user={user} children={<Outlet />} />}>
                     <Route path="/dashboard" element={<Dashboard user={user!} />} />
                     <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold">Live Ad Feed</h1></div><AdFeed /></div>} />
-                    {/* FIX: SearchPage is used for both /search and /results, passed correct props */}
-                    <Route path="/search" element={<SearchPage user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
-                    <Route path="/results/:id" element={<SearchPage user={user!} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
+                    {/* FIX: Passing onOpenModal correctly */}
+                    <Route path="/search" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
+                    <Route path="/results/:id" element={<SearchLogicWrapper user={user!} refreshUser={refreshUser} initialResultId={window.location.hash.split('/').pop()} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} />} />
                     {/* FIX: Passing onOpenModal and onRemove correctly for Saved Page */}
                     <Route path="/saved" element={<SavedPage user={user!} refreshUser={refreshUser} onOpenModal={(data:any, type:any) => setSelectedAdsGroup({data, type})} onRemove={handleRemoveAd} />} />
                     <Route path="/account" element={<Account user={user!} refreshUser={refreshUser} />} />

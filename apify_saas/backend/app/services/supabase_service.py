@@ -44,7 +44,7 @@ def deduct_credits(user_id: str, amount: int):
 
 def get_cached_results(platform: str, keyword: str):
     """
-    Prüft, ob für diese Suche bereits Ergebnisse der letzten 24h vorliegen.
+    HINWEIS: Diese Funktion wird nur noch explizit aufgerufen, nicht mehr automatisch.
     """
     supabase = get_supabase()
     try:
@@ -60,16 +60,7 @@ def get_cached_results(platform: str, keyword: str):
             return None
             
         cache_entry = response.data[0]
-        last_updated_str = cache_entry['last_updated'].replace('Z', '+00:00')
-        last_updated = datetime.datetime.fromisoformat(last_updated_str)
-        
-        # Cache verfällt nach 24 Stunden
-        if (datetime.datetime.now(datetime.timezone.utc) - last_updated).days >= 1:
-            return None
-
-        print(f"✅ Cache HIT für {keyword}")
-        
-        # Ergebnisse laden, die zu dieser Suche gehören
+        # Ergebnisse laden
         ads_res = supabase.table("ad_results").select("data").eq("search_ref", cache_entry['id']).execute()
         if ads_res and ads_res.data:
             return [row['data'] for row in ads_res.data]
@@ -79,45 +70,47 @@ def get_cached_results(platform: str, keyword: str):
         
     return None
 
-def save_search_results(platform: str, keyword: str, country: str, results: list):
+def create_search_record(platform: str, keyword: str, country: str):
     """
-    Speichert Ergebnisse in 'ad_results' (für Cache UND Live-Feed).
-    Erstellt auch einen Eintrag in 'search_cache' zur Referenzierung.
+    Erstellt synchron den Parent-Eintrag in 'search_cache' und gibt die echte DB-ID zurück.
     """
-    if not results: return
     supabase = get_supabase()
-    
-    print(f"💾 Speichere {len(results)} Ergebnisse in DB (Feed & Cache)...")
+    search_entry = {
+        "platform": platform, 
+        "query": keyword, 
+        "country": country,
+        "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    }
     
     try:
-        # 1. Cache-Eintrag erstellen (Parent)
-        search_entry = {
-            "platform": platform, 
-            "query": keyword, 
-            "country": country,
-            "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        }
-        
-        # Wir fügen country hinzu, falls die Tabelle das unterstützt, sonst ignorieren wir es hier
-        # Falls Fehler auftreten (weil Spalte fehlt), fangen wir das ab
+        # Versuch mit Country
+        res = supabase.table("search_cache").insert(search_entry).execute()
+        if res and res.data:
+            return res.data[0]['id']
+    except Exception:
+        # Fallback ohne Country (falls altes Schema)
+        if "country" in search_entry: del search_entry["country"]
         try:
             res = supabase.table("search_cache").insert(search_entry).execute()
-        except Exception:
-            # Fallback ohne Country falls DB Schema alt ist
-            del search_entry["country"]
-            res = supabase.table("search_cache").insert(search_entry).execute()
-        
-        if not res or not hasattr(res, 'data') or not res.data:
-            print("❌ Fehler: Konnte Cache-Eintrag nicht schreiben.")
-            return
-        
-        search_id = res.data[0]['id']
-        
-        # 2. Einzelne Ads speichern (Children)
-        # Das ist entscheidend für den Feed! Wir speichern Zeile für Zeile.
+            if res and res.data:
+                return res.data[0]['id']
+        except Exception as e:
+            print(f"❌ Failed to create search record: {e}")
+    
+    return None
+
+def save_search_details(search_id: str, platform: str, results: list):
+    """
+    Speichert die Ads-Details im Hintergrund, verknüpft mit search_id.
+    """
+    if not results or not search_id: return
+    supabase = get_supabase()
+    
+    print(f"💾 Background: Speichere {len(results)} Ads für Search-ID {search_id}...")
+    
+    try:
         ad_rows = []
         for ad in results:
-            # Eindeutige ID generieren oder nehmen
             raw_id = ad.get('id') or ad.get('ad_archive_id') or ad.get('item_id')
             pid = str(raw_id) if raw_id else f"gen_{datetime.datetime.now().timestamp()}_{results.index(ad)}"
             
@@ -125,17 +118,16 @@ def save_search_results(platform: str, keyword: str, country: str, results: list
                 "platform": platform,
                 "platform_id": pid,
                 "search_ref": search_id,
-                "data": ad  # Das gesamte JSON-Objekt der Ad
+                "data": ad
             })
         
-        # Batch Upsert (Vermeidet Duplikate basierend auf platform_id)
+        # Batch Upsert (in Chunks falls nötig, hier einfach alles auf einmal da Limit meist < 1000)
         if ad_rows:
-            # Wir nutzen upsert, falls die Ad schon existiert (z.B. aus einer anderen Suche)
             supabase.table("ad_results").upsert(ad_rows, on_conflict="platform, platform_id").execute()
-            print("✅ Speichern erfolgreich.")
+            print("✅ Background Save erfolgreich.")
             
     except Exception as e:
-        print(f"❌ DB Save Error: {e}")
+        print(f"❌ Background Save Error: {e}")
 
 # --- PROFIL & SAVED ADS ---
 

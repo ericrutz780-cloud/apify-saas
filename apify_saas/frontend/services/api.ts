@@ -6,7 +6,6 @@ import { cleanAndTransformData } from '../adAdapter';
 // @ts-ignore
 import { supabase } from './supabaseClient';
 
-// Verbindung zum echten Backend herstellen
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const CLEAN_BASE_URL = BASE_URL.replace(/\/$/, '');
 const API_URL = `${CLEAN_BASE_URL}/api/v1`;
@@ -19,96 +18,65 @@ class ApiService {
     try {
       const stored = localStorage.getItem('adspy_local_history');
       return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-      return [];
-    }
+    } catch (e) { return []; }
   }
 
   private _saveLocalHistory(item: SearchHistoryItem) {
     const history = this._getLocalHistory();
-    const updated = [item, ...history].slice(0, 50);
+    // Duplikate vermeiden
+    const filtered = history.filter(h => h.id !== item.id);
+    const updated = [item, ...filtered].slice(0, 50);
     localStorage.setItem('adspy_local_history', JSON.stringify(updated));
   }
 
   async register(email: string, password: string): Promise<any> {
     const response = await fetch(`${API_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password })
     });
-
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Registration failed');
-    }
+    if (!response.ok) { const err = await response.json(); throw new Error(err.detail || 'Registration failed'); }
     return await response.json();
   }
 
   async login(email: string, password: string): Promise<User> {
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password })
         });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.detail || 'Login failed');
-        }
-
+        if (!response.ok) { const err = await response.json(); throw new Error(err.detail || 'Login failed'); }
         const data = await response.json();
         this.token = data.access_token;
         localStorage.setItem('adspy_user_id', data.user.id);
-
         await this.getUser();
         return this.user!;
-    } catch (e: any) {
-        console.error("Login Error:", e);
-        throw new Error(e.message || "Login failed");
-    }
+    } catch (e: any) { console.error("Login Error:", e); throw new Error(e.message || "Login failed"); }
   }
 
   async getUser(): Promise<User | null> {
     const storedId = localStorage.getItem('adspy_user_id');
     if (!storedId) return null;
-
     try {
         const response = await fetch(`${API_URL}/user/me?user_id=${storedId}`);
         let profileData = {};
-        
-        if (response.ok) {
-            profileData = await response.json();
-        }
-
+        if (response.ok) profileData = await response.json();
         const localHistory = this._getLocalHistory();
-
         this.user = { 
-            ...MOCK_USER, 
-            ...profileData, 
-            id: storedId,
+            ...MOCK_USER, ...profileData, id: storedId,
             searchHistory: localHistory.length > 0 ? localHistory : (MOCK_USER.searchHistory || [])
         };
-        
         return this.user;
-    } catch (e) {
-        console.warn("User fetch failed", e);
-        return null;
-    }
+    } catch (e) { return null; }
   }
 
   async updateUser(data: Partial<User>): Promise<User> {
-      if (this.user) {
-          this.user = { ...this.user, ...data };
-      }
+      if (this.user) this.user = { ...this.user, ...data };
       return this.user!;
   }
 
-  // --- NEU & WICHTIG: Rerun Funktion ---
+  // --- RERUN / HISTORY LOAD ---
   async getSearchHistory(searchId: string): Promise<SearchResult> {
     if (!this.user) throw new Error("Login required");
     
-    // 1. Benchmarks laden
+    // Benchmarks parallel laden
     const benchmarkResult = await supabase.from('benchmark_cpr_cache').select('*');
     const benchmarkMap: Record<string, number> = {};
     if (benchmarkResult.data) {
@@ -118,24 +86,18 @@ class ApiService {
         });
     }
 
-    // 2. Daten vom Backend holen
     const response = await fetch(`${API_URL}/search/history/${searchId}?user_id=${this.user.id}`);
-    if (!response.ok) throw new Error("History load failed");
+    if (!response.ok) throw new Error("Could not load history. It might be expired or invalid.");
     
     const body = await response.json();
     const rawAds = body.data || [];
 
-    // 3. Transformieren (Damit Bilder & Stats stimmen)
     let cleanedMetaAds: any[] = [];
-    
-    // Wir filtern nach Meta Ads
     const metaRaw = rawAds.filter((ad: any) => !ad.platform || ad.platform === 'meta' || ad.publisher_platform);
-    
     if (metaRaw.length > 0) {
          const rowsToTransform = metaRaw.map((item: any) => ({ data: item }));
          cleanedMetaAds = cleanAndTransformData(rowsToTransform, benchmarkMap);
     }
-    
     const tikTokAds = rawAds.filter((ad: any) => ad.platform === 'tiktok');
 
     return {
@@ -158,25 +120,17 @@ class ApiService {
     if (!this.user) throw new Error("Unauthorized: Bitte einloggen.");
 
     const cleanCountry = (!params.country || params.country === 'ALL') ? 'US' : params.country;
-    const sharedSearchId = Math.random().toString(36).substring(7);
-
+    
     const payload = {
-        keyword: params.query,
-        platform: params.platform === 'both' ? 'meta' : params.platform,
-        limit: params.limit,
-        country: cleanCountry,
-        start_date_min: params.startDateMin, 
-        start_date_max: params.startDateMax,
-        sort_by: 'newest',
-        active_status: 'active'
+        keyword: params.query, platform: params.platform === 'both' ? 'meta' : params.platform,
+        limit: params.limit, country: cleanCountry,
+        start_date_min: params.startDateMin, start_date_max: params.startDateMax,
+        sort_by: 'newest', active_status: 'active'
     };
 
-    // Parallel Benchmarks & Search laden
     const [response, benchmarkResult] = await Promise.all([
         fetch(`${API_URL}/search/?user_id=${this.user.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         }),
         supabase.from('benchmark_cpr_cache').select('*')
     ]);
@@ -189,14 +143,15 @@ class ApiService {
         });
     }
 
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Search failed");
-    }
+    if (!response.ok) { const err = await response.json(); throw new Error(err.detail || "Search failed"); }
 
     const responseBody = await response.json();
+    
+    // WICHTIG: Wir nutzen jetzt die ID vom Backend!
+    // Falls das Backend keine ID liefert (Fallback), generieren wir eine, aber das bricht Rerun.
+    const searchId = responseBody.meta?.search_id || Math.random().toString(36).substring(7);
+    
     let rawAdList = responseBody.data || [];
-
     let cleanedMetaAds: any[] = [];
     let tikTokAds: any[] = [];
 
@@ -207,16 +162,13 @@ class ApiService {
              cleanedMetaAds = cleanAndTransformData(rowsToTransform, benchmarkMap);
         }
     }
-
-    if (params.platform !== 'meta') {
-        tikTokAds = rawAdList.filter((ad: any) => ad.platform === 'tiktok');
-    }
+    if (params.platform !== 'meta') tikTokAds = rawAdList.filter((ad: any) => ad.platform === 'tiktok');
 
     if (this.user) {
         this.user.credits -= params.limit;
         
         const newHistoryItem: SearchHistoryItem = {
-            id: sharedSearchId,
+            id: searchId, // Hier ist die echte DB ID!
             query: params.query,
             platform: params.platform,
             timestamp: new Date().toISOString(),
@@ -229,7 +181,7 @@ class ApiService {
     }
 
     return {
-      id: sharedSearchId,
+      id: searchId,
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',
@@ -241,17 +193,10 @@ class ApiService {
 
   async saveAd(ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok'): Promise<SavedAd> {
     if (!this.user) throw new Error("Login required");
-
     await fetch(`${API_URL}/user/saved-ads`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: this.user.id, type, data: ad })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: this.user.id, type, data: ad })
     });
-
-    const savedAd: SavedAd = {
-      id: Math.random().toString(36).substring(7),
-      type, data: ad, savedAt: new Date().toISOString()
-    };
+    const savedAd: SavedAd = { id: Math.random().toString(36).substring(7), type, data: ad, savedAt: new Date().toISOString() };
     this.user.savedAds.unshift(savedAd);
     return savedAd;
   }
@@ -262,9 +207,7 @@ class ApiService {
       this.user.savedAds = this.user.savedAds.filter(ad => ad.id !== id);
   }
 
-  async purchaseCredits(amount: number): Promise<void> {
-    if (this.user) this.user.credits += amount;
-  }
+  async purchaseCredits(amount: number): Promise<void> { if (this.user) this.user.credits += amount; }
 }
 
 export const api = new ApiService();

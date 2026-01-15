@@ -238,6 +238,46 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
     const nextCard = () => setCardIndex((prev) => (prev + 1) % cards.length);
     const prevCard = () => setCardIndex((prev) => (prev - 1 + cards.length) % cards.length);
 
+    // --- FIX: CSV EXPORT LOGIC ---
+    const handleDownloadCSV = () => {
+        const headers = [
+            "Ad ID", "Library ID", "Page Name", "Start Date", "Status", 
+            "Reach", "Viral Score", "Spend Estimate", "CTA", "Link URL", 
+            "Media URL", "Body Text"
+        ];
+        
+        const escape = (text: any) => {
+            if (!text) return "";
+            return '"' + String(text).replace(/"/g, '""') + '"';
+        };
+
+        const row = [
+            ad.id,
+            ad.ad_archive_id || ad.id,
+            escape(ad.page_name),
+            escape(ad.start_date),
+            ad.isActive ? "Active" : "Inactive",
+            ad.reach,
+            ad.efficiency_score,
+            ad.spend ? ad.spend.toFixed(2) : "0.00",
+            escape(snapshot?.cta_text),
+            escape(snapshot?.link_url),
+            escape(mediaUrl),
+            escape(currentBody)
+        ];
+
+        const csvContent = [headers.join(","), row.join(",")].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `stella_ad_${ad.id}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+    // ----------------------------
+
     return (
         <div className={isActiveView ? "flex flex-col md:flex-row h-full" : "hidden h-full"}>
             <div className="w-full md:w-1/2 h-full overflow-y-auto bg-gray-50 border-r border-gray-200 p-6">
@@ -281,6 +321,11 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                                         <ImageIcon className="w-3 h-3" />
                                         <span>{cardIndex + 1} / {cards.length}</span>
                                     </div>
+                                    {currentTitle && currentTitle !== ad.page_name && (
+                                        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 to-transparent p-3 text-white text-xs font-medium">
+                                            {currentTitle}
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -484,7 +529,7 @@ const MetaAdDetailView: React.FC<MetaAdDetailViewProps> = ({
                 </CollapsibleSection>
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-gray-100">
-                    <button className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm">
+                    <button onClick={handleDownloadCSV} className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg shadow-sm transition-all text-sm">
                         <Download className="w-4 h-4" /> Download Media
                     </button>
                     {isSaved ? (

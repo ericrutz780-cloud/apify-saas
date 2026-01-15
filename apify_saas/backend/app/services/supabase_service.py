@@ -11,7 +11,6 @@ def get_supabase() -> Client:
 # --- USER & CREDITS ---
 
 def check_user_credits(user_id: str, required_credits: int) -> bool:
-    # Wir nutzen hier eine lokale Instanz, um Thread-Safety zu garantieren
     client = get_supabase()
     try:
         response = client.table("profiles").select("credits").eq("id", user_id).maybe_single().execute()
@@ -44,9 +43,6 @@ def deduct_credits(user_id: str, amount: int):
 # --- SEARCH CACHE & FEED ---
 
 def get_cached_results(platform: str, keyword: str):
-    """
-    HINWEIS: Diese Funktion wird nur noch explizit aufgerufen (z.B. für Rerun), nicht mehr automatisch.
-    """
     client = get_supabase()
     try:
         response = client.table("search_cache")\
@@ -72,10 +68,6 @@ def get_cached_results(platform: str, keyword: str):
     return None
 
 def create_search_record(platform: str, keyword: str, country: str):
-    """
-    Erstellt synchron den Parent-Eintrag in 'search_cache' und gibt die echte DB-ID zurück.
-    Dies ist notwendig, damit das Frontend sofort eine ID für die URL hat.
-    """
     client = get_supabase()
     search_entry = {
         "platform": platform, 
@@ -85,12 +77,10 @@ def create_search_record(platform: str, keyword: str, country: str):
     }
     
     try:
-        # Versuch mit Country (falls DB-Schema aktuell)
         res = client.table("search_cache").insert(search_entry).execute()
         if res and res.data:
             return res.data[0]['id']
     except Exception:
-        # Fallback ohne Country (falls altes Schema)
         if "country" in search_entry: del search_entry["country"]
         try:
             res = client.table("search_cache").insert(search_entry).execute()
@@ -102,10 +92,6 @@ def create_search_record(platform: str, keyword: str, country: str):
     return None
 
 def save_search_details(search_id: str, platform: str, results: list):
-    """
-    Speichert die Ads-Details im Hintergrund, verknüpft mit search_id.
-    Ersetzt die alte 'save_search_results' Funktion für bessere Performance.
-    """
     if not results or not search_id: return
     client = get_supabase()
     
@@ -124,7 +110,6 @@ def save_search_details(search_id: str, platform: str, results: list):
                 "data": ad
             })
         
-        # Batch Upsert
         if ad_rows:
             client.table("ad_results").upsert(ad_rows, on_conflict="platform, platform_id").execute()
             print("✅ Background Save erfolgreich.")
@@ -137,8 +122,9 @@ def save_search_details(search_id: str, platform: str, results: list):
 def get_user_profile_data(user_id: str):
     client = get_supabase()
     try:
-        # HIER: Plan mit abfragen
-        p_res = client.table("profiles").select("email, first_name, credits, plan").eq("id", user_id).maybe_single().execute()
+        # FIX: Select "*" ist sicherer. Es lädt alles, was da ist.
+        # Wenn 'plan' fehlt, stürzt es nicht ab.
+        p_res = client.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
         profile = p_res.data if p_res and p_res.data else {}
         
         s_res = client.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
@@ -154,13 +140,14 @@ def get_user_profile_data(user_id: str):
             "email": profile.get("email", ""),
             "name": profile.get("first_name", "User"),
             "credits": profile.get("credits", 0),
-            "plan": profile.get("plan", "starter"),  # <--- HIER: Plan hinzufügen (Default 'starter')
+            # Hier nutzen wir den Default "starter", falls die Spalte noch fehlt
+            "plan": profile.get("plan", "starter"),
             "savedAds": saved_ads,
             "searchHistory": [] 
         }
     except Exception as e:
         print(f"⚠️ Profile Load Error: {e}")
-        # Auch im Fehlerfall 'plan': 'starter' zurückgeben
+        # Nur im echten Fehlerfall gibt es 0 Credits
         return {"id": user_id, "credits": 0, "plan": "starter", "savedAds": [], "searchHistory": []}
 
 def add_saved_ad(user_id: str, ad_data: dict, ad_type: str):
@@ -171,6 +158,5 @@ def delete_saved_ad(user_id: str, ad_id: str):
     client = get_supabase()
     return client.table("saved_ads").delete().eq("id", ad_id).eq("user_id", user_id).execute()
 
-# --- WICHTIG: GLOBALE VARIABLE FÜR IMPORTS ---
-# Diese Zeile hat gefehlt und den Fehler verursacht!
+# WICHTIG:
 supabase = get_supabase()

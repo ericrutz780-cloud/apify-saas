@@ -8,24 +8,24 @@ import {
   Check, 
   ChevronDown, 
   ChevronUp, 
-  TrendingUp,
-  Layers,
-  ArrowRight,
-  ShieldCheck,
-  Globe,
-  LayoutGrid,
-  Bookmark,
-  CreditCard,
-  LogOut,
-  User,
-  Menu,
-  X,
-  HelpCircle,
-  MousePointerClick,
-  ArrowUpDown,
-  Minus,
-  Coins,
-  Mail
+  TrendingUp, 
+  Layers, 
+  ArrowRight, 
+  ShieldCheck, 
+  Globe, 
+  LayoutGrid, 
+  Bookmark, 
+  CreditCard, 
+  LogOut, 
+  User, 
+  Menu, 
+  X, 
+  HelpCircle, 
+  MousePointerClick, 
+  ArrowUpDown, 
+  Minus, 
+  Coins, 
+  Mail 
 } from 'lucide-react';
 
 // --- STRIPE LINKS ---
@@ -54,14 +54,14 @@ const SectionHeader = ({
   badge, 
   title, 
   subtitle, 
-  centered = true,
-  className = ""
+  centered = true, 
+  className = "" 
 }: { 
   badge: string, 
   title: React.ReactNode, 
   subtitle?: string, 
-  centered?: boolean,
-  className?: string
+  centered?: boolean, 
+  className?: string 
 }) => (
   <div className={`mb-16 ${centered ? 'text-center max-w-3xl mx-auto' : ''} ${className}`}>
     <SectionBadge>{badge}</SectionBadge>
@@ -928,19 +928,34 @@ const FAQSection = () => {
   );
 };
 
-const Footer = () => (
+// --- FOOTER COMPONENT ---
+const Footer = ({ hideLinks = false }: { hideLinks?: boolean }) => (
   <footer className="py-12 px-6 border-t border-slate-200 bg-white text-center">
-    <div className="flex items-center justify-center gap-2 mb-4 opacity-50 hover:opacity-100 transition-opacity">
-      <div className="w-6 h-6 bg-slate-900 rounded flex items-center justify-center">
+    <div className="flex items-center justify-center gap-2 mb-6 opacity-80 hover:opacity-100 transition-opacity">
+      <div className="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center shadow-sm">
         <Zap className="text-white w-3.5 h-3.5 fill-white" />
       </div>
-      <span className="font-bold text-slate-900">StellaAds</span>
+      <span className="font-bold text-slate-900 tracking-tight">StellaAds</span>
     </div>
-    <p className="text-slate-500 text-sm">© {new Date().getFullYear()} StellaAds. All rights reserved.</p>
+    
+    {!hideLinks && (
+      <div className="flex justify-center gap-6 mb-6 text-sm font-medium text-slate-500">
+        <a href="https://stellaads.io/legal-notice/" target="_blank" rel="noopener noreferrer" className="hover:text-brand-600 transition-colors">
+          Legal Notice
+        </a>
+        <a href="https://stellaads.io/privacy-policy/" target="_blank" rel="noopener noreferrer" className="hover:text-brand-600 transition-colors">
+          Privacy Policy
+        </a>
+      </div>
+    )}
+
+    <p className="text-slate-400 text-xs">
+      © {new Date().getFullYear()} StellaAds. All rights reserved. Made in Berlin.
+    </p>
   </footer>
 );
 
-// --- EXPORTED PAGES (Including Login & Dashboard for reference/usage) ---
+// --- EXPORTED PAGES ---
 
 export const LandingPage = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
@@ -954,18 +969,18 @@ export const LandingPage = () => {
         <USPSection />
         <WorkflowSection />
         <UseCasesSection />
-        {/* Contact Modal Trigger übergeben */}
         <PricingSection onOpenContact={() => setIsContactOpen(true)} />
         <FAQSection />
       </main>
+      
+      {/* Footer mit externen Links */}
       <Footer />
-      {/* Das Modal liegt über allem */}
+      
       <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
     </div>
   );
 };
 
-// New Design Login Page (Exported so you can link it if you want)
 export const LoginPage = () => {
   const navigate = useNavigate();
   return (
@@ -1016,7 +1031,6 @@ export const LoginPage = () => {
   );
 };
 
-// New Design Dashboard Page (Exported so you can link it if you want)
 export const DashboardPage = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);

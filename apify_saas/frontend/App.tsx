@@ -16,7 +16,7 @@ import {
     Search, Loader2, AlertCircle, CheckCircle2, CreditCard, 
     ArrowRight, Zap, Filter, Facebook, Instagram, Video,
     ChevronDown, BarChart3, ListFilter, ArrowUpDown, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles, Users as UsersIcon, Coins, Download,
-    FileText, ShieldCheck 
+    FileText, ShieldCheck
 } from 'lucide-react';
 // @ts-ignore
 import { cleanAndTransformData } from './adAdapter';
@@ -501,9 +501,9 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
 
     // FIX: Agency entfernt, Enterprise hinzugefügt
     const pricingPlans = [
-        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' },
-        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '10,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true },
-        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '50,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' }
+        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '2,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' },
+        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '50,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true },
+        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '250,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' }
     ];
     const creditTopupPlans = [
         { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },

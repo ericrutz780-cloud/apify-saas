@@ -708,7 +708,7 @@ const PricingSection = ({ onOpenContact }: { onOpenContact: () => void }) => {
       yearlyTotal: 1308,
       topup: "10€ / 1k Credits",
       features: [
-        "10,000 Credits",
+        "50,000 Credits",
         "1,000 Data Points per Search",
         "2 User-Seats",
         "Priority Support"
@@ -725,7 +725,7 @@ const PricingSection = ({ onOpenContact }: { onOpenContact: () => void }) => {
       yearlyPrice: "Contact Sales",
       topup: "5€ / 1k Credits",
       features: [
-        "50,000 Credits",
+        "250,000 Credits",
         "Custom Analysis Limits",
         "5 User-Seats",
         "Dedicated Manager"

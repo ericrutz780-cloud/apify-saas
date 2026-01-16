@@ -15,7 +15,8 @@ import AdFeed from './AdFeed';
 import { 
     Search, Loader2, AlertCircle, CheckCircle2, CreditCard, 
     ArrowRight, Zap, Filter, Facebook, Instagram, Video,
-    ChevronDown, BarChart3, ListFilter, ArrowUpDown, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles, Users as UsersIcon, Coins, Download
+    ChevronDown, BarChart3, ListFilter, ArrowUpDown, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles, Users as UsersIcon, Coins, Download,
+    FileText, ShieldCheck 
 } from 'lucide-react';
 // @ts-ignore
 import { cleanAndTransformData } from './adAdapter';
@@ -572,60 +573,34 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
              
              {activeTab === 'privacy' && (
                 <div className="space-y-6 animate-in fade-in duration-300">
-                    <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden p-8 text-gray-800">
-                        <h2 className="text-2xl font-bold mb-6">Legal Notice</h2>
-                        <div className="space-y-4 mb-10 text-sm">
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Information pursuant to Sect. 5 German Telemedia Act (TMG)</h3>
-                                <p className="text-gray-600 mt-1">StellaAds GmbH<br />Musterstraße 123<br />10115 Berlin</p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Represented by</h3>
-                                <p className="text-gray-600 mt-1">Max Mustermann</p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Contact</h3>
-                                <p className="text-gray-600 mt-1">Phone: +49 (0) 123 44 55 66<br />Email: info@stellaads.com</p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Register Entry</h3>
-                                <p className="text-gray-600 mt-1">Entry in the commercial register.<br />Register Court: Amtsgericht Berlin-Charlottenburg<br />Register Number: HRB 123456</p>
-                            </div>
-                        </div>
-            
-                        <hr className="border-gray-200 my-8" />
-            
-                        <h2 className="text-2xl font-bold mb-6">Privacy Policy</h2>
-                        <div className="space-y-6 text-sm">
-                            <div>
-                                <h3 className="font-semibold text-lg text-gray-900 mb-2">1. Privacy at a glance</h3>
-                                <h4 className="font-medium text-gray-800 mt-3">General information</h4>
-                                <p className="text-gray-600 mt-1 leading-relaxed">
-                                    The following notes provide a simple overview of what happens to your personal data when you visit this website. Personal data is any data with which you can be personally identified.
-                                </p>
-                                <h4 className="font-medium text-gray-800 mt-3">Data collection on this website</h4>
-                                <p className="text-gray-600 mt-1 leading-relaxed">
-                                    <strong>Who is responsible for the data collection on this website?</strong><br/>
-                                    The data processing on this website is carried out by the website operator. You can find their contact details in the imprint of this website.
-                                </p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-lg text-gray-900 mb-2">2. Hosting and Content Delivery Networks (CDN)</h3>
-                                <p className="text-gray-600 mb-2 leading-relaxed">
-                                    We host the content of our website with the following providers:
-                                </p>
-                                <h4 className="font-medium text-gray-800">External Hosting</h4>
-                                <p className="text-gray-600 mt-1 leading-relaxed">
-                                    This website is hosted externally. The personal data collected on this website is stored on the servers of the hoster(s). This may include IP addresses, contact requests, meta and communication data, contract data, contact details, names, website accesses and other data generated via a website.
-                                </p>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-lg text-gray-900 mb-2">3. General Notes and Mandatory Information</h3>
-                                <h4 className="font-medium text-gray-800">Data Protection</h4>
-                                <p className="text-gray-600 mt-1 leading-relaxed">
-                                    The operators of these pages take the protection of your personal data very seriously. We treat your personal data confidentially and in accordance with the statutory data protection regulations and this privacy policy.
-                                </p>
-                            </div>
+                    <div className="bg-white shadow-sm rounded-xl border border-gray-200 p-8">
+                        <h2 className="text-xl font-bold text-gray-900 mb-6">Legal Documents</h2>
+                        <div className="grid gap-4">
+                            <a href="https://stellaads.io/legal-notice/" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-brand-500 hover:shadow-md transition-all group bg-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-slate-50 rounded-lg group-hover:bg-brand-50 transition-colors">
+                                        <FileText className="w-5 h-5 text-slate-600 group-hover:text-brand-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900">Legal Notice (Impressum)</h3>
+                                        <p className="text-sm text-slate-500">Company information and legal details</p>
+                                    </div>
+                                </div>
+                                <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-brand-600 transition-colors" />
+                            </a>
+
+                            <a href="https://stellaads.io/privacy-policy/" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-brand-500 hover:shadow-md transition-all group bg-white">
+                                 <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-slate-50 rounded-lg group-hover:bg-brand-50 transition-colors">
+                                        <ShieldCheck className="w-5 h-5 text-slate-600 group-hover:text-brand-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900">Privacy Policy (Datenschutzerklärung)</h3>
+                                        <p className="text-sm text-slate-500">How we handle your data</p>
+                                    </div>
+                                </div>
+                                <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-brand-600 transition-colors" />
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -683,6 +658,7 @@ const App = () => {
             />
 
             <Routes>
+                {/* WICHTIG: Hier ändern wir die Logik für Login-Redirect */}
                 <Route path="/login" element={
                     user ? <Navigate to="/dashboard" replace /> : <Login onLoginSuccess={refreshUser} />
                 } />

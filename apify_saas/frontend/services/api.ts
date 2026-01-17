@@ -90,7 +90,7 @@ class ApiService {
         const rawPlan = profileData.plan || 'starter';
         const normalizedPlan = rawPlan.toLowerCase() as UserPlan;
         
-        // FIX: Search Limit aus Profil laden oder Fallback berechnen
+        // Search Limit Logik: Pro User bekommen 1000 Ergebnisse, andere weniger
         let limit = profileData.searchLimit;
         if (!limit) {
             limit = normalizedPlan === 'pro' ? 1000 : (normalizedPlan === 'enterprise' ? 5000 : 100);
@@ -102,7 +102,7 @@ class ApiService {
             name: profileData.name || 'User',
             plan: normalizedPlan,
             credits: profileData.credits || 0,
-            searchLimit: limit, // <--- Speichern im User-Objekt
+            searchLimit: limit,
             savedAds: profileData.savedAds || [],
             searchHistory: localHistory.length > 0 ? localHistory : (profileData.searchHistory || [])
         };
@@ -178,14 +178,12 @@ class ApiService {
     if (!this.user) throw new Error("Unauthorized: Bitte einloggen.");
 
     const cleanCountry = (!params.country || params.country === 'ALL') ? 'US' : params.country;
-
-    // FIX: Limit direkt aus den User-Einstellungen nehmen!
     const limit = this.user.searchLimit || 100;
 
     const payload = {
         keyword: params.query,
         platform: params.platform === 'both' ? 'meta' : params.platform,
-        limit: limit, // <--- HIER: Dynamisches Limit
+        limit: limit,
         country: cleanCountry,
         start_date_min: params.startDateMin, 
         start_date_max: params.startDateMax,
@@ -297,6 +295,27 @@ class ApiService {
 
   async purchaseCredits(amount: number): Promise<void> {
     if (this.user) this.user.credits += amount;
+  }
+
+  // --- NEUE METHODE: STRIPE CHECKOUT SESSION ERSTELLEN ---
+  // Wird für Abos UND Top-Ups verwendet
+  async createCheckoutSession(priceId: string): Promise<{ url: string }> {
+      if (!this.user) throw new Error("Please log in to purchase.");
+      
+      const response = await fetch(`${API_URL}/create-checkout-session?user_id=${this.user.id}`, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ price_id: priceId })
+      });
+
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Checkout initiation failed');
+      }
+
+      return await response.json();
   }
 }
 

@@ -28,13 +28,22 @@ import { Register } from './Register';
 import { LandingPage } from './LandingPage';
 import { EmailConfirmed } from './EmailConfirmed';
 
-// --- STRIPE LINKS (WICHTIG: Hier sind deine Links für die App) ---
-const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/cNifZa77xdLaa3644t9k405"; 
-const LINK_STARTER_YEARLY     = "https://buy.stripe.com/dRmfZagI7cH66QU1Wl9k406"; 
-const LINK_PRO_MONTHLY        = "https://buy.stripe.com/cNi9AM8bBbD22AE9oN9k407"; 
-const LINK_PRO_YEARLY         = "https://buy.stripe.com/8x27sE3Vl22s2AE58x9k408"; 
+// --- STRIPE PRICE IDS (EINGEFÜGT AUS DEINEM TERMINAL-OUTPUT) ---
 
-const ENTERPRISE_MAIL         = "eric.rutz@stellaads.io";
+// Monthly Plans
+const PRICE_ID_STARTER_MONTHLY    = "price_1SqYwQ5vTctBPhfeBKjAv4nY";
+const PRICE_ID_PRO_MONTHLY        = "price_1SqYwR5vTctBPhfe7sekjMdK";
+
+// Yearly Plans
+const PRICE_ID_STARTER_YEARLY     = "price_1SqYwQ5vTctBPhfeiVkpek9p";
+const PRICE_ID_PRO_YEARLY         = "price_1SqYwR5vTctBPhfe4mB23SYr";
+
+// Top-Up Credits (Einmalzahlungen)
+const PRICE_ID_TOPUP_STARTER      = "price_1SqYwS5vTctBPhfeD84iwobm"; // 25€ für 1k
+const PRICE_ID_TOPUP_PRO          = "price_1SqYwS5vTctBPhfeFljQAEOU"; // 10€ für 1k
+const PRICE_ID_TOPUP_ENTERPRISE   = "price_1SqYwT5vTctBPhfe7YuJxtVT"; // 5€ für 1k
+
+const ENTERPRISE_MAIL             = "info@stellaads.io";
 
 const COUNTRIES = [
     { code: 'AT', name: 'Austria' }, { code: 'BE', name: 'Belgium' }, { code: 'BG', name: 'Bulgaria' },
@@ -70,6 +79,54 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 };
 
 // --- Components ---
+
+// Contact Modal für Enterprise Anfragen
+const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    alert("Vielen Dank! Deine Anfrage wurde gesendet. Wir melden uns in Kürze.");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 font-sans">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-8 animate-in fade-in zoom-in-95">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 bg-slate-50 rounded-full hover:bg-slate-100 transition-colors">
+            <X className="w-5 h-5" />
+        </button>
+        
+        <div className="flex items-center gap-4 mb-8">
+            <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center border border-brand-100 shadow-sm">
+                <Mail className="w-7 h-7 text-brand-600" />
+            </div>
+            <div>
+                <h3 className="text-2xl font-bold text-slate-900">Contact Sales</h3>
+                <p className="text-slate-500 text-sm font-medium">Für Enterprise & Agentur-Lösungen</p>
+            </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Name</label>
+                <input required type="text" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="Max Mustermann" />
+            </div>
+            <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">E-Mail Adresse</label>
+                <input required type="email" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="name@firma.de" />
+            </div>
+            <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Nachricht</label>
+                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Erzähl uns von deinem Team und Anforderungen..." />
+            </div>
+            <button type="submit" className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5">Anfrage absenden</button>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 const SearchProgressBar = ({ progress, status }: { progress: number, status: string }) => (
     <div className="flex flex-col gap-1.5 w-full sm:w-64 animate-in fade-in zoom-in-95 duration-300">
@@ -520,8 +577,8 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
             seats: '1 User Seat', 
             topup: '€25 / 1k', 
             export: '-',
-            monthlyLink: LINK_STARTER_MONTHLY,
-            yearlyLink: LINK_STARTER_YEARLY 
+            monthlyPriceId: PRICE_ID_STARTER_MONTHLY,
+            yearlyPriceId: PRICE_ID_STARTER_YEARLY 
         },
         { 
             name: 'Pro', 
@@ -535,8 +592,8 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
             topup: '€10 / 1k', 
             export: 'CSV/JSON', 
             popular: true,
-            monthlyLink: LINK_PRO_MONTHLY,
-            yearlyLink: LINK_PRO_YEARLY
+            monthlyPriceId: PRICE_ID_PRO_MONTHLY,
+            yearlyPriceId: PRICE_ID_PRO_YEARLY
         },
         { 
             name: 'Enterprise', 
@@ -551,32 +608,78 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
             export: 'API' 
         }
     ];
+    
     const creditTopupPlans = [
-        { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },
-        { name: 'Pro', id: 'pro_topup', price: '10 €', unit: '/ 1k Credits', features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], popular: true, buttonText: 'Buy Credits' },
-        { name: 'Enterprise', id: 'enterprise_topup', price: '5 €', unit: '/ 1k Credits', features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], buttonText: 'Buy Credits' }
+        { 
+            name: 'Starter', 
+            id: 'starter_topup', 
+            price: '25 €', 
+            unit: '/ 1k Credits', 
+            features: ['Instant availability', 'Credits never expire', 'One-time purchase'], 
+            buttonText: 'Buy Credits',
+            priceId: PRICE_ID_TOPUP_STARTER 
+        },
+        { 
+            name: 'Pro', 
+            id: 'pro_topup', 
+            price: '10 €', 
+            unit: '/ 1k Credits', 
+            features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], 
+            popular: true, 
+            buttonText: 'Buy Credits',
+            priceId: PRICE_ID_TOPUP_PRO 
+        },
+        { 
+            name: 'Enterprise', 
+            id: 'enterprise_topup', 
+            price: '5 €', 
+            unit: '/ 1k Credits', 
+            features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], 
+            buttonText: 'Buy Credits',
+            priceId: PRICE_ID_TOPUP_ENTERPRISE
+        }
     ];
 
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ name: user.name, email: user.email });
     const [isSaving, setIsSaving] = useState(false);
+    // Kontakt-Modal State
+    const [isContactOpen, setIsContactOpen] = useState(false);
+    const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
+
     useEffect(() => { setFormData({ name: user.name, email: user.email }); }, [user]);
     const handleSave = async () => { setIsSaving(true); try { await api.updateUser(formData); await refreshUser(); setIsEditing(false); } catch (error) { console.error("Failed to update profile", error); } finally { setIsSaving(false); } };
 
-    const handlePlanAction = (plan: any) => {
-        if (billingCycle === 'topup') {
-             // Placeholder for topup action if needed
-             window.location.href = `mailto:${ENTERPRISE_MAIL}?subject=Topup Request`;
-             return;
-        }
-        
+    const handlePlanAction = async (plan: any) => {
         if (plan.id === 'enterprise') {
-             window.location.href = `mailto:${ENTERPRISE_MAIL}?subject=Enterprise Plan Inquiry`;
+             setIsContactOpen(true);
              return;
         }
 
-        const link = billingCycle === 'monthly' ? plan.monthlyLink : plan.yearlyLink;
-        if (link) window.location.href = link;
+        let priceId;
+        if (billingCycle === 'topup') {
+             priceId = plan.priceId;
+        } else {
+             priceId = billingCycle === 'monthly' ? plan.monthlyPriceId : plan.yearlyPriceId;
+        }
+
+        if (!priceId) return;
+
+        setIsLoadingCheckout(true);
+        try {
+            // Call backend to create session
+            // Note: You must implement api.createCheckoutSession in your services/api.ts
+            // If you don't have it yet, you can temporarily use window.open if you have hardcoded links, 
+            // but for Price IDs, backend is required.
+            // Example for now (assuming backend exists):
+             const { url } = await api.createCheckoutSession(priceId);
+             window.location.href = url;
+        } catch (error) {
+            console.error("Checkout failed", error);
+            alert("Checkout could not be started. Please try again.");
+        } finally {
+            setIsLoadingCheckout(false);
+        }
     };
 
     return (
@@ -629,9 +732,9 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                                         <button 
                                             onClick={() => handlePlanAction(plan)}
                                             className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
-                                            disabled={user.plan === plan.id && billingCycle !== 'topup'}
+                                            disabled={(user.plan === plan.id && billingCycle !== 'topup') || isLoadingCheckout}
                                         >
-                                            {billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}
+                                            {isLoadingCheckout ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : (billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now'))}
                                         </button>
                                     </div>
                                 </div>
@@ -675,6 +778,8 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                     </div>
                 </div>
             )}
+            
+            <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
         </div>
     )
 }

@@ -28,6 +28,14 @@ import { Register } from './Register';
 import { LandingPage } from './LandingPage';
 import { EmailConfirmed } from './EmailConfirmed';
 
+// --- STRIPE LINKS (WICHTIG: Hier sind deine Links für die App) ---
+const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/cNifZa77xdLaa3644t9k405"; 
+const LINK_STARTER_YEARLY     = "https://buy.stripe.com/dRmfZagI7cH66QU1Wl9k406"; 
+const LINK_PRO_MONTHLY        = "https://buy.stripe.com/cNi9AM8bBbD22AE9oN9k407"; 
+const LINK_PRO_YEARLY         = "https://buy.stripe.com/8x27sE3Vl22s2AE58x9k408"; 
+
+const ENTERPRISE_MAIL         = "eric.rutz@stellaads.io";
+
 const COUNTRIES = [
     { code: 'AT', name: 'Austria' }, { code: 'BE', name: 'Belgium' }, { code: 'BG', name: 'Bulgaria' },
     { code: 'HR', name: 'Croatia' }, { code: 'CY', name: 'Cyprus' }, { code: 'CZ', name: 'Czech Republic' },
@@ -501,9 +509,47 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
 
     // FIX: Agency entfernt, Enterprise hinzugefügt
     const pricingPlans = [
-        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '2,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-' },
-        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '50,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true },
-        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '250,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' }
+        { 
+            name: 'Starter', 
+            id: 'starter', 
+            subheader: 'Best for: Occasional Research', 
+            monthlyPrice: '€49', 
+            yearlyPrice: '€39', 
+            credits: '1,500 Credits', 
+            scans: '100 Data Points', 
+            seats: '1 User Seat', 
+            topup: '€25 / 1k', 
+            export: '-',
+            monthlyLink: LINK_STARTER_MONTHLY,
+            yearlyLink: LINK_STARTER_YEARLY 
+        },
+        { 
+            name: 'Pro', 
+            id: 'pro', 
+            subheader: 'Best for: Heavy Users', 
+            monthlyPrice: '€129', 
+            yearlyPrice: '€99', 
+            credits: '50,000 Credits', 
+            scans: '1,000 Data Points', 
+            seats: '2 User Seats', 
+            topup: '€10 / 1k', 
+            export: 'CSV/JSON', 
+            popular: true,
+            monthlyLink: LINK_PRO_MONTHLY,
+            yearlyLink: LINK_PRO_YEARLY
+        },
+        { 
+            name: 'Enterprise', 
+            id: 'enterprise', 
+            subheader: 'Best for: Agencies', 
+            monthlyPrice: 'Contact', 
+            yearlyPrice: 'Contact', 
+            credits: '250,000 Credits', 
+            scans: 'Custom', 
+            seats: '5 Seats', 
+            topup: '€5 / 1k', 
+            export: 'API' 
+        }
     ];
     const creditTopupPlans = [
         { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits' },
@@ -516,6 +562,22 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     const [isSaving, setIsSaving] = useState(false);
     useEffect(() => { setFormData({ name: user.name, email: user.email }); }, [user]);
     const handleSave = async () => { setIsSaving(true); try { await api.updateUser(formData); await refreshUser(); setIsEditing(false); } catch (error) { console.error("Failed to update profile", error); } finally { setIsSaving(false); } };
+
+    const handlePlanAction = (plan: any) => {
+        if (billingCycle === 'topup') {
+             // Placeholder for topup action if needed
+             window.location.href = `mailto:${ENTERPRISE_MAIL}?subject=Topup Request`;
+             return;
+        }
+        
+        if (plan.id === 'enterprise') {
+             window.location.href = `mailto:${ENTERPRISE_MAIL}?subject=Enterprise Plan Inquiry`;
+             return;
+        }
+
+        const link = billingCycle === 'monthly' ? plan.monthlyLink : plan.yearlyLink;
+        if (link) window.location.href = link;
+    };
 
     return (
         <div className="w-full">
@@ -563,7 +625,15 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                                 <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
                                     <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
                                     <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
-                                    <div className="p-6 bg-white rounded-b-2xl"><button className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}>{billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}</button></div>
+                                    <div className="p-6 bg-white rounded-b-2xl">
+                                        <button 
+                                            onClick={() => handlePlanAction(plan)}
+                                            className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
+                                            disabled={user.plan === plan.id && billingCycle !== 'topup'}
+                                        >
+                                            {billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now')}
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

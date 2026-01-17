@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel, EmailStr
-from app.services.supabase_service import supabase
+# WICHTIG: Wir importieren get_supabase, um frische Clients zu erstellen
+from app.services.supabase_service import supabase, get_supabase 
 
 router = APIRouter()
 
@@ -12,7 +13,6 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
 
-# NEU: Modelle für Passwort-Änderungen
 class PasswordChange(BaseModel):
     user_id: str
     email: str
@@ -69,42 +69,44 @@ def login(user: UserLogin):
         print(f"Login Error: {e}")
         raise HTTPException(status_code=400, detail="Invalid credentials")
 
-# --- NEU: PASSWORT ÄNDERN (Eingeloggt) ---
+# --- KORRIGIERT: PASSWORT ÄNDERN ---
 @router.post("/change-password")
 def change_password(data: PasswordChange):
+    # Wir erstellen einen NEUEN Client-Instanz für diesen Request.
+    # Das verhindert, dass wir den globalen Admin-Client Status verändern.
+    client = get_supabase()
+    
     try:
-        # 1. Sicherheits-Check: Wir versuchen uns mit dem ALTEN Passwort einzuloggen.
-        # Wenn das fehlschlägt, gehört der Account nicht dem User oder das alte PW ist falsch.
-        check_res = supabase.auth.sign_in_with_password({
+        # 1. Login versuch mit ALTEM Passwort
+        # Das prüft automatisch, ob das alte Passwort stimmt.
+        auth_res = client.auth.sign_in_with_password({
             "email": data.email,
             "password": data.old_password
         })
         
-        if not check_res.user:
+        if not auth_res.user:
             raise HTTPException(status_code=401, detail="Das alte Passwort ist falsch.")
 
-        # 2. Wenn Login erfolgreich, updaten wir das Passwort auf das neue
-        update_res = supabase.auth.admin.update_user_by_id(
-            data.user_id,
-            {"password": data.new_password}
-        )
+        # 2. Passwort Update als eingeloggter User durchführen
+        # Da wir jetzt eine Session im 'client' haben, können wir update_user nutzen.
+        # Das braucht KEINE Admin-Rechte!
+        client.auth.update_user({"password": data.new_password})
+        
+        # Sauber ausloggen
+        client.auth.sign_out()
         
         return {"message": "Password updated successfully"}
 
     except Exception as e:
         print(f"Change Password Error: {e}")
-        # Wir wollen dem Frontend sagen, wenn das alte PW falsch war
         if "Invalid login credentials" in str(e):
             raise HTTPException(status_code=401, detail="Das alte Passwort ist falsch.")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"Fehler beim Ändern: {str(e)}")
 
-# --- NEU: PASSWORT VERGESSEN (Ausgeloggt) ---
 @router.post("/reset-password")
 def reset_password(data: PasswordResetRequest):
     try:
-        # Sendet eine Magic Link / Reset E-Mail an den User
-        # Du musst in Supabase unter Auth -> Email Templates die URL anpassen, 
-        # damit sie auf deine App zeigt (z.B. https://app.stellaads.io/update-password)
+        # Sendet eine Reset E-Mail
         supabase.auth.reset_password_for_email(
             data.email,
             {"redirect_to": "https://app.stellaads.io/#/account?tab=security"} 
@@ -112,5 +114,4 @@ def reset_password(data: PasswordResetRequest):
         return {"message": "Falls die E-Mail existiert, wurde ein Reset-Link gesendet."}
     except Exception as e:
         print(f"Reset Password Error: {e}")
-        # Aus Sicherheitsgründen geben wir immer OK zurück, auch wenn Email nicht existiert
         return {"message": "Falls die E-Mail existiert, wurde ein Reset-Link gesendet."}

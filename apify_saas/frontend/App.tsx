@@ -16,7 +16,7 @@ import {
     Search, Loader2, AlertCircle, CheckCircle2, CreditCard, 
     ArrowRight, Zap, Filter, Facebook, Instagram, Video,
     ChevronDown, BarChart3, ListFilter, ArrowUpDown, Bookmark, Trash2, Undo2, X, LayoutGrid, Mail, Sparkles, Users as UsersIcon, Coins, Download,
-    FileText, ShieldCheck
+    FileText, ShieldCheck, Lock, KeyRound
 } from 'lucide-react';
 // @ts-ignore
 import { cleanAndTransformData } from './adAdapter';
@@ -28,17 +28,16 @@ import { Register } from './Register';
 import { LandingPage } from './LandingPage';
 import { EmailConfirmed } from './EmailConfirmed';
 
-// --- STRIPE PRICE IDS (AKTUALISIERT MIT DEINEN KORREKTEN DATEN) ---
-
-// Monthly Plans (IDs aus deinem Script-Output)
+// --- STRIPE PRICE IDS ---
+// Monthly Plans
 const PRICE_ID_STARTER_MONTHLY    = "price_1SqYwQ5vTctBPhfeBKjAv4nY";
 const PRICE_ID_PRO_MONTHLY        = "price_1SqYwR5vTctBPhfe7sekjMdK";
 
-// Yearly Plans (IDs aus deinem Script-Output)
+// Yearly Plans
 const PRICE_ID_STARTER_YEARLY     = "price_1SqYwQ5vTctBPhfeiVkpek9p";
 const PRICE_ID_PRO_YEARLY         = "price_1SqYwR5vTctBPhfe4mB23SYr";
 
-// Top-Up Credits (DEINE MANUELL KORRIGIERTEN PRICE IDs)
+// Top-Up Credits
 const PRICE_ID_TOPUP_STARTER      = "price_1SqYwS5vTctBPhfeD84iwobm"; 
 const PRICE_ID_TOPUP_PRO          = "price_1SqYwS5vTctBPhfeFljQAEOU"; 
 const PRICE_ID_TOPUP_ENTERPRISE   = "price_1SqYwT5vTctBPhfe7YuJxtVT"; 
@@ -80,7 +79,7 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 
 // --- Components ---
 
-// Contact Modal für Enterprise Anfragen
+// NEU: Contact Modal für Enterprise Anfragen
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   if (!isOpen) return null;
 
@@ -200,6 +199,11 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => Promise<void> }) => {
   const [error, setError] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // NEU: Reset Password State
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,6 +218,19 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => Promise<void> }) => {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setResetLoading(true);
+      try {
+          await api.requestPasswordReset(resetEmail);
+          setResetMessage("If an account exists, a reset link has been sent.");
+      } catch(e) {
+          setResetMessage("Error sending reset link.");
+      } finally {
+          setResetLoading(false);
+      }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-sm border border-gray-200">
@@ -226,12 +243,41 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => Promise<void> }) => {
           {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center"><AlertCircle className="w-4 h-4 mr-2" />{error}</div>}
           <div className="space-y-4">
             <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="Enter your email" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="••••••••" /></div>
+            <div>
+                <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                    <button type="button" onClick={() => setShowResetModal(true)} className="text-xs font-medium text-brand-600 hover:text-brand-500">Forgot password?</button>
+                </div>
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none block w-full px-3.5 py-2.5 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 sm:text-sm shadow-xs" placeholder="••••••••" />
+            </div>
           </div>
           <button type="submit" disabled={loading} className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-70 disabled:cursor-not-allowed transition-all">{loading ? <Loader2 className="animate-spin h-5 w-5" /> : 'Sign in'}</button>
         </form>
         <div className="text-center mt-4"><span className="text-sm text-gray-500">Don't have an account? </span><Link to="/register" className="text-sm font-medium text-brand-600 hover:text-brand-500">Sign up</Link></div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showResetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowResetModal(false)}>
+              <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm relative" onClick={e => e.stopPropagation()}>
+                  <button onClick={() => setShowResetModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Reset Password</h3>
+                  <p className="text-sm text-gray-500 mb-4">Enter your email address and we'll send you a link to reset your password.</p>
+                  
+                  {resetMessage ? (
+                      <div className="text-center py-4">
+                          <p className="text-green-600 text-sm font-medium mb-4">{resetMessage}</p>
+                          <button onClick={() => setShowResetModal(false)} className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Close</button>
+                      </div>
+                  ) : (
+                      <form onSubmit={handleResetPassword} className="space-y-4">
+                          <input type="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" placeholder="name@company.com" />
+                          <button type="submit" disabled={resetLoading} className="w-full py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-70">{resetLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : "Send Reset Link"}</button>
+                      </form>
+                  )}
+              </div>
+          </div>
+      )}
     </div>
   );
 };
@@ -564,7 +610,7 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     useEffect(() => { if (searchParams.get('mode') === 'topup') setBillingCycle('topup'); }, [searchParams]);
     const activeTab = searchParams.get('tab') || 'profile';
 
-    // FIX: Agency entfernt, Enterprise hinzugefügt
+    // Pricing & Plan Arrays here... (Unverändert)
     const pricingPlans = [
         { 
             name: 'Starter', 
@@ -647,8 +693,46 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
     const [isContactOpen, setIsContactOpen] = useState(false);
     const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
 
+    // NEU: Password Change State
+    const [oldPassword, setOldPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [pwError, setPwError] = useState('');
+    const [pwSuccess, setPwSuccess] = useState('');
+    const [isChangingPw, setIsChangingPw] = useState(false);
+
     useEffect(() => { setFormData({ name: user.name, email: user.email }); }, [user]);
+    
     const handleSave = async () => { setIsSaving(true); try { await api.updateUser(formData); await refreshUser(); setIsEditing(false); } catch (error) { console.error("Failed to update profile", error); } finally { setIsSaving(false); } };
+
+    const handlePasswordChange = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPwError('');
+        setPwSuccess('');
+        
+        if (newPassword !== confirmPassword) {
+            setPwError("New passwords do not match.");
+            return;
+        }
+        
+        if (newPassword.length < 6) {
+            setPwError("Password must be at least 6 characters.");
+            return;
+        }
+
+        setIsChangingPw(true);
+        try {
+            await api.changePassword(oldPassword, newPassword);
+            setPwSuccess("Password successfully updated.");
+            setOldPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (e: any) {
+            setPwError(e.message || "Failed to update password.");
+        } finally {
+            setIsChangingPw(false);
+        }
+    };
 
     const handlePlanAction = async (plan: any) => {
         if (plan.id === 'enterprise') {
@@ -667,11 +751,6 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
 
         setIsLoadingCheckout(true);
         try {
-            // Call backend to create session
-            // Note: You must implement api.createCheckoutSession in your services/api.ts
-            // If you don't have it yet, you can temporarily use window.open if you have hardcoded links, 
-            // but for Price IDs, backend is required.
-            // Example for now (assuming backend exists):
              const { url } = await api.createCheckoutSession(priceId);
              window.location.href = url;
         } catch (error) {
@@ -692,6 +771,7 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
              </div>
              
              {activeTab === 'profile' && (<div className="space-y-6 animate-in fade-in duration-300">
+                 {/* Personal Info Box */}
                  <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
                      <div className="px-6 py-4 border-b border-gray-200"><h3 className="text-base font-medium text-gray-900">Personal Information</h3></div>
                      <div className="p-6">
@@ -705,14 +785,49 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                      </div>
                      <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">{isEditing ? <><button onClick={() => setIsEditing(false)} className="text-sm font-medium text-gray-700 mr-3 border border-gray-300 px-3 py-1.5 rounded-md">Cancel</button><button onClick={handleSave} className="text-sm font-medium text-white bg-brand-600 px-3 py-1.5 rounded-md">{isSaving ? 'Saving...' : 'Save Changes'}</button></> : <button onClick={() => setIsEditing(true)} className="text-sm font-medium text-gray-600 border border-gray-300 px-3 py-1.5 rounded-md">Edit Profile</button>}</div>
                  </div>
+
+                 {/* Security / Password Change Box */}
+                 <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                     <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                         <Lock className="w-4 h-4 text-gray-500"/>
+                         <h3 className="text-base font-medium text-gray-900">Security & Password</h3>
+                     </div>
+                     <div className="p-6">
+                         <form onSubmit={handlePasswordChange} className="max-w-lg space-y-4">
+                             {pwError && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{pwError}</div>}
+                             {pwSuccess && <div className="bg-green-50 text-green-600 p-3 rounded-lg text-sm">{pwSuccess}</div>}
+                             
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                                 <div className="relative">
+                                     <KeyRound className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                                     <input type="password" required value={oldPassword} onChange={e => setOldPassword(e.target.value)} className="block w-full pl-10 border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm focus:ring-brand-500 focus:border-brand-500" placeholder="••••••••" />
+                                 </div>
+                             </div>
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                                 <input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm focus:ring-brand-500 focus:border-brand-500" placeholder="New strong password" />
+                             </div>
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                                 <input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="block w-full border-gray-300 rounded-lg shadow-sm py-2 px-3 sm:text-sm focus:ring-brand-500 focus:border-brand-500" placeholder="Confirm new password" />
+                             </div>
+                             <div className="pt-2 text-right">
+                                 <button type="submit" disabled={isChangingPw} className="text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 px-4 py-2 rounded-md shadow-sm transition-colors disabled:opacity-70">
+                                     {isChangingPw ? "Updating..." : "Update Password"}
+                                 </button>
+                             </div>
+                         </form>
+                     </div>
+                 </div>
              
-             {/* Contact Us Section */}
-             <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center"><h3 className="text-base font-medium text-gray-900">Contact Us</h3></div>
-                <div className="p-6">
-                    <div className="flex items-center gap-4"><div className="p-3 bg-brand-50 rounded-lg text-brand-600"><Mail className="w-5 h-5" /></div><div><p className="text-sm font-medium text-gray-700">Email Support</p><a href="mailto:info@stellaads.com" className="text-sm text-brand-600 hover:text-brand-700 font-semibold">info@stellaads.com</a></div></div>
-                </div>
-             </div>
+                 {/* Contact Us Section */}
+                 <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center"><h3 className="text-base font-medium text-gray-900">Contact Us</h3></div>
+                    <div className="p-6">
+                        <div className="flex items-center gap-4"><div className="p-3 bg-brand-50 rounded-lg text-brand-600"><Mail className="w-5 h-5" /></div><div><p className="text-sm font-medium text-gray-700">Email Support</p><a href="mailto:info@stellaads.com" className="text-sm text-brand-600 hover:text-brand-700 font-semibold">info@stellaads.com</a></div></div>
+                    </div>
+                 </div>
              </div>)}
 
              {activeTab === 'billing' && (

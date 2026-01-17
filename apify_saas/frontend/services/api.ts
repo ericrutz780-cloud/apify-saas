@@ -72,6 +72,43 @@ class ApiService {
     }
   }
 
+  // --- NEU: Passwort ändern (Eingeloggt) ---
+  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+      if (!this.user) throw new Error("Nicht eingeloggt.");
+
+      const response = await fetch(`${API_URL}/auth/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+              user_id: this.user.id,
+              email: this.user.email,
+              old_password: oldPassword,
+              new_password: newPassword
+          })
+      });
+
+      if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || "Passwort konnte nicht geändert werden.");
+      }
+  }
+
+  // --- NEU: Passwort vergessen (Ausgeloggt) ---
+  async requestPasswordReset(email: string): Promise<void> {
+      const response = await fetch(`${API_URL}/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+      });
+
+      if (!response.ok) {
+          // Wir werfen hier keinen Fehler, um User Enumeration zu verhindern,
+          // oder wir werfen einen generischen Fehler.
+          console.error("Reset request failed technically");
+      }
+      // Erfolg wird immer simuliert (Security Best Practice)
+  }
+
   async getUser(): Promise<User | null> {
     const storedId = localStorage.getItem('adspy_user_id');
     const storedEmail = localStorage.getItem('adspy_user_email') || '';
@@ -114,11 +151,9 @@ class ApiService {
     }
   }
 
-  // --- KORRIGIERT: Update mit Backend-Call ---
   async updateUser(data: Partial<User>): Promise<User> {
       if (!this.user) throw new Error("User not logged in");
 
-      // 1. Backend aufrufen (PATCH Request)
       const response = await fetch(`${API_URL}/user/me?user_id=${this.user.id}`, {
           method: 'PATCH',
           headers: {
@@ -126,7 +161,6 @@ class ApiService {
           },
           body: JSON.stringify({
               name: data.name,
-              // email: data.email // Email Updates vorerst auskommentiert
           })
       });
 
@@ -135,7 +169,6 @@ class ApiService {
           throw new Error(err.detail || "Failed to update profile");
       }
 
-      // 2. Lokalen State aktualisieren
       this.user = { ...this.user, ...data };
       return this.user;
   }
@@ -316,7 +349,6 @@ class ApiService {
     if (this.user) this.user.credits += amount;
   }
 
-  // --- STRIPE CHECKOUT SESSION (Für Top-Up & Abos) ---
   async createCheckoutSession(priceId: string): Promise<{ url: string }> {
       if (!this.user) throw new Error("Please log in to purchase.");
       

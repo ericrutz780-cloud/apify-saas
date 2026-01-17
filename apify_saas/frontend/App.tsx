@@ -28,20 +28,20 @@ import { Register } from './Register';
 import { LandingPage } from './LandingPage';
 import { EmailConfirmed } from './EmailConfirmed';
 
-// --- STRIPE PRICE IDS (EINGEFÜGT AUS DEINEM TERMINAL-OUTPUT) ---
+// --- STRIPE PRICE IDS (AKTUALISIERT MIT DEINEN KORREKTEN DATEN) ---
 
-// Monthly Plans
+// Monthly Plans (IDs aus deinem Script-Output)
 const PRICE_ID_STARTER_MONTHLY    = "price_1SqYwQ5vTctBPhfeBKjAv4nY";
 const PRICE_ID_PRO_MONTHLY        = "price_1SqYwR5vTctBPhfe7sekjMdK";
 
-// Yearly Plans
+// Yearly Plans (IDs aus deinem Script-Output)
 const PRICE_ID_STARTER_YEARLY     = "price_1SqYwQ5vTctBPhfeiVkpek9p";
 const PRICE_ID_PRO_YEARLY         = "price_1SqYwR5vTctBPhfe4mB23SYr";
 
-// Top-Up Credits (Einmalzahlungen)
-const PRICE_ID_TOPUP_STARTER      = "price_1SqYwS5vTctBPhfeD84iwobm"; // 25€ für 1k
-const PRICE_ID_TOPUP_PRO          = "price_1SqYwS5vTctBPhfeFljQAEOU"; // 10€ für 1k
-const PRICE_ID_TOPUP_ENTERPRISE   = "price_1SqYwT5vTctBPhfe7YuJxtVT"; // 5€ für 1k
+// Top-Up Credits (DEINE MANUELL KORRIGIERTEN PRICE IDs)
+const PRICE_ID_TOPUP_STARTER      = "price_1SqYwS5vTctBPhfeD84iwobm"; 
+const PRICE_ID_TOPUP_PRO          = "price_1SqYwS5vTctBPhfeFljQAEOU"; 
+const PRICE_ID_TOPUP_ENTERPRISE   = "price_1SqYwT5vTctBPhfe7YuJxtVT"; 
 
 const ENTERPRISE_MAIL             = "info@stellaads.io";
 

@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import { api } from './services/api';
 import { User, SearchResult, MetaAd, TikTokAd, UserPlan } from './types';
 import MetaAdCard from './components/MetaAdCard';
+import CookieConsent from "react-cookie-consent";
 // TikTokAdCard Import bleibt für Saved Page Fallback, wird aber in Suche ausgeblendet
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
@@ -946,6 +947,21 @@ const App = () => {
                 }}
                 isSaved={!!selectedAdsGroup?.data[0] && !!user?.savedAds.find(s => s.data.id === selectedAdsGroup.data[0].id)}
             />
+            
+            {/* HIER DAS COOKIE BANNER EINFÜGEN (ganz oben oder unten im Router) */}
+            <CookieConsent
+                location="bottom"
+                buttonText="Akzeptieren"
+                cookieName="stellaads_cookie_consent"
+                style={{ background: "#2B373B" }}
+                buttonStyle={{ color: "#4e503b", fontSize: "13px" }}
+                expires={150}
+            >
+                Diese Webseite nutzt Cookies, um die Nutzererfahrung zu verbessern.{' '}
+                <a href="https://stellaads.io/privacy-policy/" target="_blank" rel="noopener noreferrer" style={{ color: "#FFF", textDecoration: "underline" }}>
+                    Datenschutzerklärung
+                </a>
+            </CookieConsent>
 
             <Routes>
                 {/* WICHTIG: Hier ändern wir die Logik für Login-Redirect */}

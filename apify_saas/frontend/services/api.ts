@@ -59,6 +59,7 @@ class ApiService {
 
         const data = await response.json();
         this.token = data.access_token;
+        localStorage.setItem('adspy_token', data.access_token);
         
         localStorage.setItem('adspy_user_id', data.user.id);
         localStorage.setItem('adspy_user_email', data.user.email || email);
@@ -90,7 +91,6 @@ class ApiService {
         const rawPlan = profileData.plan || 'starter';
         const normalizedPlan = rawPlan.toLowerCase() as UserPlan;
         
-        // Search Limit Logik: Pro User bekommen 1000 Ergebnisse, andere weniger
         let limit = profileData.searchLimit;
         if (!limit) {
             limit = normalizedPlan === 'pro' ? 1000 : (normalizedPlan === 'enterprise' ? 5000 : 100);
@@ -114,11 +114,30 @@ class ApiService {
     }
   }
 
+  // --- KORRIGIERT: Update mit Backend-Call ---
   async updateUser(data: Partial<User>): Promise<User> {
-      if (this.user) {
-          this.user = { ...this.user, ...data };
+      if (!this.user) throw new Error("User not logged in");
+
+      // 1. Backend aufrufen (PATCH Request)
+      const response = await fetch(`${API_URL}/user/me?user_id=${this.user.id}`, {
+          method: 'PATCH',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+              name: data.name,
+              // email: data.email // Email Updates vorerst auskommentiert
+          })
+      });
+
+      if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || "Failed to update profile");
       }
-      return this.user!;
+
+      // 2. Lokalen State aktualisieren
+      this.user = { ...this.user, ...data };
+      return this.user;
   }
 
   async getSearchHistory(searchId: string): Promise<SearchResult> {
@@ -297,8 +316,7 @@ class ApiService {
     if (this.user) this.user.credits += amount;
   }
 
-  // --- NEUE METHODE: STRIPE CHECKOUT SESSION ERSTELLEN ---
-  // Wird für Abos UND Top-Ups verwendet
+  // --- STRIPE CHECKOUT SESSION (Für Top-Up & Abos) ---
   async createCheckoutSession(priceId: string): Promise<{ url: string }> {
       if (!this.user) throw new Error("Please log in to purchase.");
       

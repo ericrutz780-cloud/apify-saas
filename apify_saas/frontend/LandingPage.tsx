@@ -710,7 +710,6 @@ const PricingSection = ({ onOpenContact }: { onOpenContact: () => void }) => {
       features: [
         "50,000 Credits",
         "1,000 Data Points per Search",
-        "2 User-Seats",
         "Priority Support"
       ],
       export: "CSV/JSON Export",
@@ -727,8 +726,7 @@ const PricingSection = ({ onOpenContact }: { onOpenContact: () => void }) => {
       features: [
         "250,000 Credits",
         "Custom Analysis Limits",
-        "5 User-Seats",
-        "Dedicated Manager"
+        "Priority Support"
       ],
       export: "API & White Label",
       highlight: false,

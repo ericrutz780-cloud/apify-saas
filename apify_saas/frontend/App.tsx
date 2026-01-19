@@ -5,6 +5,7 @@ import { api } from './services/api';
 import { User, SearchResult, MetaAd, TikTokAd, UserPlan } from './types';
 import MetaAdCard from './components/MetaAdCard';
 import CookieConsent from "react-cookie-consent";
+// TikTokAdCard Import bleibt für Saved Page Fallback, wird aber in Suche ausgeblendet
 import TikTokAdCard from './components/TikTokAdCard';
 import AdDetailModal from './components/AdDetailModal';
 import ExportModal from './components/ExportModal';
@@ -79,6 +80,7 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 
 // --- Components ---
 
+// NEU: Contact Modal für Enterprise Anfragen
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   if (!isOpen) return null;
 
@@ -339,7 +341,7 @@ const Dashboard = ({ user }: { user: User }) => {
 };
 
 // FIX: Komponente wieder in SearchLogicWrapper umbenannt
-const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
+const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     
@@ -359,6 +361,8 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const [sortBy, setSortBy] = useState('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
     const [exportData, setExportData] = useState<SearchResult | null>(null);
+    
+    // FIX: Client-Side Pagination State
     const [visibleCount, setVisibleCount] = useState(50);
     
     // FIX: Ref um Endlos-Loops beim History Loading zu verhindern
@@ -368,47 +372,60 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const cost = limit;
     const canAfford = user.credits >= cost;
     const remainingCredits = user.credits - cost;
+
+    // FIX: Prüfen auf Pro oder Enterprise für Export
     const canExport = user.plan === 'pro' || user.plan === 'enterprise';
 
     // --- FIX: RERUN / LOAD HISTORY LOGIC ---
     useEffect(() => {
         const loadHistory = async (id: string) => {
+            // FIX: Hier ist der Schutz gegen "dashboard" und andere ungültige IDs
             if (!id || id === 'dashboard' || id === 'undefined' || id.length < 10) return;
-            
-            // WICHTIG: Wenn wir es schon versucht haben (z.B. Fehler), nicht nochmal probieren!
-            if (historyAttempted.current.has(id)) {
-                console.log("⚠️ History ID already attempted, skipping to avoid loop:", id);
+
+            // FIX: WICHTIG - Wenn das Ergebnis schon geladen ist und die ID übereinstimmt, NICHTS tun.
+            // Das verhindert das "Verschwinden" und den CORS-Fehler Loop.
+            if (result && (result.id === id || result.search_id === id || (result.meta && result.meta.search_id === id))) {
+                console.log("✅ Using existing data from memory, skipping fetch.");
                 return;
             }
             
-            // Markiere als versucht
+            // FIX: Loop Prevention - Wenn schon versucht, abbrechen!
+            if (historyAttempted.current.has(id)) {
+                console.warn(`⚠️ Already attempted to load ${id}, skipping to prevent loop.`);
+                return;
+            }
             historyAttempted.current.add(id);
 
-            if (result && (result.id === id || result.search_id === id)) {
-                return;
-            }
-
+            // Wenn wir hier sind, müssen wir wirklich laden
             setResult(null); 
-            setVisibleCount(50); 
-            setLoading(true); setStatusIndex(8); setProgress(90); setError('');
+            setVisibleCount(50); // Reset Pagination
+            setLoading(true); setStatusIndex(8); setProgress(90); 
             
             try {
+                // Versuche erst LocalStorage
                 const stored = localStorage.getItem(`search_${id}`);
                 let loadedFromCache = false;
+                
                 if (stored) {
                     try {
                         const parsed = JSON.parse(stored);
+                        // FIX: Nur nutzen, wenn tatsächlich Daten drin sind!
+                        // Wenn wir nur Metadaten gespeichert haben (wegen Quota), müssen wir neu laden.
                         if (parsed.data && Array.isArray(parsed.data) && parsed.data.length > 0) {
                             setResult(parsed);
                             setQuery(parsed.params.query);
                             setCountry(parsed.params.country || 'DE');
                             loadedFromCache = true;
                         }
-                    } catch(e) { console.warn("Cache parse error", e); }
+                    } catch(e) {
+                        console.warn("Cache parse error", e);
+                    }
                 }
                 
                 if (!loadedFromCache) {
+                    // Fallback: API Call (DB via api.getSearchHistory)
                     const historyResult = await api.getSearchHistory(id);
+                    // Check if result is valid
                     if (historyResult && historyResult.data) {
                         setResult(historyResult);
                         setQuery(historyResult.params.query);
@@ -425,21 +442,28 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
             }
         };
 
+        // FIX: Wir prüfen nur auf initialResultId und loading, nicht mehr auf !result
+        // Das erlaubt das Neuladen, auch wenn schon was da ist.
         if (routeId && !loading) {
             loadHistory(routeId);
         }
-    }, [routeId, result]); 
+    }, [routeId, result]); // Dependencies include result for the check inside
 
     const handleSearch = useCallback(async () => {
         if (!query || !canAfford || loading) return;
-        setLoading(true); setProgress(0); setStatusIndex(0); setError(''); setVisibleCount(50);
+        setLoading(true); setProgress(0); setStatusIndex(0); setError(''); setVisibleCount(50); // Reset Pagination
 
+        // --- FIX: DYNAMISCHER PROGRESS BALKEN ---
+        // Formel: 40s Startzeit (Apify Cold Start) + 0.21s pro Ad
         const estimatedDuration = 40 + (limit * 0.21);
-        const percentPerTick = 100 / (estimatedDuration * 10);
+        const percentPerTick = 100 / (estimatedDuration * 10); // *10 weil 100ms interval
 
         const progressTimer = setInterval(() => {
             setProgress(prev => {
+                // Wir lassen es max bis 99% laufen
                 const next = Math.min(99, prev + percentPerTick);
+                
+                // Status Messages umschalten
                 if (next > (100 / STATUS_MESSAGES.length) * (statusIndex + 1)) {
                     setStatusIndex(idx => Math.min(STATUS_MESSAGES.length - 1, idx + 1));
                 }
@@ -457,21 +481,30 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
             clearInterval(progressTimer); 
             setProgress(100); 
             setStatusIndex(STATUS_MESSAGES.length - 1);
+            
+            // WICHTIG: Setze das Resultat SOFORT.
             setResult(apiResult);
             
+            // FIX: LocalStorage Update OHNE riesige Datenmengen
+            // Wir speichern nur die Metadaten, damit der Browser nicht crasht.
             try {
-                const cacheData = { ...apiResult, data: [] }; 
+                const cacheData = { ...apiResult, data: [] }; // Leeres Data-Array
                 safeLocalStorageSetItem(`search_${apiResult.id}`, JSON.stringify(cacheData));
-            } catch (e) { console.warn("LocalStorage Update failed:", e); }
+            } catch (e) {
+                console.warn("LocalStorage Update failed:", e);
+            }
             
             await refreshUser();
             setLoading(false);
+            
+            // Navigate triggert jetzt zwar den useEffect oben, aber der checkt "result" und bricht ab.
             navigate(`/results/${apiResult.id}?q=${encodeURIComponent(query)}&country=${country}`, { replace: true });
             
         } catch (err: any) { 
             clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
         }
     }, [query, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex, limit]);
+
 
     const transformedMetaAds = useMemo(() => {
         if (!result) return [];
@@ -493,8 +526,10 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const getFilteredAndSortedAds = () => {
         if (!result) return [];
         let ads: any[] = [];
+        
         if (activeTab === 'facebook') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('facebook'))]; }
         else if (activeTab === 'instagram') { ads = [...transformedMetaAds.filter((ad: MetaAd) => ad.publisher_platform.includes('instagram'))]; }
+
         if (formatFilter === 'video') ads = ads.filter(ad => ad.snapshot.videos && ad.snapshot.videos.length > 0);
         else if (formatFilter === 'image') ads = ads.filter(ad => (!ad.snapshot.videos || ad.snapshot.videos.length === 0));
         const grouped = groupAdsByText(ads as MetaAd[]);
@@ -508,39 +543,73 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     };
 
     const displayedItems = getFilteredAndSortedAds();
+    // FIX: Slice items based on visibleCount to prevent lags
     const visibleItems = displayedItems.slice(0, visibleCount);
+    
     const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
     
+    const handleToggleSave = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
+        if (!user) return;
+        const existing = user.savedAds.find(s => s.data.id === ad.id && s.type === type);
+        if (existing) await onOpenModal([ad], type); // Placeholder, eigentlich müsste hier remove sein
+        else await onOpenModal([ad], type); // Placeholder
+    };
+
     // --- FIX: ECHTE EXPORT FUNKTION ---
     const handleExportFile = (format: 'csv' | 'json') => {
         if (!exportData) return;
-        const dataToExport = exportData.metaAds || []; 
+        
+        const dataToExport = exportData.metaAds || []; // TikTok support ggf. später
         const fileName = `stella_ads_export_${new Date().toISOString().split('T')[0]}.${format}`;
+
         if (format === 'json') {
             const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
         } else {
+            // CSV Generation
             const headers = ['ID', 'Platform', 'Page', 'Text', 'Link', 'Start Date', 'Reach', 'Score', 'Media URL'];
             const rows = dataToExport.map((ad: any) => {
                 const escape = (text: string) => `"${(text || '').replace(/"/g, '""')}"`;
-                return [ad.id, 'Meta', escape(ad.page_name), escape(ad.snapshot?.body?.text), ad.snapshot?.link_url || '', ad.start_date || '', ad.reach || 0, ad.efficiency_score || 0, ad.snapshot?.images?.[0]?.resized_image_url || ad.snapshot?.videos?.[0]?.video_hd_url || ''].join(',');
+                return [
+                    ad.id,
+                    'Meta',
+                    escape(ad.page_name),
+                    escape(ad.snapshot?.body?.text),
+                    ad.snapshot?.link_url || '',
+                    ad.start_date || '',
+                    ad.reach || 0,
+                    ad.efficiency_score || 0,
+                    ad.snapshot?.images?.[0]?.resized_image_url || ad.snapshot?.videos?.[0]?.video_hd_url || ''
+                ].join(',');
             });
             const csvContent = [headers.join(','), ...rows].join('\n');
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
         }
         setExportData(null);
     };
 
     return (
         <div className="w-full">
+            {/* FIX: Export Modal hier eingebunden */}
             <ExportModal isOpen={!!exportData} onClose={() => setExportData(null)} onExport={handleExportFile} resultCount={exportData ? (exportData.metaAds?.length || 0) : 0} />
+
             <div className="w-full">
                 <div className="text-left mb-8"><h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Ad Intelligence Search</h1><p className="text-gray-500 mt-1 text-sm">Find winning creatives across Meta.</p></div>
+                
                 <SearchInputSection query={query} setQuery={setQuery} country={country} setCountry={setCountry} dateRange={dateRange} setDateRange={setDateRange} loading={loading} progress={progress} statusIndex={statusIndex} handleSearch={handleSearch} canAfford={canAfford} cost={cost} remainingCredits={remainingCredits} error={error} user={user} />
             </div>
+
             {result && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4 space-y-6">
                     <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-gray-200">
@@ -557,7 +626,16 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
                             <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
                                 <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Sort:</span>
                                 <div className="relative group w-full sm:w-auto"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><ArrowUpDown className="h-3.5 w-3.5 text-gray-400" /></div><select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="w-full sm:w-auto appearance-none pl-9 pr-8 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer hover:bg-gray-50"><option value="efficiency_score">Viral Score</option><option value="reach">Reach</option><option value="newest">Newest</option></select><div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-400" /></div></div>
-                                {canExport && (<button onClick={() => setExportData(result)} className="flex items-center gap-2 px-4 h-[35px] bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-normal transition-all shadow-sm group" title="Export results to CSV/JSON"><Download className="w-4 h-4 text-gray-400 group-hover:text-gray-600" /> Export</button>)}
+                                {canExport && (
+                                    <button
+                                        onClick={() => setExportData(result)}
+                                        className="flex items-center gap-2 px-4 h-[35px] bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-normal transition-all shadow-sm group"
+                                        title="Export results to CSV/JSON"
+                                    >
+                                        <Download className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                                        Export
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -573,7 +651,12 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
                     {/* FIX: Load More Button (English) */}
                     {displayedItems.length > visibleCount && (
                         <div className="flex justify-center py-8">
-                            <button onClick={() => setVisibleCount(prev => prev + 50)} className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500">Show more results ({displayedItems.length - visibleCount} remaining)</button>
+                            <button
+                                onClick={() => setVisibleCount(prev => prev + 50)}
+                                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+                            >
+                                Show more results ({displayedItems.length - visibleCount} remaining)
+                            </button>
                         </div>
                     )}
 
@@ -604,15 +687,78 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
 
     // Pricing & Plan Arrays here... (Unverändert)
     const pricingPlans = [
-        { name: 'Starter', id: 'starter', subheader: 'Best for: Occasional Research', monthlyPrice: '€49', yearlyPrice: '€39', credits: '1,500 Credits', scans: '100 Data Points', seats: '1 User Seat', topup: '€25 / 1k', export: '-', monthlyPriceId: PRICE_ID_STARTER_MONTHLY, yearlyPriceId: PRICE_ID_STARTER_YEARLY },
-        { name: 'Pro', id: 'pro', subheader: 'Best for: Heavy Users', monthlyPrice: '€129', yearlyPrice: '€99', credits: '50,000 Credits', scans: '1,000 Data Points', seats: '2 User Seats', topup: '€10 / 1k', export: 'CSV/JSON', popular: true, monthlyPriceId: PRICE_ID_PRO_MONTHLY, yearlyPriceId: PRICE_ID_PRO_YEARLY },
-        { name: 'Enterprise', id: 'enterprise', subheader: 'Best for: Agencies', monthlyPrice: 'Contact', yearlyPrice: 'Contact', credits: '250,000 Credits', scans: 'Custom', seats: '5 Seats', topup: '€5 / 1k', export: 'API' }
+        { 
+            name: 'Starter', 
+            id: 'starter', 
+            subheader: 'Best for: Occasional Research', 
+            monthlyPrice: '€49', 
+            yearlyPrice: '€39', 
+            credits: '1,500 Credits', 
+            scans: '100 Data Points', 
+            seats: '1 User Seat', 
+            topup: '€25 / 1k', 
+            export: '-',
+            monthlyPriceId: PRICE_ID_STARTER_MONTHLY,
+            yearlyPriceId: PRICE_ID_STARTER_YEARLY 
+        },
+        { 
+            name: 'Pro', 
+            id: 'pro', 
+            subheader: 'Best for: Heavy Users', 
+            monthlyPrice: '€129', 
+            yearlyPrice: '€99', 
+            credits: '50,000 Credits', 
+            scans: '1,000 Data Points', 
+            seats: '2 User Seats', 
+            topup: '€10 / 1k', 
+            export: 'CSV/JSON', 
+            popular: true,
+            monthlyPriceId: PRICE_ID_PRO_MONTHLY,
+            yearlyPriceId: PRICE_ID_PRO_YEARLY
+        },
+        { 
+            name: 'Enterprise', 
+            id: 'enterprise', 
+            subheader: 'Best for: Agencies', 
+            monthlyPrice: 'Contact', 
+            yearlyPrice: 'Contact', 
+            credits: '250,000 Credits', 
+            scans: 'Custom', 
+            seats: '5 Seats', 
+            topup: '€5 / 1k', 
+            export: 'API' 
+        }
     ];
     
     const creditTopupPlans = [
-        { name: 'Starter', id: 'starter_topup', price: '25 €', unit: '/ 1k Credits', features: ['Instant availability', 'Credits never expire', 'One-time purchase'], buttonText: 'Buy Credits', priceId: PRICE_ID_TOPUP_STARTER },
-        { name: 'Pro', id: 'pro_topup', price: '10 €', unit: '/ 1k Credits', features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], popular: true, buttonText: 'Buy Credits', priceId: PRICE_ID_TOPUP_PRO },
-        { name: 'Enterprise', id: 'enterprise_topup', price: '5 €', unit: '/ 1k Credits', features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], buttonText: 'Buy Credits', priceId: PRICE_ID_TOPUP_ENTERPRISE }
+        { 
+            name: 'Starter', 
+            id: 'starter_topup', 
+            price: '25 €', 
+            unit: '/ 1k Credits', 
+            features: ['Instant availability', 'Credits never expire', 'One-time purchase'], 
+            buttonText: 'Buy Credits',
+            priceId: PRICE_ID_TOPUP_STARTER 
+        },
+        { 
+            name: 'Pro', 
+            id: 'pro_topup', 
+            price: '10 €', 
+            unit: '/ 1k Credits', 
+            features: ['Volume savings', 'Credits never expire', 'Priority scraping nodes'], 
+            popular: true, 
+            buttonText: 'Buy Credits',
+            priceId: PRICE_ID_TOPUP_PRO 
+        },
+        { 
+            name: 'Enterprise', 
+            id: 'enterprise_topup', 
+            price: '5 €', 
+            unit: '/ 1k Credits', 
+            features: ['Maximum cost efficiency', 'Custom credit pools', 'Dedicated support'], 
+            buttonText: 'Buy Credits',
+            priceId: PRICE_ID_TOPUP_ENTERPRISE
+        }
     ];
 
     const [isEditing, setIsEditing] = useState(false);
@@ -754,7 +900,18 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                  <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center"><h3 className="text-base font-medium text-gray-900">Contact Us</h3></div>
                     <div className="p-6">
-                        <div className="flex items-center gap-4"><div className="p-3 bg-brand-50 rounded-lg text-brand-600"><Mail className="w-5 h-5" /></div><div><p className="text-sm font-medium text-gray-700">Email Support</p><a href="mailto:info@stellaads.com" className="text-sm text-brand-600 hover:text-brand-700 font-semibold">info@stellaads.com</a></div></div>
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-brand-50 rounded-lg text-brand-600"><Mail className="w-5 h-5" /></div>
+                            <div>
+                                <p className="text-sm font-medium text-gray-700">Email Support</p>
+                                <button 
+                                    onClick={() => setIsContactOpen(true)} 
+                                    className="text-sm text-brand-600 hover:text-brand-700 font-semibold hover:underline"
+                                >
+                                    info@stellaads.io
+                                </button>
+                            </div>
+                        </div>
                     </div>
                  </div>
              </div>)}

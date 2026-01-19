@@ -341,7 +341,7 @@ const Dashboard = ({ user }: { user: User }) => {
 };
 
 // FIX: Komponente wieder in SearchLogicWrapper umbenannt
-const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
+const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     
@@ -361,8 +361,6 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
     const [sortBy, setSortBy] = useState('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
     const [exportData, setExportData] = useState<SearchResult | null>(null);
-    
-    // FIX: Client-Side Pagination State
     const [visibleCount, setVisibleCount] = useState(50);
     
     // FIX: Ref um Endlos-Loops beim History Loading zu verhindern
@@ -399,7 +397,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
             // Wenn wir hier sind, müssen wir wirklich laden
             setResult(null); 
             setVisibleCount(50); // Reset Pagination
-            setLoading(true); setStatusIndex(8); setProgress(90); 
+            setLoading(true); setStatusIndex(8); setProgress(90); setError('');
             
             try {
                 // Versuche erst LocalStorage

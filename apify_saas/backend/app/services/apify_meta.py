@@ -212,7 +212,7 @@ async def search_meta_ads(query: str, limit: int, country: str = "US", start_dat
         # Dies verhindert, dass der Server einfriert (Endlosschleife/Timeout)
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=1024, # Etwas mehr RAM für Stabilität
+            memory_mbytes=512, # Etwas mehr RAM für Stabilität
             timeout_secs=900
         ))
         

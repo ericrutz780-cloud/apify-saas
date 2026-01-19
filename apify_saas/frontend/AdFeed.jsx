@@ -3,39 +3,44 @@ import { supabase } from './services/supabaseClient';
 import { cleanAndTransformData } from './adAdapter';
 import MetaAdCard from './components/MetaAdCard'; 
 import AdDetailModal from './components/AdDetailModal'; 
-import { Loader2 } from 'lucide-react'; // Optional: Für ein Spinner-Icon
 
-const AdFeed = () => {
+const AdFeed = ({ currentSearch }) => { // currentSearch als Prop annehmen!
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [progress, setProgress] = useState(0); // NEU: Fortschritt in %
+  const [progress, setProgress] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAdGroup, setSelectedAdGroup] = useState([]);
 
-  // Konfiguration für den Ladebalken
-  const targetCount = 100; // Hier das erwartete Limit eintragen (oder als Prop übergeben)
+  // Wir holen das Limit aus der aktuellen Suche, oder nutzen 100 als Standard
+  const limit = currentSearch?.params?.limit || 100;
+  // Sicherheits-Check: Falls Limit 'undefined' ist, nehmen wir 100
+  const targetCount = limit > 0 ? limit : 100;
 
-  // 1. Fortschrittsbalken-Logik (Deine Formel)
   useEffect(() => {
     if (!loading) {
       setProgress(100);
       return;
     }
-
+    
     setProgress(0);
 
-    // DEINE MESSWERTE:
-    // 40 Sekunden Basis-Wartezeit (Scraper Start)
-    // + 0.21 Sekunden pro Ad
+    // DEINE FORMEL: 40s Startzeit + 0.21s pro Ad
+    // 100 Ads -> ~60s
+    // 1000 Ads -> ~250s
     const estimatedTotalSeconds = 40 + (targetCount * 0.21); 
     
-    // Berechnen, wie viel % pro 100ms Tick hinzugefügt werden
+    // Wie viel Prozent pro 100ms Schritt?
     const percentPerTick = 100 / (estimatedTotalSeconds * 10);
 
     const interval = setInterval(() => {
       setProgress(prev => {
-        // Wir bremsen bei 95% ab, bis die echten Daten da sind
-        if (prev >= 95) return 95; 
+        // Langsamer werden gegen Ende (bei 90%), falls es mal länger dauert
+        if (prev >= 90) {
+            return prev + (percentPerTick / 5); 
+        }
+        // Maximal bis 99% laufen lassen
+        if (prev >= 99) return 99;
+        
         return prev + percentPerTick;
       });
     }, 100);
@@ -43,21 +48,21 @@ const AdFeed = () => {
     return () => clearInterval(interval);
   }, [loading, targetCount]);
 
-  // 2. Daten laden
   useEffect(() => {
     const fetchAds = async () => {
       try {
         setLoading(true);
-        
-        // Hier laden wir die Daten aus Supabase
+        // Wir laden nur so viele, wie wir bestellt haben
         const { data, error } = await supabase
           .from('ad_results')
           .select('data')
-          .limit(targetCount); 
+          .limit(targetCount)
+          .order('created_at', { ascending: false }); // Neueste zuerst
 
         if (error) throw error;
 
         const safeAds = cleanAndTransformData(data);
+        // Sortieren nach Score
         safeAds.sort((a, b) => (b.efficiency_score || 0) - (a.efficiency_score || 0));
         setAds(safeAds);
 
@@ -69,47 +74,52 @@ const AdFeed = () => {
     };
 
     fetchAds();
-  }, []); // Leeres Array = Nur beim Mounten ausführen
+  }, [targetCount]); // Neu laden wenn sich targetCount ändert
 
   const handleCardClick = (ad) => {
       setSelectedAdGroup([ad]);
       setIsModalOpen(true);
   };
 
-  // 3. Loading UI mit Fortschrittsbalken
+  // LOADING SCREEN
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-6">
-        <div className="relative w-20 h-20">
-            {/* Optionaler Spinner Ring */}
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-8 animate-in fade-in duration-500">
+        <div className="relative w-24 h-24">
             <div className="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
             <div className="absolute inset-0 border-4 border-brand-600 rounded-full border-t-transparent animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-bold text-brand-700">
+            <div className="absolute inset-0 flex items-center justify-center font-bold text-xl text-brand-700">
                 {Math.round(progress)}%
             </div>
         </div>
         
-        <div className="w-full max-w-md space-y-2">
-            <div className="flex justify-between text-sm font-medium text-gray-500">
-                <span>Searching Ads...</span>
-                <span>~{(40 + targetCount * 0.21).toFixed(0)}s expected</span>
+        <div className="w-full max-w-md space-y-3 px-4">
+            <div className="flex justify-between text-sm font-medium text-gray-600">
+                <span>Collecting Ads...</span>
+                <span>Target: {targetCount} items</span>
             </div>
-            {/* Der eigentliche Balken */}
-            <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+            
+            <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
                 <div 
-                    className="h-full bg-brand-600 transition-all duration-300 ease-out rounded-full"
+                    className="h-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-300 ease-linear rounded-full"
                     style={{ width: `${progress}%` }}
                 ></div>
             </div>
+            
             <p className="text-xs text-center text-gray-400">
-                Analysing creative patterns & viral scores
+                AI Analysis & Scoring in progress (~{(40 + targetCount * 0.21).toFixed(0)}s)
             </p>
         </div>
       </div>
     );
   }
 
-  if (ads.length === 0) return <div className="p-10 text-center text-gray-500">Keine Daten gefunden.</div>;
+  if (ads.length === 0) return (
+    <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+        <p className="text-lg font-medium">Keine Ergebnisse gefunden</p>
+        <p className="text-sm">Versuche einen anderen Suchbegriff.</p>
+    </div>
+  );
 
   return (
     <>

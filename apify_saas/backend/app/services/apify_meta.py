@@ -290,7 +290,7 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
         # Async Aufruf des Actors
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=1024, # Mehr RAM für viele Items
+            memory_mbytes=512, # Mehr RAM für viele Items
             timeout_secs=900    # 15 Minuten Timeout für 1000 Ads
         ))
         

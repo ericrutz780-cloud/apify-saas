@@ -267,7 +267,8 @@ class ApiService {
     }
 
     const responseBody = await response.json();
-    const searchId = responseBody.meta?.search_id || Math.random().toString(36).substring(7);
+    // Falls Backend keine ID liefert, generieren wir eine echte UUID, damit die DB nicht crasht
+    const searchId = responseBody.meta?.search_id || crypto.randomUUID();
     
     let rawAdList = responseBody.data || [];
     let cleanedMetaAds: any[] = [];

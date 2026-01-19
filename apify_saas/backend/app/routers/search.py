@@ -7,7 +7,7 @@ import logging
 # Services
 from app.services import apify_meta
 
-# Optionaler Import für TikTok (verhindert Absturz, falls Modul fehlt)
+# Optionaler Import für TikTok
 try:
     from app.services import apify_tiktok
 except ImportError:
@@ -42,29 +42,15 @@ class SearchQuery(BaseModel):
 @router.post("/")
 async def search_ads(query: SearchQuery, background_tasks: BackgroundTasks, user_id: str = Query(..., description="User ID")):
     """
-    Führt eine Live-Suche durch oder holt Ergebnisse aus dem Cache.
+    Führt IMMER eine Live-Suche durch (Cache wurde auf User-Wunsch deaktiviert).
     """
     # 1. Credits prüfen
     if not check_user_credits(user_id, query.limit):
         raise HTTPException(status_code=402, detail="Nicht genügend Credits vorhanden.")
 
-    # 2. Cache prüfen (nur wenn eindeutige Plattform gewählt, bei 'both' überspringen wir Cache der Einfachheit halber)
-    if query.platform in ["meta", "tiktok"]:
-        cached_ads = get_cached_results(query.platform, query.keyword)
-        # Wir nutzen den Cache nur, wenn genug Daten da sind (mind. 50% des Limits)
-        if cached_ads and len(cached_ads) >= (query.limit * 0.5): 
-            # Auch bei Cache-Hit Credits abziehen (oder reduzierte Rate, je nach Business Logik)
-            deduct_credits(user_id, query.limit)
-            return {
-                "id": "cache-hit",
-                "params": {"query": query.keyword, "country": query.country, "platform": query.platform},
-                "meta": {
-                    "count": len(cached_ads), 
-                    "source": "cache", 
-                    "search_id": "cache-hit"
-                },
-                "data": cached_ads
-            }
+    # 2. [ENTFERNT] Cache Logik
+    # Auf expliziten Wunsch wurde der Cache-Check hier entfernt. 
+    # Jede Suche triggert nun den Actor.
 
     # 3. Live Suche starten
     results = []
@@ -72,7 +58,7 @@ async def search_ads(query: SearchQuery, background_tasks: BackgroundTasks, user
     # -- META (Facebook/Instagram) --
     if query.platform == "meta" or query.platform == "both":
         try:
-            # Aufruf ist jetzt korrekt asynchron
+            # Asynchroner Aufruf des Scrapers
             meta_results = await apify_meta.search_meta_ads(
                 query=query.keyword, 
                 limit=query.limit, 
@@ -101,7 +87,7 @@ async def search_ads(query: SearchQuery, background_tasks: BackgroundTasks, user
         # Credits abziehen, da Ergebnisse geliefert wurden
         deduct_credits(user_id, query.limit)
         
-        # Such-Datensatz in DB anlegen
+        # Such-Datensatz in DB anlegen (für Historie/Dashboard)
         search_id = create_search_record(query.platform, query.keyword, query.country)
         
         # Ergebnisse im Hintergrund speichern (non-blocking)
@@ -130,7 +116,7 @@ def get_search_history_details(search_id: str, user_id: str):
     """
     Lädt historische Suchergebnisse anhand der Search-ID.
     """
-    # FIX: UUID Schutz - verhindert DB-Fehler bei ungültigen Strings
+    # FIX: UUID Schutz - verhindert DB-Fehler bei ungültigen Strings wie "cache-hit"
     try:
         uuid.UUID(search_id)
     except ValueError:
@@ -141,7 +127,7 @@ def get_search_history_details(search_id: str, user_id: str):
 
     client = get_supabase()
     
-    # Metadaten der Suche holen (Query, Land, etc.)
+    # Metadaten der Suche holen
     search_meta = {}
     try:
         meta_res = client.table("search_cache").select("*").eq("id", search_id).maybe_single().execute()
@@ -150,7 +136,7 @@ def get_search_history_details(search_id: str, user_id: str):
     except Exception as e:
         logger.warning(f"History Meta Error: {e}")
 
-    # Die eigentlichen Ads holen
+    # Ads holen
     try:
         response = client.table("ad_results").select("data").eq("search_ref", search_id).execute()
         ads = [row['data'] for row in response.data] if response.data else []
@@ -164,7 +150,6 @@ def get_search_history_details(search_id: str, user_id: str):
             },
             "meta": {
                 "count": len(ads), 
-                # FIX: Hier stand vorher 'history', was den Suchbegriff überschrieben hat!
                 "query": search_meta.get("query", ""), 
                 "search_id": search_id
             },

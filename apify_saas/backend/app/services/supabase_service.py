@@ -3,20 +3,26 @@ import json
 import os
 from supabase import create_client, Client
 from app.core.config import settings
+from supabase.lib.client_options import ClientOptions
 
 def get_supabase() -> Client:
     url = settings.SUPABASE_URL
     key = settings.SUPABASE_KEY
     
-    # --- DEBUG: Prüfen ob Key geladen wird (Nur Anfang/Ende zeigen) ---
     if not key:
-        print("❌ CRITICAL: SUPABASE_KEY is missing in Env!")
+        print("❌ CRITICAL: SUPABASE_KEY is missing!")
     else:
-        # Zeigt nur die letzten 5 Zeichen im Log (sicher)
-        # Service Key endet auf ...FI6A
-        print(f"🔧 Supabase Client init. Key ends with: ...{key[-5:]}")
+        print(f"🔧 Init Supabase with Service Key ending: ...{key[-5:]}")
+
+    # WICHTIG: Wir sagen dem Client, dass er KEINE Session persistieren soll.
+    # Das verhindert, dass er versucht, Tokens im Hintergrund zu managen,
+    # was bei Service-Keys oft zu Problemen führt.
+    options = ClientOptions(
+        persist_session=False,
+        auto_refresh_token=False
+    )
     
-    return create_client(url, key)
+    return create_client(url, key, options=options)
 
 # --- USER & CREDITS ---
 

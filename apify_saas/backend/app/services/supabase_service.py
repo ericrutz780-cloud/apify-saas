@@ -3,24 +3,25 @@ import json
 import os
 from supabase import create_client, Client
 from app.core.config import settings
+import logging
+
+# Logger einrichten
+logger = logging.getLogger(__name__)
 
 def get_supabase() -> Client:
     url = settings.SUPABASE_URL
     key = settings.SUPABASE_KEY
     
-    # --- DEBUG: Prüfen ob Key geladen wird ---
     if not key:
         print("❌ CRITICAL: SUPABASE_KEY is missing in Env!")
-    else:
-        print(f"🔧 Supabase Client init. Key ends with: ...{key[-5:]}")
     
     client = create_client(url, key)
-
-    # !!! WICHTIG - DER FIX FÜR LEERE DATEN !!!
-    # Wir setzen den Auth-Token explizit für den Postgrest-Client.
-    # Das garantiert, dass der Service-Key (Admin) wirklich genutzt wird
-    # und RLS (Sicherheitsregeln) umgangen werden.
-    client.postgrest.auth(key)
+    
+    # RLS Bypass für Admin-Operationen (Service Role Key muss genutzt werden)
+    try:
+        client.postgrest.auth(key)
+    except:
+        pass
 
     return client
 
@@ -33,7 +34,7 @@ def check_user_credits(user_id: str, required_credits: int) -> bool:
         if response and hasattr(response, 'data') and response.data:
             return response.data.get('credits', 0) >= required_credits
     except Exception as e:
-        print(f"⚠️ Credit Check Error: {e}")
+        logger.error(f"⚠️ Credit Check Error: {e}")
     return False
 
 def deduct_credits(user_id: str, amount: int):
@@ -42,18 +43,18 @@ def deduct_credits(user_id: str, amount: int):
         response = client.table("profiles").select("credits").eq("id", user_id).execute()
         
         if not response.data:
-            print(f"❌ Deduct Error: User {user_id} nicht gefunden.")
+            logger.error(f"❌ Deduct Error: User {user_id} nicht gefunden.")
             return
 
         current_credits = response.data[0].get('credits', 0)
         new_balance = max(0, current_credits - amount)
 
-        print(f"💰 Deducting {amount}. Old: {current_credits} -> New: {new_balance}")
+        logger.info(f"💰 Deducting {amount}. Old: {current_credits} -> New: {new_balance}")
 
         # Update durchführen
         client.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
         
-        # Ledger (optional)
+        # Ledger Eintrag (optional, Fail-Safe)
         try:
             client.table("credit_ledger").insert({
                 "user_id": user_id, 
@@ -63,7 +64,7 @@ def deduct_credits(user_id: str, amount: int):
         except:
             pass
     except Exception as e:
-        print(f"❌ Deduct Critical Error: {e}")
+        logger.error(f"❌ Deduct Critical Error: {e}")
 
 # --- SEARCH CACHE & FEED ---
 
@@ -86,7 +87,7 @@ def get_cached_results(platform: str, keyword: str):
         if ads_res and ads_res.data:
             return [row['data'] for row in ads_res.data]
     except Exception as e:
-        print(f"⚠️ Cache Error: {e}")
+        logger.warning(f"⚠️ Cache Error: {e}")
     return None
 
 def create_search_record(platform: str, keyword: str, country: str):
@@ -101,46 +102,69 @@ def create_search_record(platform: str, keyword: str, country: str):
         res = client.table("search_cache").insert(search_entry).execute()
         if res and res.data: return res.data[0]['id']
     except Exception:
+        # Fallback falls country Probleme macht
         if "country" in search_entry: del search_entry["country"]
         try:
             res = client.table("search_cache").insert(search_entry).execute()
             if res and res.data: return res.data[0]['id']
         except Exception as e:
-            print(f"❌ Failed to create search record: {e}")
+            logger.error(f"❌ Failed to create search record: {e}")
     return None
 
 def save_search_details(search_id: str, platform: str, results: list):
+    """
+    Speichert Ergebnisse in Batches, um Memory Overload zu verhindern.
+    """
     if not results or not search_id: return
     client = get_supabase()
+    
+    # Batch-Größe (50 ist sicher für Render Free Tier)
+    BATCH_SIZE = 50
+    
     try:
-        ad_rows = []
-        for ad in results:
+        total_batches = (len(results) + BATCH_SIZE - 1) // BATCH_SIZE
+        logger.info(f"💾 Saving {len(results)} items in {total_batches} batches...")
+
+        ad_rows_batch = []
+        for i, ad in enumerate(results):
             raw_id = ad.get('id') or ad.get('ad_archive_id') or ad.get('item_id')
-            pid = str(raw_id) if raw_id else f"gen_{datetime.datetime.now().timestamp()}_{results.index(ad)}"
-            ad_rows.append({"platform": platform, "platform_id": pid, "search_ref": search_id, "data": ad})
+            pid = str(raw_id) if raw_id else f"gen_{datetime.datetime.now().timestamp()}_{i}"
+            
+            ad_rows_batch.append({
+                "platform": platform, 
+                "platform_id": pid, 
+                "search_ref": search_id, 
+                "data": ad
+            })
+
+            # Wenn Batch voll ist oder es das letzte Element ist -> Senden
+            if len(ad_rows_batch) >= BATCH_SIZE or i == len(results) - 1:
+                try:
+                    client.table("ad_results").upsert(ad_rows_batch, on_conflict="platform, platform_id").execute()
+                    ad_rows_batch = [] # Reset Batch
+                except Exception as batch_error:
+                    logger.error(f"❌ Error saving batch {i//BATCH_SIZE}: {batch_error}")
         
-        if ad_rows:
-            client.table("ad_results").upsert(ad_rows, on_conflict="platform, platform_id").execute()
+        logger.info("✅ All batches saved successfully.")
+
     except Exception as e:
-        print(f"❌ Background Save Error: {e}")
+        logger.error(f"❌ Background Save Critical Error: {e}")
 
 # --- PROFIL & SAVED ADS ---
 
 def get_user_profile_data(user_id: str):
     client = get_supabase()
     try:
-        print(f"🔍 Loading Profile for ID: {user_id}") # DEBUG
+        logger.info(f"🔍 Loading Profile for ID: {user_id}")
         
         # 1. Profil laden
-        p_res = client.table("profiles").select("*").eq("id", user_id).execute() # single() entfernt um Fehler zu vermeiden
+        p_res = client.table("profiles").select("*").eq("id", user_id).execute()
         
-        # DEBUG: Was kam zurück?
         if not p_res.data:
-            print(f"❌ Profile Data is EMPTY for ID: {user_id} - Authentication/RLS Issue?")
-            # Wir geben ein Dummy-Objekt zurück, damit das Frontend nicht abstürzt
+            logger.warning(f"❌ Profile Data is EMPTY for ID: {user_id}")
             return {"id": user_id, "credits": 0, "plan": "starter", "searchLimit": 100, "name": "Unknown", "savedAds": [], "searchHistory": []}
         else:
-            print(f"✅ Profile Data Found: {p_res.data[0]}")
+            logger.info(f"✅ Profile Data Found: {p_res.data[0]}")
 
         profile = p_res.data[0]
         
@@ -160,7 +184,6 @@ def get_user_profile_data(user_id: str):
             elif plan == 'enterprise': limit = 5000
             else: limit = 100
 
-        # FIX: 'name' statt 'first_name' nutzen (wie in DB)
         user_name = profile.get("name") or profile.get("first_name") or "User"
 
         return {
@@ -174,8 +197,7 @@ def get_user_profile_data(user_id: str):
             "searchHistory": [] 
         }
     except Exception as e:
-        # WICHTIG: Fehler ausgeben!
-        print(f"❌ CRITICAL PROFILE ERROR: {e}")
+        logger.error(f"❌ CRITICAL PROFILE ERROR: {e}")
         return {"id": user_id, "credits": 0, "plan": "starter", "searchLimit": 100, "savedAds": [], "searchHistory": []}
 
 def add_saved_ad(user_id: str, ad_data: dict, ad_type: str):

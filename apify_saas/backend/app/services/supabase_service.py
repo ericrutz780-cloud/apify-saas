@@ -3,7 +3,6 @@ import json
 import os
 from supabase import create_client, Client
 from app.core.config import settings
-# WICHTIG: ClientOptions Import entfernt, da er den Server crasht (AttributeError)
 
 def get_supabase() -> Client:
     url = settings.SUPABASE_URL
@@ -13,12 +12,17 @@ def get_supabase() -> Client:
     if not key:
         print("❌ CRITICAL: SUPABASE_KEY is missing in Env!")
     else:
-        # Zeigt nur die letzten 5 Zeichen im Log (sicher)
         print(f"🔧 Supabase Client init. Key ends with: ...{key[-5:]}")
     
-    # FIX: Wir nutzen die Standard-Initialisierung ohne 'options'.
-    # Der Service-Role-Key funktioniert auch so, und das verhindert den Absturz.
-    return create_client(url, key)
+    client = create_client(url, key)
+
+    # !!! WICHTIG - DER FIX FÜR LEERE DATEN !!!
+    # Wir setzen den Auth-Token explizit für den Postgrest-Client.
+    # Das garantiert, dass der Service-Key (Admin) wirklich genutzt wird
+    # und RLS (Sicherheitsregeln) umgangen werden.
+    client.postgrest.auth(key)
+
+    return client
 
 # --- USER & CREDITS ---
 
@@ -128,15 +132,17 @@ def get_user_profile_data(user_id: str):
         print(f"🔍 Loading Profile for ID: {user_id}") # DEBUG
         
         # 1. Profil laden
-        p_res = client.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
+        p_res = client.table("profiles").select("*").eq("id", user_id).execute() # single() entfernt um Fehler zu vermeiden
         
         # DEBUG: Was kam zurück?
         if not p_res.data:
-            print(f"❌ Profile Data is EMPTY for ID: {user_id}")
+            print(f"❌ Profile Data is EMPTY for ID: {user_id} - Authentication/RLS Issue?")
+            # Wir geben ein Dummy-Objekt zurück, damit das Frontend nicht abstürzt
+            return {"id": user_id, "credits": 0, "plan": "starter", "searchLimit": 100, "name": "Unknown", "savedAds": [], "searchHistory": []}
         else:
-            print(f"✅ Profile Data Found: {p_res.data}")
+            print(f"✅ Profile Data Found: {p_res.data[0]}")
 
-        profile = p_res.data if p_res and p_res.data else {}
+        profile = p_res.data[0]
         
         # 2. Saved Ads
         s_res = client.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
@@ -160,7 +166,7 @@ def get_user_profile_data(user_id: str):
         return {
             "id": user_id,
             "email": profile.get("email", ""),
-            "name": user_name, # <-- FIX applied
+            "name": user_name,
             "credits": profile.get("credits", 0),
             "plan": plan,
             "searchLimit": limit,

@@ -21,24 +21,39 @@ def check_user_credits(user_id: str, required_credits: int) -> bool:
     return False
 
 def deduct_credits(user_id: str, amount: int):
-    client = get_supabase()
+    # Wir nutzen explizit den Admin-Client (ignoriert RLS)
+    client = get_supabase() 
     try:
-        response = client.table("profiles").select("credits").eq("id", user_id).maybe_single().execute()
-        if response and hasattr(response, 'data') and response.data:
-            current = response.data.get('credits', 0)
-            new_balance = max(0, current - amount)
-            client.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
-            
-            try:
-                client.table("credit_ledger").insert({
-                    "user_id": user_id, 
-                    "amount": -amount, 
-                    "description": "Search API Usage"
-                }).execute()
-            except:
-                pass
+        # 1. Aktuelle Credits holen
+        response = client.table("profiles").select("credits").eq("id", user_id).execute()
+        
+        if not response.data:
+            print(f"❌ Deduct Error: User {user_id} nicht gefunden.")
+            return
+
+        current_credits = response.data[0].get('credits', 0)
+        new_balance = max(0, current_credits - amount)
+
+        print(f"💰 Ziehe {amount} Credits ab. Alt: {current_credits} -> Neu: {new_balance}")
+
+        # 2. Neue Credits speichern
+        update_res = client.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
+        
+        if not update_res.data:
+            print("❌ Fehler: Credit-Update wurde von der DB nicht bestätigt.")
+        
+        # 3. Ledger Eintrag (optional, darf failen)
+        try:
+            client.table("credit_ledger").insert({
+                "user_id": user_id, 
+                "amount": -amount, 
+                "description": "Search API Usage"
+            }).execute()
+        except Exception as ledger_err:
+            print(f"⚠️ Ledger Skip: {ledger_err}")
+
     except Exception as e:
-        print(f"⚠️ Deduct Error: {e}")
+        print(f"❌ KRITISCHER FEHLER beim Credit-Abzug: {e}")
 
 # --- SEARCH CACHE & FEED ---
 

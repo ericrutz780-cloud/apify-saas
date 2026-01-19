@@ -80,7 +80,7 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 
 // --- Components ---
 
-// NEU: Contact Modal für Enterprise Anfragen (Updated)
+// NEU: Contact Modal (English + API Call)
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const [isSending, setIsSending] = useState(false);
 
@@ -96,13 +96,13 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     const message = (form.elements[2] as HTMLTextAreaElement).value;
 
     try {
-        // Echter API Call
+        // Echter API Call an das Backend
         await api.sendContactForm({ name, email, message });
         alert("Thank you! Your request has been sent successfully.");
         onClose();
     } catch (err) {
         console.error("Failed to send:", err);
-        alert("Failed to send message. Please try again or email us directly.");
+        alert("Failed to send message. Please try again or email us directly at info@stellaads.io");
     } finally {
         setIsSending(false);
     }
@@ -122,7 +122,7 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
             </div>
             <div>
                 <h3 className="text-2xl font-bold text-slate-900">Contact Sales</h3>
-                <p className="text-slate-500 text-sm font-medium">Für Enterprise & Agentur-Lösungen</p>
+                <p className="text-slate-500 text-sm font-medium">For Enterprise & Agency Solutions</p>
             </div>
         </div>
 
@@ -132,12 +132,12 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
                 <input required type="text" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="Max Mustermann" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">E-Mail Adresse</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
                 <input required type="email" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="name@firma.de" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Nachricht</label>
-                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Erzähl uns von deinem Team und Anforderungen..." />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Message</label>
+                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Tell us about your team and requirements..." />
             </div>
             <button type="submit" disabled={isSending} className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-70">
                 {isSending ? "Sending..." : "Send Request"}
@@ -381,8 +381,6 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const [sortBy, setSortBy] = useState('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
     const [exportData, setExportData] = useState<SearchResult | null>(null);
-    
-    // FIX: Client-Side Pagination State
     const [visibleCount, setVisibleCount] = useState(50);
     
     // FIX: Ref um Endlos-Loops beim History Loading zu verhindern
@@ -403,7 +401,6 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
             if (!id || id === 'dashboard' || id === 'undefined' || id.length < 10) return;
 
             // FIX: WICHTIG - Wenn das Ergebnis schon geladen ist und die ID übereinstimmt, NICHTS tun.
-            // Das verhindert das "Verschwinden" und den CORS-Fehler Loop.
             if (result && (result.id === id || result.search_id === id || (result.meta && result.meta.search_id === id))) {
                 console.log("✅ Using existing data from memory, skipping fetch.");
                 return;

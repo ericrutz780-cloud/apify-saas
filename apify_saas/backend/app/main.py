@@ -52,10 +52,15 @@ def root():
 @app.post("/api/v1/contact")
 async def handle_contact_form(data: ContactRequest):
     """
-    Empfängt Kontaktanfragen vom Frontend.
+    Empfängt Kontaktanfragen und loggt sie in der Server-Konsole.
     """
-    logger.info(f"📨 NEW CONTACT REQUEST: {data.name} ({data.email}) - {data.message}")
-    # Hier könnte später eine E-Mail Logik (SMTP/SendGrid) folgen
+    # Dies erscheint in deinen Render Logs:
+    print(f"\n📨 === NEW CONTACT REQUEST === 📨")
+    print(f"From: {data.name} ({data.email})")
+    print(f"Message: {data.message}")
+    print(f"==================================\n")
+    
+    logger.info(f"Contact Request from {data.email}")
     return {"status": "success", "message": "Request received"}
 
 # Router Registrierung

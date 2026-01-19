@@ -50,7 +50,7 @@ def get_advertiser_info(item):
         "facebook_followers": page_info.get("likes"),
         "instagram_handle": page_info.get("ig_username"),
         "instagram_followers": page_info.get("ig_followers"),
-        "about_text": about.get("text"), # FIX: Variable 'about' war vorher undefiniert
+        "about_text": about.get("text"), # FIX: 'about' Variable ist jetzt korrekt definiert
         "category": page_info.get("page_category")
     }
 
@@ -188,7 +188,7 @@ def normalize_meta_ad(item):
 async def search_meta_ads(query: str, limit: int, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "active"):
     target_country = country.upper() if country and country != "ALL" else "US"
     
-    # URL Konstruktion
+    # URL Konstruktion - Matches User Logs
     search_url = f"https://www.facebook.com/ads/library/?active_status={active_status}&ad_type=all&country={target_country}&q={query}&sort_data[direction]=desc&sort_data[mode]=relevancy_monthly_grouped&media_type=all"
     if start_date_min: search_url += f"&start_date[min]={start_date_min}"
     if start_date_max: search_url += f"&start_date[max]={start_date_max}"
@@ -209,10 +209,10 @@ async def search_meta_ads(query: str, limit: int, country: str = "US", start_dat
         loop = asyncio.get_event_loop()
         
         # 1. Actor Aufruf (Blocking -> Async via Executor)
-        # Dies behebt den "Wrapper Fehler", da der Main Thread nicht blockiert wird
+        # Dies verhindert, dass der Server einfriert (Endlosschleife/Timeout)
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=512, # 
+            memory_mbytes=1024, # Etwas mehr RAM für Stabilität
             timeout_secs=900
         ))
         

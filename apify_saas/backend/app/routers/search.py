@@ -164,7 +164,8 @@ def get_search_history_details(search_id: str, user_id: str):
             },
             "meta": {
                 "count": len(ads), 
-                "query": "history", 
+                # FIX: Hier stand vorher 'history', was den Suchbegriff überschrieben hat!
+                "query": search_meta.get("query", ""), 
                 "search_id": search_id
             },
             "data": ads

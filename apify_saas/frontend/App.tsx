@@ -361,6 +361,9 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
     // FIX: Modal State für Export
     const [exportData, setExportData] = useState<SearchResult | null>(null);
 
+    // FIX: Client-Side Pagination State
+    const [visibleCount, setVisibleCount] = useState(50);
+
     const limit = user.searchLimit || 100;
     const cost = limit;
     const canAfford = user.credits >= cost;
@@ -384,6 +387,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
 
             // Wenn wir hier sind, müssen wir wirklich laden
             setResult(null); 
+            setVisibleCount(50); // Reset Pagination
             setLoading(true); setStatusIndex(8); setProgress(90); 
             
             try {
@@ -418,7 +422,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
 
     const handleSearch = useCallback(async () => {
         if (!query || !canAfford || loading) return;
-        setLoading(true); setProgress(0); setStatusIndex(0); setError('');
+        setLoading(true); setProgress(0); setStatusIndex(0); setError(''); setVisibleCount(50); // Reset Pagination
 
         // --- FIX: DYNAMISCHER PROGRESS BALKEN ---
         // Formel: 40s Startzeit (Apify Cold Start) + 0.21s pro Ad
@@ -502,6 +506,9 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
     };
 
     const displayedItems = getFilteredAndSortedAds();
+    // FIX: Slice items based on visibleCount to prevent lags
+    const visibleItems = displayedItems.slice(0, visibleCount);
+    
     const isMetaActive = activeTab === 'facebook' || activeTab === 'instagram';
     
     const handleToggleSave = async (ad: MetaAd | TikTokAd, type: 'meta' | 'tiktok') => {
@@ -595,13 +602,27 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
                             </div>
                         </div>
                     </div>
+                    {/* GRID ANZEIGE: Nutzt jetzt visibleItems statt displayedItems */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-                        {isMetaActive && displayedItems.map((item: any) => {
+                        {isMetaActive && visibleItems.map((item: any) => {
                             const ad = item.representative;
                             const savedEntry = user.savedAds.find(s => s.data.id === ad.id && s.type === 'meta');
                             return <MetaAdCard key={ad.id} ad={ad} versionCount={item.count} viewMode={viewMode} onClick={(data) => onOpenModal(item.group, 'meta')} platformContext={activeTab === 'facebook' || activeTab === 'instagram' ? activeTab : undefined} onToggleSave={(ad) => onOpenModal([ad], 'meta')} isSaved={!!savedEntry} />;
                         })}
                     </div>
+                    
+                    {/* FIX: Load More Button (English) */}
+                    {displayedItems.length > visibleCount && (
+                        <div className="flex justify-center py-8">
+                            <button
+                                onClick={() => setVisibleCount(prev => prev + 50)}
+                                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500"
+                            >
+                                Show more results ({displayedItems.length - visibleCount} remaining)
+                            </button>
+                        </div>
+                    )}
+
                     {displayedItems.length === 0 && !loading && <div className="text-center py-20 text-gray-500">No results match your filters</div>}
                 </div>
             )}

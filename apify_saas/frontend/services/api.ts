@@ -104,7 +104,7 @@ class ApiService {
       }
   }
 
-  // NEU: Kontaktformular senden
+  // WICHTIG: Diese Funktion sendet die Daten an das Backend
   async sendContactForm(data: { name: string; email: string; message: string }): Promise<void> {
       const response = await fetch(`${API_URL}/contact`, {
           method: 'POST',
@@ -113,7 +113,8 @@ class ApiService {
       });
 
       if (!response.ok) {
-          throw new Error("Failed to send message");
+          const err = await response.json();
+          throw new Error(err.detail || "Failed to send message");
       }
   }
 

@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 load_dotenv() 
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 
-# E-Mail Konfiguration (muss in Render gesetzt werden)
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com") # Standard: Gmail
+# E-Mail Konfiguration laden (SiteGround)
+SMTP_SERVER = os.getenv("SMTP_SERVER", "mail.stellaads.io")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER") # Deine Absender-Email
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") # Dein App-Passwort (nicht das normale Login-Passwort!)
-TARGET_EMAIL = os.getenv("TARGET_EMAIL", "eric.rutz@stellaads.io") # Wo die Mails ankommen sollen
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+TARGET_EMAIL = os.getenv("TARGET_EMAIL")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -56,50 +56,54 @@ class ContactRequest(BaseModel):
 def root():
     return {"status": "active", "message": "Ad Spy API is running"}
 
+# --- NEU: E-Mail Versand Endpoint ---
 @app.post("/api/v1/contact")
 async def handle_contact_form(data: ContactRequest):
     """
-    Empfängt Kontaktanfragen, loggt sie UND sendet eine echte E-Mail.
+    Empfängt Kontaktanfragen und sendet sie via SiteGround SMTP.
     """
-    # 1. Log in Konsole (Sicherheitshalber)
-    print(f"\n📨 === NEW CONTACT REQUEST === 📨")
-    print(f"From: {data.name} ({data.email})")
-    print(f"Message: {data.message}")
-    print(f"==================================\n")
-    
-    # 2. Echte E-Mail senden
-    if SMTP_USER and SMTP_PASSWORD:
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = SMTP_USER
-            msg['To'] = TARGET_EMAIL
-            msg['Subject'] = f"New Lead: {data.name}"
-            
-            body = f"""
-            New Contact Request from StellaAds App:
-            
-            Name: {data.name}
-            Email: {data.email}
-            
-            Message:
-            {data.message}
-            """
-            msg.attach(MIMEText(body, 'plain'))
-            
-            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            text = msg.as_string()
-            server.sendmail(SMTP_USER, TARGET_EMAIL, text)
-            server.quit()
-            logger.info(f"✅ Email sent successfully to {TARGET_EMAIL}")
-        except Exception as e:
-            logger.error(f"❌ Email sending failed: {e}")
-            # Kein Crash für den User, aber Log-Fehler
-    else:
-        logger.warning("⚠️ SMTP credentials not set in Render Environment. Skipping email.")
+    print(f"\n📨 Contact Request received from {data.email}")
 
-    return {"status": "success", "message": "Request received"}
+    if not SMTP_USER or not SMTP_PASSWORD:
+        logger.error("❌ SMTP Credentials missing in Environment Variables!")
+        raise HTTPException(status_code=500, detail="Server misconfiguration: SMTP missing")
+
+    try:
+        # E-Mail erstellen
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USER
+        msg['To'] = TARGET_EMAIL
+        msg['Subject'] = f"New Inquiry: {data.name}"
+        
+        body = f"""
+        New Contact Request from StellaAds App:
+        
+        Name: {data.name}
+        Email: {data.email}
+        
+        Message:
+        {data.message}
+        """
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Verbindung zum SiteGround Server
+        logger.info(f"🔌 Connecting to SMTP: {SMTP_SERVER}:{SMTP_PORT}...")
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.set_debuglevel(1) # Zeigt Details im Render Log
+        server.starttls() # Verschlüsselung aktivieren
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        
+        # Senden
+        text = msg.as_string()
+        server.sendmail(SMTP_USER, TARGET_EMAIL, text)
+        server.quit()
+        
+        logger.info(f"✅ Email sent successfully to {TARGET_EMAIL}")
+        return {"status": "success", "message": "Email sent"}
+
+    except Exception as e:
+        logger.error(f"❌ Email sending failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Email sending failed: {str(e)}")
 
 # Router Registrierung
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])

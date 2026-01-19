@@ -80,7 +80,7 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 
 // --- Components ---
 
-// NEU: Contact Modal (English + API Call)
+// NEU: Contact Modal für Enterprise Anfragen (Updated mit API Call & Englisch)
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const [isSending, setIsSending] = useState(false);
 

@@ -80,7 +80,7 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 
 // --- Components ---
 
-// NEU: Contact Modal für Enterprise Anfragen (Updated)
+// NEU: Contact Modal (English + API Call)
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const [isSending, setIsSending] = useState(false);
 
@@ -96,7 +96,7 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     const message = (form.elements[2] as HTMLTextAreaElement).value;
 
     try {
-        // Echter API Call
+        // Echter API Call an das Backend
         await api.sendContactForm({ name, email, message });
         alert("Thank you! Your request has been sent successfully.");
         onClose();
@@ -132,7 +132,7 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
                 <input required type="text" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="Max Mustermann" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">E-Mail Address</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
                 <input required type="email" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="name@firma.de" />
             </div>
             <div>
@@ -361,7 +361,7 @@ const Dashboard = ({ user }: { user: User }) => {
 };
 
 // FIX: Komponente wieder in SearchLogicWrapper umbenannt
-const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
+const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     
@@ -637,7 +637,7 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
                             <h2 className="text-xl font-bold text-gray-900 whitespace-nowrap">Results for <span className="text-brand-600">"{result.params.query}"</span></h2>
                             <div className="hidden sm:block w-px h-6 bg-gray-300 mx-2"></div>
                             <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 self-start">
-                                <button onClick={() => setActiveTab('facebook')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'facebook' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" /> Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaMetaAds.filter(a => a.publisher_platform.includes('facebook')).length}</span></button>
+                                <button onClick={() => setActiveTab('facebook')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'facebook' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Facebook className="w-3.5 h-3.5 mr-2 text-[#1877F2]" /> Facebook <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('facebook')).length}</span></button>
                                 <button onClick={() => setActiveTab('instagram')} className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'instagram' ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'}`}><Instagram className="w-3.5 h-3.5 mr-2 text-[#E4405F]" /> Instagram <span className="ml-2 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-xs font-semibold border border-gray-200 min-w-[20px] text-center">{transformedMetaAds.filter(a => a.publisher_platform.includes('instagram')).length}</span></button>
                             </div>
                         </div>

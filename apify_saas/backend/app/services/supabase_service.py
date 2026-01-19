@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import time  # WICHTIG für Throttling
 from supabase import create_client, Client
 from app.core.config import settings
 import logging
@@ -17,7 +18,7 @@ def get_supabase() -> Client:
     
     client = create_client(url, key)
     
-    # RLS Bypass für Admin-Operationen (Service Role Key muss genutzt werden)
+    # RLS Bypass für Admin-Operationen
     try:
         client.postgrest.auth(key)
     except:
@@ -54,7 +55,7 @@ def deduct_credits(user_id: str, amount: int):
         # Update durchführen
         client.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
         
-        # Ledger Eintrag (optional, Fail-Safe)
+        # Ledger Eintrag
         try:
             client.table("credit_ledger").insert({
                 "user_id": user_id, 
@@ -102,7 +103,6 @@ def create_search_record(platform: str, keyword: str, country: str):
         res = client.table("search_cache").insert(search_entry).execute()
         if res and res.data: return res.data[0]['id']
     except Exception:
-        # Fallback falls country Probleme macht
         if "country" in search_entry: del search_entry["country"]
         try:
             res = client.table("search_cache").insert(search_entry).execute()
@@ -113,13 +113,13 @@ def create_search_record(platform: str, keyword: str, country: str):
 
 def save_search_details(search_id: str, platform: str, results: list):
     """
-    Speichert Ergebnisse in Batches, um Memory Overload zu verhindern.
+    Speichert Ergebnisse extrem schonend, um Server-Crashes zu vermeiden.
     """
     if not results or not search_id: return
     client = get_supabase()
     
-    # Batch-Größe (50 ist sicher für Render Free Tier)
-    BATCH_SIZE = 50
+    # Batch-Größe massiv reduziert für Stabilität
+    BATCH_SIZE = 20 
     
     try:
         total_batches = (len(results) + BATCH_SIZE - 1) // BATCH_SIZE
@@ -142,6 +142,10 @@ def save_search_details(search_id: str, platform: str, results: list):
                 try:
                     client.table("ad_results").upsert(ad_rows_batch, on_conflict="platform, platform_id").execute()
                     ad_rows_batch = [] # Reset Batch
+                    
+                    # WICHTIG: Kurze Pause, damit der Server/Supabase Connection Pool nicht überlastet wird
+                    time.sleep(0.5) 
+                    
                 except Exception as batch_error:
                     logger.error(f"❌ Error saving batch {i//BATCH_SIZE}: {batch_error}")
         
@@ -157,7 +161,6 @@ def get_user_profile_data(user_id: str):
     try:
         logger.info(f"🔍 Loading Profile for ID: {user_id}")
         
-        # 1. Profil laden
         p_res = client.table("profiles").select("*").eq("id", user_id).execute()
         
         if not p_res.data:
@@ -168,14 +171,12 @@ def get_user_profile_data(user_id: str):
 
         profile = p_res.data[0]
         
-        # 2. Saved Ads
         s_res = client.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
         saved_ads = []
         if s_res and s_res.data:
             for item in s_res.data:
                 saved_ads.append({"id": item['id'], "type": item['type'], "data": item['data'], "savedAt": item['created_at']})
 
-        # Fallback Logic
         plan = profile.get("plan", "starter")
         limit = profile.get("search_limit")
         

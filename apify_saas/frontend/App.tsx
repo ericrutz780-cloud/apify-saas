@@ -70,7 +70,7 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        // Ignoriere Quota Fehler stillschweigend, da wir eh Fallback haben
+        // Ignoriere Quota Fehler stillschweigend
         console.warn(`LocalStorage write failed for "${key}" (Quota/Error).`);
     }
 };
@@ -360,6 +360,9 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
 
     // FIX: Client-Side Pagination State
     const [visibleCount, setVisibleCount] = useState(50);
+    
+    // FIX: Ref um Endlos-Loops beim History Loading zu verhindern
+    const historyAttempted = useRef<Set<string>>(new Set());
 
     const limit = user.searchLimit || 100;
     const cost = limit;
@@ -376,11 +379,17 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
             if (!id || id === 'dashboard' || id === 'undefined' || id.length < 10) return;
 
             // FIX: WICHTIG - Wenn das Ergebnis schon geladen ist und die ID übereinstimmt, NICHTS tun.
-            // Das verhindert das "Verschwinden" und den CORS-Fehler Loop.
             if (result && (result.id === id || result.search_id === id || (result.meta && result.meta.search_id === id))) {
                 console.log("✅ Using existing data from memory, skipping fetch.");
                 return;
             }
+            
+            // FIX: Loop Prevention - Wenn schon versucht, abbrechen!
+            if (historyAttempted.current.has(id)) {
+                console.warn(`⚠️ Already attempted to load ${id}, skipping to prevent loop.`);
+                return;
+            }
+            historyAttempted.current.add(id);
 
             // Wenn wir hier sind, müssen wir wirklich laden
             setResult(null); 

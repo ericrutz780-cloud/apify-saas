@@ -30,13 +30,13 @@ def get_page_size(item):
     likes = item.get("likes", 0) or item.get("page_like_count", 0)
     
     advertiser = item.get("advertiser") or {}
-    page_info_outer = advertiser.get("ad_library_page_info") or {}
-    page_info = page_info_outer.get("page_info") or {}
+    page_info = advertiser.get("ad_library_page_info", {}) or {}
+    page_info_inner = page_info.get("page_info", {}) or {}
     
     if not likes: likes = page_info.get("likes", 0) or 0
     ig_followers = page_info.get("ig_followers", 0) or 0
     
-    snapshot = item.get("snapshot") or {}
+    snapshot = item.get("snapshot", {}) or {}
     if not likes: likes = snapshot.get("page_like_count", 0) or 0
 
     return (int(likes or 0) + int(ig_followers or 0))
@@ -44,11 +44,11 @@ def get_page_size(item):
 def get_advertiser_info(item):
     if not item: return {}
     advertiser = item.get("advertiser") or {}
-    page_info_outer = advertiser.get("ad_library_page_info") or {}
-    page_info = page_info_outer.get("page_info") or {}
+    page_info = advertiser.get("ad_library_page_info", {}) or {}
+    page_info_inner = page_info.get("page_info", {}) or {}
     
-    page = advertiser.get("page") or {}
-    about = page.get("about") or {}
+    page = advertiser.get("page", {}) or {}
+    about = page.get("about", {}) or {}
     about_text = about.get("text")
     
     return {
@@ -65,6 +65,7 @@ def get_days_active(start_timestamp):
     if not start_timestamp:
         return 1.0
     try:
+        # Fall 1: String (ISO Format)
         if isinstance(start_timestamp, str):
             try:
                 if len(start_timestamp) == 10: # YYYY-MM-DD
@@ -73,6 +74,7 @@ def get_days_active(start_timestamp):
                     start_date = datetime.datetime.fromisoformat(start_timestamp.replace('Z', '+00:00'))
             except:
                 return 1.0
+        # Fall 2: Integer/Float (Unix Timestamp)
         elif isinstance(start_timestamp, (int, float)):
             start_date = datetime.datetime.fromtimestamp(int(start_timestamp))
         else:
@@ -80,6 +82,7 @@ def get_days_active(start_timestamp):
             
         now = datetime.datetime.now()
         delta = now - start_date
+        # Falls start_date in der Zukunft liegt (Zeitzonen-Bug), setze auf 0.5
         days = max(0.5, delta.total_seconds() / 86400)
         return days
     except Exception as e:
@@ -98,7 +101,8 @@ def get_ad_cluster(ad):
     cats_str = str(cats).lower()
     
     snapshot = ad.get("snapshot") or {}
-    cta = snapshot.get("cta_text") or ""
+    cta = snapshot.get("cta_text")
+    if not cta: cta = ""
     cta = str(cta).lower()
     
     service_keywords = ['medical', 'doctor', 'software', 'real estate', 'consulting', 'education', 'lawyer', 'dentist', 'service', 'health/beauty', 'employment', 'job', 'karriere', 'b2b', 'agency', 'business']
@@ -120,9 +124,10 @@ def normalize_meta_ad(item):
     # Validierung: Hat das Item überhaupt Daten?
     if not item: return None
     
+    # --- FIX: Verhindert NoneType Fehler ---
     raw_snapshot = item.get("snapshot") or {}
-    raw_id = item.get("ad_archive_id") or item.get("ad_id")
     
+    raw_id = item.get("ad_archive_id") or item.get("ad_id")
     # Kritischer Check: Ohne ID können wir nichts tun
     if not raw_id or str(raw_id) == "nan": 
         return None 
@@ -156,7 +161,7 @@ def normalize_meta_ad(item):
     advertiser_info = get_advertiser_info(item)
     demographics_raw = get_demographics(item)
     
-    aaa_info = item.get('aaa_info') or {}
+    aaa_info = item.get('aaa_info') or {} # FIX
     target_locations = aaa_info.get('location_audience') or []
     
     page_cats = item.get("categories", [])
@@ -169,7 +174,7 @@ def normalize_meta_ad(item):
     videos = raw_snapshot.get("videos") or []
     cards = raw_snapshot.get("cards") or []
     
-    body = raw_snapshot.get("body") or {}
+    body = raw_snapshot.get("body") or {} # FIX
     body_text = body.get("text")
     if not body_text and cards and isinstance(cards[0], dict):
         body_text = cards[0].get("body")
@@ -196,7 +201,7 @@ def normalize_meta_ad(item):
         "page_size": page_size,
         "viral_ratio": viral_ratio, 
         "days_active": days_active,
-        "viral_velocity": viral_velocity,
+        "viral_velocity": viral_ratio / days_active,
         "efficiency_score": 0, 
         "viral_factor": 0,     
         "demographics": demographics_raw,
@@ -215,13 +220,15 @@ def normalize_meta_ad(item):
     }
 
 def get_demographics(ad):
+    # Helper um Demographics sicher zu holen
     breakdown = get_nested_value(ad, ['aaa_info', 'age_country_gender_reach_breakdown'])
     if not breakdown: breakdown = get_nested_value(ad, ['transparency_by_location', 'eu_transparency', 'age_country_gender_reach_breakdown'])
     if not breakdown: breakdown = get_nested_value(ad, ['eu_data', 'age_country_gender_reach_breakdown'])
     return breakdown or []
 
-
-# --- HAUPTFUNKTION (JETZT ASYNC OHNE WRAPPER) ---
+# --- WICHTIG: RUN FUNCTION (JETZT REIN ASYNC) ---
+# Hier haben wir den Wrapper entfernt, der den "Event loop is running" Fehler verursacht hat.
+# Stattdessen nutzen wir direkt 'async def'.
 
 async def run_apify_meta_search(query: str, limit: int, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "active"):
     """

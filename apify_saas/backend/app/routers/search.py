@@ -4,6 +4,7 @@ from typing import Optional, List
 import uuid 
 
 # --- IMPORTS FÜR BEIDE PLATTFORMEN ---
+# Hier nutzen wir jetzt die korrekte asynchrone Funktion
 from app.services.apify_meta import run_apify_meta_search
 # Wir gehen davon aus, dass apify_tiktok existiert (wie in deinem Code gezeigt)
 try:
@@ -107,6 +108,7 @@ async def search_ads(query: SearchQuery, background_tasks: BackgroundTasks, user
         background_tasks.add_task(save_search_details, search_id, record_platform, results)
 
     # 5. ERGEBNISSE SOFORT ZURÜCKGEBEN
+    # Das ist entscheidend, damit der User nicht auf die DB warten muss
     print(f"✅ Returning {len(results)} live results.")
     return {
         "meta": {

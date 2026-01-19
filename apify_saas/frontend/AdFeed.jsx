@@ -72,7 +72,6 @@ const AdFeed = ({ currentSearch }) => {
           .limit(targetCount);
 
         // WICHTIG: Wenn wir eine Search ID haben, filtern wir danach!
-        // Das fehlte in der "kurzen" Version.
         if (searchId) {
             query = query.eq('search_ref', searchId);
         }

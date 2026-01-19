@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Search, CreditCard, LogOut, Menu, X, User as UserIcon, Zap, Bookmark, Mail } from 'lucide-react';
@@ -7,9 +6,10 @@ import { User } from '../types';
 interface LayoutProps {
   children: React.ReactNode;
   user: User | null;
+  onLogout: () => void; // <--- NEU: Prop hinzugefügt
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, user }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => { // <--- onLogout entpacken
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,9 +25,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
       return location.pathname === path;
   };
 
-  const handleLogout = () => {
-    navigate('/login');
-  };
+  // Diese lokale Funktion ist jetzt unnötig, wir nutzen direkt onLogout
+  // const handleLogout = () => { navigate('/login'); }; 
 
   if (['/login', '/register', '/'].includes(location.pathname)) {
     return <>{children}</>;
@@ -100,7 +99,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
                     </div>
                 </Link>
                 <button
-                  onClick={handleLogout}
+                  onClick={onLogout} // <--- HIER: onLogout nutzen
                   className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
                 >
                   <LogOut className="w-5 h-5" />
@@ -173,7 +172,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user }) => {
                 </Link>
                 <button
                   onClick={() => {
-                      handleLogout();
+                      onLogout(); // <--- HIER: onLogout nutzen
                       setIsMobileMenuOpen(false);
                   }}
                   className="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md"

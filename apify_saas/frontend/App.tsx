@@ -301,7 +301,6 @@ const Dashboard = ({ user }: { user: User }) => {
             <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div><h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1><p className="text-gray-500 mt-1 text-sm">Overview of your activity and available credits.</p></div>
                 <div className="flex gap-2">
-                    <button onClick={() => navigate('/feed')} className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-all"><LayoutGrid className="w-4 h-4 mr-2 text-gray-500" /> Live Feed</button>
                     <button onClick={() => navigate('/search')} className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 transition-all"><Search className="w-4 h-4 mr-2" /> New Search</button>
                 </div>
             </header>
@@ -620,7 +619,8 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
             monthlyPrice: '€49', 
             yearlyPrice: '€39', 
             credits: '1,500 Credits', 
-            scans: '100 Data Points',  
+            scans: '100 Data Points', 
+            seats: '1 User Seat', 
             topup: '€25 / 1k', 
             export: '-',
             monthlyPriceId: PRICE_ID_STARTER_MONTHLY,
@@ -633,7 +633,8 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
             monthlyPrice: '€129', 
             yearlyPrice: '€99', 
             credits: '50,000 Credits', 
-            scans: '1,000 Data Points',  
+            scans: '1,000 Data Points', 
+            seats: '2 User Seats', 
             topup: '€10 / 1k', 
             export: 'CSV/JSON', 
             popular: true,
@@ -647,7 +648,8 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
             monthlyPrice: 'Contact', 
             yearlyPrice: 'Contact', 
             credits: '250,000 Credits', 
-            scans: 'Custom',  
+            scans: 'Custom', 
+            seats: '5 Seats', 
             topup: '€5 / 1k', 
             export: 'API' 
         }
@@ -840,7 +842,7 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                             {(billingCycle === 'topup' ? creditTopupPlans : pricingPlans).map((plan: any) => (
                                 <div key={plan.id} className={`bg-white rounded-2xl shadow-sm flex flex-col border ${user.plan === plan.id && billingCycle !== 'topup' ? 'border-brand-600 ring-4 ring-brand-500/10' : 'border-gray-200'} relative`}>
                                     <div className="p-6 border-b border-gray-100"><h3 className="text-xl font-bold text-gray-900">{plan.name}</h3><p className="text-xs text-gray-500 mt-1 h-4">{plan.subheader}</p><div className="mt-6 flex flex-col">{plan.id === 'enterprise' && billingCycle !== 'topup' ? <div className="text-2xl font-bold text-gray-900 h-10 flex items-center">Contact Us</div> : <div className="flex items-baseline"><span className="text-4xl font-bold text-gray-900 tracking-tight">{billingCycle === 'topup' ? plan.price : (billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice)}</span><span className="ml-1 text-sm text-gray-500 font-medium">{billingCycle === 'topup' ? plan.unit : '/mo'}</span></div>}{billingCycle === 'yearly' && plan.id !== 'enterprise' && <div className="text-xs text-green-600 font-medium mt-1">Billed annually</div>}</div></div>
-                                    <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li><li className="flex items-center text-sm"><UsersIcon className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.seats}</span></li></>}</ul></div>
+                                    <div className="p-6 bg-gray-25/50 flex-1"><ul className="space-y-4">{billingCycle === 'topup' ? plan.features.map((feature: string) => (<li key={feature} className="flex items-center text-sm"><CheckCircle2 className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{feature}</span></li>)) : <><li className="flex items-center text-sm"><Sparkles className="w-4 h-4 text-brand-600 mr-3 flex-shrink-0" /><span className="text-gray-700 font-medium">{plan.credits}</span></li><li className="flex items-center text-sm"><Search className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" /><span className="text-gray-600">{plan.scans}</span></li></>}</ul></div>
                                     <div className="p-6 bg-white rounded-b-2xl">
                                         <button 
                                             onClick={() => handlePlanAction(plan)}
@@ -898,9 +900,9 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
 }
 
 // FIX 2: User Check Wrapper to prevent Layout Crash on Login
-const ProtectedRoute = ({ user, children }: { user: User | null, children: React.ReactElement }) => {
+const ProtectedRoute = ({ user, children, onLogout }: { user: User | null, children: React.ReactElement, onLogout: () => void }) => {
     if (!user) return <Navigate to="/login" replace />;
-    return <Layout user={user}>{children}</Layout>;
+    return <Layout user={user} onLogout={onLogout}>{children}</Layout>;
 };
 
 const App = () => {
@@ -920,6 +922,17 @@ const App = () => {
   };
   const handleRemoveAd = async (id: string) => {
       try { await api.removeSavedAd(id); await refreshUser(); showToast("Ad removed!"); } catch (e) { console.error("Remove failed", e); }
+  };
+
+  // --- NEU: Logout Handler ---
+  const handleLogout = () => {
+      // 1. Storage leeren
+      localStorage.removeItem('adspy_token');
+      localStorage.removeItem('adspy_user_id');
+      localStorage.removeItem('adspy_user_email');
+      
+      // 2. State leeren (löst Re-Render aus -> ProtectedRoute redirectet zu Login)
+      setUser(null);
   };
   
   useEffect(() => { const init = async () => { await refreshUser(); setLoading(false); }; init(); }, []);
@@ -972,7 +985,7 @@ const App = () => {
                 <Route path="/email-confirmed" element={<EmailConfirmed />} />
                 <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
                 
-                <Route element={<ProtectedRoute user={user} children={<Outlet />} />}>
+                <Route element={<ProtectedRoute user={user} onLogout={handleLogout} children={<Outlet />} />}>
                     <Route path="/dashboard" element={<Dashboard user={user!} />} />
                     <Route path="/feed" element={<div className="w-full"><div className="mb-8"><h1 className="text-2xl font-semibold">Live Ad Feed</h1></div><AdFeed /></div>} />
                     {/* FIX: Passing onOpenModal correctly */}

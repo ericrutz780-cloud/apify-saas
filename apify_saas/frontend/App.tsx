@@ -375,7 +375,14 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
             // FIX: Hier ist der Schutz gegen "dashboard" und andere ungültige IDs
             if (!id || id === 'dashboard' || id === 'undefined' || id.length < 10) return;
 
-            // FIX: Reset Result damit der Effekt feuert (auch beim 3. mal)
+            // FIX: WICHTIG - Wenn das Ergebnis schon geladen ist und die ID übereinstimmt, NICHTS tun.
+            // Das verhindert den Loop und das Verschwinden durch CORS-Fehler
+            if (result && (result.id === id || result.search_id === id || (result.meta && result.meta.search_id === id))) {
+                console.log("✅ Using existing data from memory, skipping fetch.");
+                return;
+            }
+
+            // Wenn wir hier sind, müssen wir wirklich laden
             setResult(null); 
             setLoading(true); setStatusIndex(8); setProgress(90); 
             
@@ -407,15 +414,23 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
         if (initialResultId && !loading) {
             loadHistory(initialResultId);
         }
-    }, [initialResultId]); 
+    }, [initialResultId, result]); // Dependencies include result for the check inside
 
     const handleSearch = useCallback(async () => {
         if (!query || !canAfford || loading) return;
         setLoading(true); setProgress(0); setStatusIndex(0); setError('');
 
+        // --- FIX: DYNAMISCHER PROGRESS BALKEN ---
+        // Formel: 40s Startzeit (Apify Cold Start) + 0.21s pro Ad
+        const estimatedDuration = 40 + (limit * 0.21);
+        const percentPerTick = 100 / (estimatedDuration * 10); // *10 weil 100ms interval
+
         const progressTimer = setInterval(() => {
             setProgress(prev => {
-                const next = Math.min(99, prev + (100 / (7000 / 100)));
+                // Wir lassen es max bis 99% laufen
+                const next = Math.min(99, prev + percentPerTick);
+                
+                // Status Messages umschalten
                 if (next > (100 / STATUS_MESSAGES.length) * (statusIndex + 1)) {
                     setStatusIndex(idx => Math.min(STATUS_MESSAGES.length - 1, idx + 1));
                 }
@@ -445,7 +460,7 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
         } catch (err: any) { 
             clearInterval(progressTimer); setLoading(false); setError(err.message || 'Search failed.'); 
         }
-    }, [query, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex]);
+    }, [query, country, dateRange, user.credits, cost, canAfford, loading, refreshUser, navigate, statusIndex, limit]);
 
 
     const transformedMetaAds = useMemo(() => {

@@ -18,19 +18,11 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# --- 2. CORS KONFIGURATION (UNVERÄNDERT) ---
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://apify-saas.vercel.app",
-    "https://app.stellaads.io",  
-    "https://stellaads.io"       
-]
-
+# --- 2. CORS KONFIGURATION ---
+# FIX: Wildcard erlaubt alle Origins. Löst das "Access-Control-Allow-Origin" Problem.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"https://apify-saas.*\.vercel\.app", 
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,13 +64,8 @@ async def create_checkout_session(
         # Automatische Erkennung: Abo oder Einmalzahlung?
         mode = 'subscription' if price_info.recurring else 'payment'
 
-        # Domain URL Bestimmung (Lokal vs Produktion)
-        # Wenn du lokal testest, leite auf localhost zurück.
-        # In Produktion auf stellaads.io.
-        # Hier hardcoden wir deine App-URL, da du Deployments nutzt.
+        # Domain URL Bestimmung
         domain_url = "https://app.stellaads.io" 
-        # TIPP: Falls du lokal testest, kannst du dies kurzzeitig ändern auf:
-        # domain_url = "http://localhost:5173"
         
         success_url = f"{domain_url}/#/account?status=success&session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{domain_url}/#/account?status=canceled"

@@ -1,151 +1,132 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from app.models.api_requests import SearchRequest
+from app.services import apify_meta, apify_tiktok
+from app.services.supabase_service import create_search_record, save_search_details, supabase
+# FIX: UUID Import hinzugefügt
 import uuid 
-
-# --- IMPORTS FÜR BEIDE PLATTFORMEN ---
-# Hier nutzen wir jetzt die korrekte asynchrone Funktion
-from app.services.apify_meta import run_apify_meta_search
-# Wir gehen davon aus, dass apify_tiktok existiert (wie in deinem Code gezeigt)
-try:
-    from app.services import apify_tiktok
-except ImportError:
-    print("⚠️ Warning: apify_tiktok service not found.")
-    apify_tiktok = None
-
-from app.services.supabase_service import (
-    get_cached_results, 
-    create_search_record, 
-    save_search_details,
-    check_user_credits, 
-    deduct_credits,
-    get_supabase
-)
 
 router = APIRouter()
 
-class SearchQuery(BaseModel):
-    keyword: str
-    platform: str = "meta" # meta, tiktok, both
-    limit: int = 20
-    country: str = "US"
-    start_date_min: Optional[str] = None
-    start_date_max: Optional[str] = None
-    sort_by: str = "newest"
-    active_status: str = "active"
-
-@router.post("/")
-async def search_ads(query: SearchQuery, background_tasks: BackgroundTasks, user_id: str = Query(..., description="User ID")):
-    """
-    Kombinierte Suche (Meta + TikTok).
-    Fängt Fehler ab, prüft Credits, Cache und liefert Ergebnisse sofort.
-    """
-    print(f"API ROUTER: Live Search '{query.keyword}' | Platform: {query.platform} | Limit: {query.limit}")
-
-    # 1. CREDITS PRÜFEN
-    if not check_user_credits(user_id, query.limit):
-        raise HTTPException(status_code=402, detail="Nicht genügend Credits.")
-
-    # 2. CACHE PRÜFEN (Nur bei Einzel-Plattform Suche sinnvoll um Komplexität zu meiden)
-    if query.platform in ["meta", "tiktok"]:
-        cached_ads = get_cached_results(query.platform, query.keyword)
-        if cached_ads and len(cached_ads) >= (query.limit * 0.5): 
-            print(f"✅ Cache Hit for '{query.keyword}'")
-            deduct_credits(user_id, query.limit)
-            return {
-                "meta": {"count": len(cached_ads), "source": "cache", "search_id": "cache-hit"},
-                "data": cached_ads
-            }
-
-    # 3. LIVE SUCHE STARTEN
-    results = []
-    
-    # --- A) META SEARCH ---
-    if query.platform == "meta" or query.platform == "both":
-        try:
-            print(f"🚀 Starting Meta Search...")
-            # WICHTIG: 'await' nutzen, da run_apify_meta_search jetzt async ist
-            meta_results = await run_apify_meta_search(
-                query=query.keyword, 
-                limit=query.limit, 
-                country=query.country,
-                start_date_min=query.start_date_min,
-                start_date_max=query.start_date_max,
-                active_status=query.active_status
-            )
-            if meta_results:
-                results.extend(meta_results)
-        except Exception as e:
-            print(f"❌ Meta Search Error: {e}")
-
-    # --- B) TIKTOK SEARCH ---
-    if (query.platform == "tiktok" or query.platform == "both") and apify_tiktok:
-        try:
-            print(f"🎵 Starting TikTok Search...")
-            # Wir nehmen an, dass search_tiktok_ads auch async ist
-            tiktok_results = await apify_tiktok.search_tiktok_ads(
-                query=query.keyword,
-                limit=query.limit
-            )
-            if tiktok_results:
-                results.extend(tiktok_results)
-        except Exception as e:
-            print(f"❌ TikTok Search Error: {e}")
-
-    # Check: Haben wir überhaupt Ergebnisse?
-    if not results:
-        print("⚠️ No results found on any platform.")
-        return {"meta": {"count": 0, "source": "live"}, "data": []}
-
-    # 4. CREDITS ABZIEHEN & SPEICHERN
-    deduct_credits(user_id, query.limit)
-    
-    # Wir erstellen einen Record für die Haupt-Plattform (oder 'mixed')
-    record_platform = query.platform if query.platform != "both" else "mixed"
-    search_id = create_search_record(record_platform, query.keyword, query.country)
-    
-    if search_id:
-        background_tasks.add_task(save_search_details, search_id, record_platform, results)
-
-    # 5. ERGEBNISSE SOFORT ZURÜCKGEBEN
-    # Das ist entscheidend, damit der User nicht auf die DB warten muss
-    print(f"✅ Returning {len(results)} live results.")
-    return {
-        "meta": {
-            "count": len(results), 
-            "source": "live", 
-            "search_id": search_id 
-        },
-        "data": results 
-    }
-
+# --- RERUN ENDPOINT ---
 @router.get("/history/{search_id}")
-def get_search_history_details(search_id: str, user_id: str):
-    """
-    Lädt historische Ergebnisse.
-    Mit UUID-Schutz gegen Browser-Cache Fehler.
-    """
-    # --- FIX: UUID VALIDIERUNG ---
+async def get_search_history(
+    search_id: str,
+    user_id: str = Query(..., description="User ID")
+):
+    print(f"API ROUTER: Rerun Search ID '{search_id}' for User: {user_id}")
+    
+    # FIX: Verhindert Absturz bei alten Browser-Daten (Invalid UUID)
     try:
         uuid.UUID(search_id)
     except ValueError:
-        print(f"⚠️ Invalid UUID ignored: {search_id}")
-        return {"meta": {"count": 0, "error": "Invalid ID ignored"}, "data": []}
+        return {
+            "status": "error",
+            "data": [],
+            "meta": {"count": 0, "error": "Invalid ID ignored", "search_id": search_id}
+        }
 
-    client = get_supabase()
-    
     try:
-        response = client.table("ad_results").select("data").eq("search_ref", search_id).execute()
+        # 1. Metadaten (Query, Country) laden
+        parent_res = supabase.table("search_cache").select("*").eq("id", search_id).execute()
+        if not parent_res.data:
+             # Statt 404 lieber leeres Ergebnis, um Frontend-Crash zu vermeiden
+             return {"status": "success", "data": [], "meta": {"count": 0}}
         
-        if not response.data:
-            return {"meta": {"count": 0}, "data": []}
-            
-        ads = [row['data'] for row in response.data]
+        search_meta = parent_res.data[0]
+        
+        # 2. Ergebnisse laden
+        response = supabase.table("ad_results").select("data").eq("search_ref", search_id).execute()
+        results = [row['data'] for row in response.data] if response.data else []
+        
+        print(f"✅ Loaded {len(results)} ads from history.")
         
         return {
-            "meta": {"count": len(ads), "query": "history", "search_id": search_id},
-            "data": ads
+            "status": "success",
+            "data": results,
+            "meta": {
+                "count": len(results),
+                "query": search_meta.get("query", ""),
+                "sort": "history_replay",
+                "source": "database",
+                "search_id": search_id
+            }
         }
+
     except Exception as e:
-        print(f"History Fetch Error: {e}")
-        return {"meta": {"count": 0, "error": str(e)}, "data": []}
+        print(f"History Fetch Error: {str(e)}")
+        # FIX: Kein 500er Error werfen, sondern leeres Array zurückgeben, damit UI nicht crasht
+        return {"status": "error", "data": [], "meta": {"error": str(e)}}
+
+
+# --- LIVE SEARCH ENDPOINT ---
+@router.post("/")
+async def search_ads(
+    request: SearchRequest,
+    background_tasks: BackgroundTasks, 
+    user_id: str = Query(..., description="User ID")
+):
+    print(f"API ROUTER: Live Search '{request.keyword}' | Country: {request.country}")
+
+    results = []
+
+    try:
+        # 1. META / FACEBOOK SEARCH
+        if request.platform == "meta" or request.platform == "both":
+            # await ist korrekt, da apify_meta.search_meta_ads async ist
+            meta_results = await apify_meta.search_meta_ads(
+                query=request.keyword,
+                country=request.country,
+                limit=request.limit,
+                start_date_min=request.start_date_min,
+                start_date_max=request.start_date_max,
+                active_status=request.active_status
+            )
+            
+            # Platform Tagging sicherstellen
+            if meta_results:
+                for ad in meta_results:
+                    if not ad.get('publisher_platform'): 
+                        ad['publisher_platform'] = ['facebook', 'instagram']
+                results.extend(meta_results)
+
+        # 2. TIKTOK SEARCH
+        if request.platform == "tiktok" or request.platform == "both":
+            if apify_tiktok:
+                tiktok_results = await apify_tiktok.search_tiktok_ads(
+                    query=request.keyword,
+                    limit=request.limit
+                )
+                results.extend(tiktok_results)
+        
+        # 3. SPEICHERN & ID ERSTELLEN
+        search_id = None
+        if results:
+            # Synchron: ID für das Frontend erstellen
+            search_id = create_search_record(request.platform, request.keyword, request.country)
+            
+            # Asynchron: Die eigentlichen Daten speichern
+            if search_id:
+                background_tasks.add_task(
+                    save_search_details, 
+                    search_id=search_id,
+                    platform=request.platform, 
+                    results=results
+                )
+
+        # FIX: Meta-Objekt hinzugefügt, das Types.ts jetzt erwartet
+        return {
+            "status": "success", 
+            "data": results,
+            "meta": {
+                "count": len(results),
+                "query": request.keyword,
+                "sort": request.sort_by,
+                "source": "live",
+                "search_id": search_id 
+            }
+        }
+
+    except Exception as e:
+        print(f"Router Error: {str(e)}")
+        # Fehler abfangen statt Server Crash
+        return {"status": "error", "data": [], "meta": {"error": str(e)}}

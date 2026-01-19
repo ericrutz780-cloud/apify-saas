@@ -177,13 +177,24 @@ export interface TikTokAd {
   authorMeta: TikTokAuthorMeta;
 }
 
+// FIX: 'meta' Feld hinzugefügt, damit App.tsx nicht mehr meckert
 export interface SearchResult {
   id: string;
+  search_id?: string; // Optional für Abwärtskompatibilität
   params: SearchParams;
-  timestamp: string;
-  status: 'pending' | 'completed' | 'failed';
-  metaAds: MetaAd[];
-  tikTokAds: TikTokAd[];
-  cost: number;
-  data?: any[]; 
+  timestamp?: string;
+  status?: 'pending' | 'completed' | 'failed';
+  metaAds?: MetaAd[];
+  tikTokAds?: TikTokAd[];
+  cost?: number;
+  data: (MetaAd | TikTokAd)[]; // Dies ist das Hauptfeld für Ergebnisse
+  
+  // DAS HIER FEHLTE:
+  meta?: {
+    count: number;
+    source: string;
+    search_id: string;
+    query?: string;
+    error?: string;
+  };
 }

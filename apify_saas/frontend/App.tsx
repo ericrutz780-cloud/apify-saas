@@ -72,23 +72,30 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 // --- Components ---
 
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const [isSending, setIsSending] = useState(false);
+
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSending(true);
+    
     const form = e.target as HTMLFormElement;
     const name = (form.elements[0] as HTMLInputElement).value;
     const email = (form.elements[1] as HTMLInputElement).value;
     const message = (form.elements[2] as HTMLTextAreaElement).value;
 
-    // DEBUGGING: Zeigt Daten in der Browser-Konsole an (F12)
-    console.log("📧 Contact Form Logic Triggered:", { name, email, message });
-    
-    // TODO: Hier müsste der echte API-Call zum Backend hin, um die Mail zu versenden.
-    // await api.sendContactForm({ name, email, message });
-
-    alert("Thank you! Your request has been sent. We will contact you shortly.");
-    onClose();
+    try {
+        // ECHTER API CALL
+        await api.sendContactForm({ name, email, message });
+        alert("Thank you! Your request has been sent successfully.");
+        onClose();
+    } catch (err) {
+        console.error(err);
+        alert("Failed to send message. Please try again or email us directly.");
+    } finally {
+        setIsSending(false);
+    }
   };
 
   return (
@@ -122,7 +129,9 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
                 <label className="block text-sm font-bold text-slate-700 mb-2">Nachricht</label>
                 <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Erzähl uns von deinem Team und Anforderungen..." />
             </div>
-            <button type="submit" className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5">Send Request</button>
+            <button type="submit" disabled={isSending} className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-70">
+                {isSending ? "Sending..." : "Send Request"}
+            </button>
         </form>
       </div>
     </div>
@@ -257,8 +266,6 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => Promise<void> }) => {
         </form>
         <div className="text-center mt-4"><span className="text-sm text-gray-500">Don't have an account? </span><Link to="/register" className="text-sm font-medium text-brand-600 hover:text-brand-500">Sign up</Link></div>
       </div>
-
-      {/* Forgot Password Modal */}
       {showResetModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowResetModal(false)}>
               <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm relative" onClick={e => e.stopPropagation()}>
@@ -342,7 +349,7 @@ const Dashboard = ({ user }: { user: User }) => {
 };
 
 // FIX: Komponente wieder in SearchLogicWrapper umbenannt
-const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
+const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     
@@ -362,6 +369,8 @@ const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const [sortBy, setSortBy] = useState('efficiency_score');
     const [viewMode, setViewMode] = useState<'condensed' | 'details'>(() => (localStorage.getItem('view_mode') as 'condensed' | 'details') || 'details');
     const [exportData, setExportData] = useState<SearchResult | null>(null);
+    
+    // FIX: Client-Side Pagination State
     const [visibleCount, setVisibleCount] = useState(50);
     
     // FIX: Ref um Endlos-Loops beim History Loading zu verhindern

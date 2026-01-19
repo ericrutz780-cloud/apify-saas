@@ -104,6 +104,19 @@ class ApiService {
       }
   }
 
+  // NEU: Kontaktformular senden
+  async sendContactForm(data: { name: string; email: string; message: string }): Promise<void> {
+      const response = await fetch(`${API_URL}/contact`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+          throw new Error("Failed to send message");
+      }
+  }
+
   async getUser(): Promise<User | null> {
     const storedId = localStorage.getItem('adspy_user_id');
     const storedEmail = localStorage.getItem('adspy_user_email') || '';
@@ -205,7 +218,6 @@ class ApiService {
     }
     const tikTokAds = rawAds.filter((ad: any) => ad.platform === 'tiktok');
     
-    // FIX: Combined Data für TypeScript
     const combinedData = [...cleanedMetaAds, ...tikTokAds];
 
     return {
@@ -221,7 +233,7 @@ class ApiService {
         status: 'completed',
         metaAds: cleanedMetaAds,
         tikTokAds: tikTokAds,
-        data: combinedData, // <-- HIER: Das fehlende Feld
+        data: combinedData,
         meta: body.meta,
         cost: 0
     };
@@ -302,7 +314,6 @@ class ApiService {
         this._saveLocalHistory(newHistoryItem);
     }
 
-    // FIX: Combined Data für TypeScript
     const combinedData = [...cleanedMetaAds, ...tikTokAds];
 
     return {
@@ -313,7 +324,7 @@ class ApiService {
       status: 'completed',
       metaAds: cleanedMetaAds,
       tikTokAds: tikTokAds,
-      data: combinedData, // <-- HIER: Das fehlende Feld
+      data: combinedData,
       meta: responseBody.meta,
       cost: limit
     };

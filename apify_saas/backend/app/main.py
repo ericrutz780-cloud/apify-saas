@@ -2,12 +2,11 @@ import stripe
 import os
 import logging
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 from app.core.config import settings
-# WICHTIG: Alle Router importieren
 from app.routers import auth, user, search, demo, payment
 
 # Setup Logging
@@ -24,7 +23,6 @@ app = FastAPI(
 )
 
 # --- 2. CORS KONFIGURATION ---
-# Erlaubt ALLES, um Frontend-Fehler zu vermeiden
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -37,11 +35,33 @@ app.add_middleware(
 class CheckoutSessionRequest(BaseModel):
     price_id: str
 
+# NEU: Modell für Kontaktformular
+class ContactRequest(BaseModel):
+    name: str
+    email: EmailStr
+    message: str
+
 # --- 4. ENDPOINTS ---
 
 @app.get("/")
 def root():
     return {"status": "active", "message": "Ad Spy API is running"}
+
+# NEU: Kontakt-Endpoint
+@app.post("/api/v1/contact")
+async def handle_contact_form(data: ContactRequest):
+    """
+    Empfängt Kontaktanfragen und loggt sie in der Server-Konsole.
+    """
+    # 1. In den Server-Logs ausgeben (sichtbar in Render)
+    print(f"\n📨 === NEW CONTACT REQUEST === 📨")
+    print(f"From: {data.name} ({data.email})")
+    print(f"Message: {data.message}")
+    print(f"==================================\n")
+    
+    # 2. Hier könnte später echter E-Mail Versand (SMTP/SendGrid) hin.
+    
+    return {"status": "success", "message": "Request received and logged."}
 
 # Router Registrierung
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
@@ -50,7 +70,7 @@ app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(demo.router, prefix="/api/v1/demo", tags=["Demo"])
 app.include_router(payment.router, prefix="/api/v1/payment", tags=["Payment"])
 
-# --- 5. STRIPE ENDPOINT (Direkt hier oder im Router) ---
+# --- 5. STRIPE ENDPOINT ---
 @app.post("/api/v1/create-checkout-session")
 async def create_checkout_session(
     data: CheckoutSessionRequest, 
@@ -63,9 +83,7 @@ async def create_checkout_session(
         price_info = stripe.Price.retrieve(data.price_id)
         mode = 'subscription' if price_info.recurring else 'payment'
         
-        # Domain URL (Production oder Localhost)
-        # Am besten aus ENV laden, Fallback hardcoded
-        domain_url = os.getenv("FRONTEND_URL", "https://app.stellaads.io")
+        domain_url = "https://app.stellaads.io"
         
         success_url = f"{domain_url}/#/account?status=success&session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{domain_url}/#/account?status=canceled"

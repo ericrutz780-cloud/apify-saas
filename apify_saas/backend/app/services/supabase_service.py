@@ -3,26 +3,22 @@ import json
 import os
 from supabase import create_client, Client
 from app.core.config import settings
-from supabase.lib.client_options import ClientOptions
+# WICHTIG: ClientOptions Import entfernt, da er den Server crasht (AttributeError)
 
 def get_supabase() -> Client:
     url = settings.SUPABASE_URL
     key = settings.SUPABASE_KEY
     
+    # --- DEBUG: Prüfen ob Key geladen wird ---
     if not key:
-        print("❌ CRITICAL: SUPABASE_KEY is missing!")
+        print("❌ CRITICAL: SUPABASE_KEY is missing in Env!")
     else:
-        print(f"🔧 Init Supabase with Service Key ending: ...{key[-5:]}")
-
-    # WICHTIG: Wir sagen dem Client, dass er KEINE Session persistieren soll.
-    # Das verhindert, dass er versucht, Tokens im Hintergrund zu managen,
-    # was bei Service-Keys oft zu Problemen führt.
-    options = ClientOptions(
-        persist_session=False,
-        auto_refresh_token=False
-    )
+        # Zeigt nur die letzten 5 Zeichen im Log (sicher)
+        print(f"🔧 Supabase Client init. Key ends with: ...{key[-5:]}")
     
-    return create_client(url, key, options=options)
+    # FIX: Wir nutzen die Standard-Initialisierung ohne 'options'.
+    # Der Service-Role-Key funktioniert auch so, und das verhindert den Absturz.
+    return create_client(url, key)
 
 # --- USER & CREDITS ---
 
@@ -65,7 +61,7 @@ def deduct_credits(user_id: str, amount: int):
     except Exception as e:
         print(f"❌ Deduct Critical Error: {e}")
 
-# --- SEARCH CACHE & FEED (Unverändert, aber der Vollständigkeit halber hier) ---
+# --- SEARCH CACHE & FEED ---
 
 def get_cached_results(platform: str, keyword: str):
     client = get_supabase()
@@ -124,7 +120,7 @@ def save_search_details(search_id: str, platform: str, results: list):
     except Exception as e:
         print(f"❌ Background Save Error: {e}")
 
-# --- PROFIL & SAVED ADS (HIER SIND DIE FIXES) ---
+# --- PROFIL & SAVED ADS ---
 
 def get_user_profile_data(user_id: str):
     client = get_supabase()
@@ -164,7 +160,7 @@ def get_user_profile_data(user_id: str):
         return {
             "id": user_id,
             "email": profile.get("email", ""),
-            "name": user_name, # <-- FIX
+            "name": user_name, # <-- FIX applied
             "credits": profile.get("credits", 0),
             "plan": plan,
             "searchLimit": limit,

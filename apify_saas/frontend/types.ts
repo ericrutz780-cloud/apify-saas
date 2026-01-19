@@ -24,7 +24,6 @@ export interface User {
   name: string;
   credits: number;
   plan: UserPlan;
-  // WICHTIG: Für Enterprise-Limits notwendig
   searchLimit: number; 
   savedAds: SavedAd[];
   searchHistory: SearchHistoryItem[];
@@ -57,7 +56,6 @@ export interface MetaAdSnapshot {
       video_sd_url?: string;
       video_preview_image_url?: string; 
   }>;
-  // WICHTIG: Für Carousel-Anzeigen notwendig
   cards?: any[]; 
   page_name?: string;
   page_profile_picture_url?: string;
@@ -117,7 +115,6 @@ export interface MetaAdBeneficiaryPayer {
 
 export interface MetaAd {
   id: string;
-  // WICHTIG: Oft als Key verwendet
   ad_archive_id: string; 
   isActive: boolean;
   publisher_platform: string[];

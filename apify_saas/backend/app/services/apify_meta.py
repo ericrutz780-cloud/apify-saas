@@ -16,7 +16,7 @@ client = ApifyClient(settings.APIFY_TOKEN)
 
 def get_nested_value(ad, path_list):
     current = ad
-    if not current: return None # FIX: Safety Check
+    if not current: return None 
     for key in path_list:
         if isinstance(current, dict):
             current = current.get(key)
@@ -26,37 +26,38 @@ def get_nested_value(ad, path_list):
 
 def get_page_size(item):
     """Ermittelt die Macht des Profils (Likes + Follower)."""
-    if not item: return 0 # FIX
+    if not item: return 0
     likes = item.get("likes", 0) or item.get("page_like_count", 0)
-    advertiser = item.get("advertiser", {}) or {} # FIX
-    page_info = advertiser.get("ad_library_page_info", {}) or {}
-    page_info_inner = page_info.get("page_info", {}) or {}
     
-    if not likes: likes = page_info_inner.get("likes", 0) or 0
-    ig_followers = page_info_inner.get("ig_followers", 0) or 0
+    advertiser = item.get("advertiser") or {}
+    page_info_outer = advertiser.get("ad_library_page_info") or {}
+    page_info = page_info_outer.get("page_info") or {}
     
-    snapshot = item.get("snapshot", {}) or {} # FIX
+    if not likes: likes = page_info.get("likes", 0) or 0
+    ig_followers = page_info.get("ig_followers", 0) or 0
+    
+    snapshot = item.get("snapshot") or {}
     if not likes: likes = snapshot.get("page_like_count", 0) or 0
 
     return (int(likes or 0) + int(ig_followers or 0))
 
 def get_advertiser_info(item):
-    if not item: return {} # FIX
-    advertiser = item.get("advertiser", {}) or {}
-    page_info = advertiser.get("ad_library_page_info", {}) or {}
-    page_info_inner = page_info.get("page_info", {}) or {}
+    if not item: return {}
+    advertiser = item.get("advertiser") or {}
+    page_info_outer = advertiser.get("ad_library_page_info") or {}
+    page_info = page_info_outer.get("page_info") or {}
     
-    page = advertiser.get("page", {}) or {}
-    about = page.get("about", {}) or {}
+    page = advertiser.get("page") or {}
+    about = page.get("about") or {}
     about_text = about.get("text")
     
     return {
-        "facebook_handle": page_info_inner.get("page_alias"),
-        "facebook_followers": page_info_inner.get("likes"),
-        "instagram_handle": page_info_inner.get("ig_username"),
-        "instagram_followers": page_info_inner.get("ig_followers"),
+        "facebook_handle": page_info.get("page_alias"),
+        "facebook_followers": page_info.get("likes"),
+        "instagram_handle": page_info.get("ig_username"),
+        "instagram_followers": page_info.get("ig_followers"),
         "about_text": about_text,
-        "category": page_info_inner.get("page_category")
+        "category": page_info.get("page_category")
     }
 
 def get_days_active(start_timestamp):
@@ -64,7 +65,6 @@ def get_days_active(start_timestamp):
     if not start_timestamp:
         return 1.0
     try:
-        # Fall 1: String (ISO Format)
         if isinstance(start_timestamp, str):
             try:
                 if len(start_timestamp) == 10: # YYYY-MM-DD
@@ -73,7 +73,6 @@ def get_days_active(start_timestamp):
                     start_date = datetime.datetime.fromisoformat(start_timestamp.replace('Z', '+00:00'))
             except:
                 return 1.0
-        # Fall 2: Integer/Float (Unix Timestamp)
         elif isinstance(start_timestamp, (int, float)):
             start_date = datetime.datetime.fromtimestamp(int(start_timestamp))
         else:
@@ -81,7 +80,6 @@ def get_days_active(start_timestamp):
             
         now = datetime.datetime.now()
         delta = now - start_date
-        # Falls start_date in der Zukunft liegt (Zeitzonen-Bug), setze auf 0.5
         days = max(0.5, delta.total_seconds() / 86400)
         return days
     except Exception as e:
@@ -100,8 +98,7 @@ def get_ad_cluster(ad):
     cats_str = str(cats).lower()
     
     snapshot = ad.get("snapshot") or {}
-    cta = snapshot.get("cta_text")
-    if not cta: cta = ""
+    cta = snapshot.get("cta_text") or ""
     cta = str(cta).lower()
     
     service_keywords = ['medical', 'doctor', 'software', 'real estate', 'consulting', 'education', 'lawyer', 'dentist', 'service', 'health/beauty', 'employment', 'job', 'karriere', 'b2b', 'agency', 'business']
@@ -123,10 +120,9 @@ def normalize_meta_ad(item):
     # Validierung: Hat das Item überhaupt Daten?
     if not item: return None
     
-    # --- FIX: Verhindert NoneType Fehler ---
     raw_snapshot = item.get("snapshot") or {}
-    
     raw_id = item.get("ad_archive_id") or item.get("ad_id")
+    
     # Kritischer Check: Ohne ID können wir nichts tun
     if not raw_id or str(raw_id) == "nan": 
         return None 
@@ -160,7 +156,7 @@ def normalize_meta_ad(item):
     advertiser_info = get_advertiser_info(item)
     demographics_raw = get_demographics(item)
     
-    aaa_info = item.get('aaa_info') or {} # FIX
+    aaa_info = item.get('aaa_info') or {}
     target_locations = aaa_info.get('location_audience') or []
     
     page_cats = item.get("categories", [])
@@ -173,7 +169,7 @@ def normalize_meta_ad(item):
     videos = raw_snapshot.get("videos") or []
     cards = raw_snapshot.get("cards") or []
     
-    body = raw_snapshot.get("body") or {} # FIX
+    body = raw_snapshot.get("body") or {}
     body_text = body.get("text")
     if not body_text and cards and isinstance(cards[0], dict):
         body_text = cards[0].get("body")
@@ -219,42 +215,19 @@ def normalize_meta_ad(item):
     }
 
 def get_demographics(ad):
-    # Helper um Demographics sicher zu holen
     breakdown = get_nested_value(ad, ['aaa_info', 'age_country_gender_reach_breakdown'])
     if not breakdown: breakdown = get_nested_value(ad, ['transparency_by_location', 'eu_transparency', 'age_country_gender_reach_breakdown'])
     if not breakdown: breakdown = get_nested_value(ad, ['eu_data', 'age_country_gender_reach_breakdown'])
     return breakdown or []
 
-# --- WICHTIG: RUN FUNCTION (HIER WIRD GESTARTET) ---
 
-# Wir benennen die Funktion so um, dass sie mit deinem Backend kompatibel ist
-# In app/routers/search.py rufst du wahrscheinlich `run_apify_meta_search` auf?
-# Falls dein Backend 'search_meta_ads' async aufruft, lass es so.
-# Falls dein Backend 'run_apify_meta_search' synchron aufruft, nutzen wir diesen Wrapper:
+# --- HAUPTFUNKTION (JETZT ASYNC OHNE WRAPPER) ---
 
-def run_apify_meta_search(keyword: str, limit: int, country: str):
+async def run_apify_meta_search(query: str, limit: int, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "active"):
     """
-    Synchrone Wrapper-Funktion für das Backend.
-    Startet den Async-Loop für die Suche.
+    Führt den Apify Actor aus und gibt die Ergebnisse zurück.
+    Läuft asynchron im Executor, um den Event-Loop nicht zu blockieren.
     """
-    try:
-        # Erstelle oder hole Event-Loop
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        return loop.run_until_complete(search_meta_ads(
-            query=keyword, 
-            country=country, 
-            limit=limit # Hier geben wir das Limit weiter!
-        ))
-    except Exception as e:
-        logger.error(f"Wrapper Error: {e}")
-        return []
-
-async def search_meta_ads(query: str, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "active", limit: int = 20):
     target_country = country.upper() if country and country != "ALL" else "US"
     
     search_url = (
@@ -270,7 +243,7 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
     if start_date_min: search_url += f"&start_date[min]={start_date_min}"
     if start_date_max: search_url += f"&start_date[max]={start_date_max}"
 
-    # FIX: Hier verwenden wir jetzt das dynamische 'limit'
+    # Limit setzen
     POOL_SIZE = limit
     
     run_input = {
@@ -287,11 +260,13 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
 
     try:
         loop = asyncio.get_event_loop()
-        # Async Aufruf des Actors
+        
+        # Async Aufruf des Actors im Executor (damit der Server nicht blockiert)
+        # WICHTIG: 512 MB Limit beachten!
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=512, # Mehr RAM für viele Items
-            timeout_secs=900    # 15 Minuten Timeout für 1000 Ads
+            memory_mbytes=512,  # 512MB FIX
+            timeout_secs=900
         ))
         
         if not run:
@@ -313,7 +288,7 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
 
             for i, item in enumerate(dataset_items):
                 try:
-                    # HIER PASSIERTE DER FEHLER (item konnte None sein oder Felder fehlen)
+                    # HIER: Normalisierung mit Fehlerbehandlung
                     norm = normalize_meta_ad(item)
                     if norm and isinstance(norm, dict) and norm.get('id'): 
                         if norm['id'] in seen_ids: continue
@@ -332,7 +307,7 @@ async def search_meta_ads(query: str, country: str = "US", start_date_min: str =
             if not results_pool: 
                 return []
 
-            # --- SCORING (Unverändert) ---
+            # --- DEINE SCORING LOGIK (KOMPLETT ERHALTEN) ---
             cohort_buckets = {}
             for ad in results_pool:
                 cat_cluster = get_ad_cluster(ad)

@@ -7,10 +7,10 @@ from pydantic import BaseModel
 
 # Deine bestehenden Imports
 from app.core.config import settings
-from app.routers import auth, user, search, demo
+from app.routers import auth, user, search, demo, payment
 
 # --- 1. SETUP & CONFIG ---
-load_dotenv() # Lädt Variablen aus .env
+load_dotenv() 
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 
 app = FastAPI(
@@ -19,7 +19,7 @@ app = FastAPI(
 )
 
 # --- 2. CORS KONFIGURATION ---
-# FIX: Wildcard erlaubt alle Origins. Löst das "Access-Control-Allow-Origin" Problem.
+# FIX: Wir erlauben explizit ALLES, damit keine Blockaden passieren.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -38,14 +38,14 @@ class CheckoutSessionRequest(BaseModel):
 def root():
     return {"status": "active", "message": "Ad Spy API is running"}
 
-# Deine bestehenden Router
+# Router einbinden (Hier fehlte payment in deiner Version)
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(user.router, prefix="/api/v1/user", tags=["User"])
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(demo.router, prefix="/api/v1/demo", tags=["Demo"])
+app.include_router(payment.router, prefix="/api/v1/payment", tags=["Payment"])
 
-# --- 5. NEUER STRIPE ENDPOINT ---
-# Dieser Endpoint wird von deiner api.ts aufgerufen
+# --- 5. STRIPE ENDPOINT ---
 @app.post("/api/v1/create-checkout-session")
 async def create_checkout_session(
     data: CheckoutSessionRequest, 
@@ -58,19 +58,15 @@ async def create_checkout_session(
         raise HTTPException(status_code=500, detail="Stripe API Key ist nicht konfiguriert (Server Error)")
 
     try:
-        # Wir fragen Stripe, was das für ein Preis ist (Abo oder Einmalzahlung?)
         price_info = stripe.Price.retrieve(data.price_id)
-        
-        # Automatische Erkennung: Abo oder Einmalzahlung?
         mode = 'subscription' if price_info.recurring else 'payment'
 
-        # Domain URL Bestimmung
+        # Domain URL (Produktion)
         domain_url = "https://app.stellaads.io" 
         
         success_url = f"{domain_url}/#/account?status=success&session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{domain_url}/#/account?status=canceled"
 
-        # Session erstellen
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card', 'paypal'],
             line_items=[
@@ -82,7 +78,6 @@ async def create_checkout_session(
             mode=mode, 
             success_url=success_url,
             cancel_url=cancel_url,
-            # WICHTIG: Metadaten für den Webhook (damit die Credits ankommen)
             metadata={
                 "user_id": user_id,
                 "credits": price_info.metadata.get("credits", "0") 
@@ -94,5 +89,4 @@ async def create_checkout_session(
 
     except Exception as e:
         print(f"Stripe Checkout Error: {str(e)}")
-        # Gibt den Fehler an das Frontend zurück, damit man sieht was los ist
         raise HTTPException(status_code=400, detail=f"Stripe Error: {str(e)}")

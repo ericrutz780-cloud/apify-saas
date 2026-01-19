@@ -376,13 +376,12 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
             if (!id || id === 'dashboard' || id === 'undefined' || id.length < 10) return;
 
             // FIX: WICHTIG - Wenn das Ergebnis schon geladen ist und die ID übereinstimmt, NICHTS tun.
-            // Das verhindert den Loop und das Verschwinden durch CORS-Fehler
-            if (result && (result.id === id || result.search_id === id || (result.meta && result.meta.search_id === id))) {
+            // Das verhindert das "Verschwinden" und den CORS-Fehler Loop.
+            if (result && (result.id === id || (result.meta && result.meta.search_id === id))) {
                 console.log("✅ Using existing data from memory, skipping fetch.");
                 return;
             }
 
-            // Wenn wir hier sind, müssen wir wirklich laden
             setResult(null); 
             setLoading(true); setStatusIndex(8); setProgress(90); 
             
@@ -409,28 +408,23 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
             }
         };
 
-        // FIX: Wir prüfen nur auf initialResultId und loading, nicht mehr auf !result
-        // Das erlaubt das Neuladen, auch wenn schon was da ist.
         if (initialResultId && !loading) {
             loadHistory(initialResultId);
         }
-    }, [initialResultId, result]); // Dependencies include result for the check inside
+    }, [initialResultId, result]);
 
     const handleSearch = useCallback(async () => {
         if (!query || !canAfford || loading) return;
         setLoading(true); setProgress(0); setStatusIndex(0); setError('');
 
         // --- FIX: DYNAMISCHER PROGRESS BALKEN ---
-        // Formel: 40s Startzeit (Apify Cold Start) + 0.21s pro Ad
+        // Exakt deine Formel: 40s Start + 0.21s pro Ad
         const estimatedDuration = 40 + (limit * 0.21);
-        const percentPerTick = 100 / (estimatedDuration * 10); // *10 weil 100ms interval
+        const percentPerTick = 100 / (estimatedDuration * 10); 
 
         const progressTimer = setInterval(() => {
             setProgress(prev => {
-                // Wir lassen es max bis 99% laufen
                 const next = Math.min(99, prev + percentPerTick);
-                
-                // Status Messages umschalten
                 if (next > (100 / STATUS_MESSAGES.length) * (statusIndex + 1)) {
                     setStatusIndex(idx => Math.min(STATUS_MESSAGES.length - 1, idx + 1));
                 }

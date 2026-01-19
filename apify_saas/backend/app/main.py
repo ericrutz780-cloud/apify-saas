@@ -20,12 +20,17 @@ logger = logging.getLogger(__name__)
 load_dotenv() 
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 
-# E-Mail Konfiguration laden (SiteGround)
-SMTP_SERVER = os.getenv("SMTP_SERVER", "mail.stellaads.io")
+# E-Mail Konfiguration
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.resend.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER")
+# SMTP_USER ist der Login-Name (bei Resend immer "resend")
+SMTP_USER = os.getenv("SMTP_USER", "resend")
+# SMTP_PASSWORD ist der API Key
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-TARGET_EMAIL = os.getenv("TARGET_EMAIL")
+# SENDER_EMAIL ist die Adresse, die als Absender angezeigt wird (MUSS verifiziert sein!)
+# Fallback: Nutzt SMTP_USER, falls SENDER_EMAIL nicht gesetzt ist (für Gmail ok, für Resend falsch)
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "info@stellaads.io") 
+TARGET_EMAIL = os.getenv("TARGET_EMAIL", "info@stellaads.io")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -56,22 +61,22 @@ class ContactRequest(BaseModel):
 def root():
     return {"status": "active", "message": "Ad Spy API is running"}
 
-# --- NEU: E-Mail Versand Endpoint ---
 @app.post("/api/v1/contact")
 async def handle_contact_form(data: ContactRequest):
     """
-    Empfängt Kontaktanfragen und sendet sie via SiteGround SMTP.
+    Empfängt Kontaktanfragen und sendet sie via SMTP.
     """
-    print(f"\n📨 Contact Request received from {data.email}")
+    logger.info(f"📨 Contact Request received from {data.email}")
 
-    if not SMTP_USER or not SMTP_PASSWORD:
+    if not SMTP_PASSWORD:
         logger.error("❌ SMTP Credentials missing in Environment Variables!")
         raise HTTPException(status_code=500, detail="Server misconfiguration: SMTP missing")
 
     try:
         # E-Mail erstellen
         msg = MIMEMultipart()
-        msg['From'] = SMTP_USER
+        # WICHTIG: Hier nutzen wir jetzt SENDER_EMAIL statt SMTP_USER
+        msg['From'] = SENDER_EMAIL 
         msg['To'] = TARGET_EMAIL
         msg['Subject'] = f"New Inquiry: {data.name}"
         
@@ -86,16 +91,20 @@ async def handle_contact_form(data: ContactRequest):
         """
         msg.attach(MIMEText(body, 'plain'))
         
-        # Verbindung zum SiteGround Server
-        logger.info(f"🔌 Connecting to SMTP: {SMTP_SERVER}:{SMTP_PORT}...")
+        # Verbindung zum SMTP Server
+        logger.info(f"🔌 Connecting to SMTP: {SMTP_SERVER}:{SMTP_PORT} as user '{SMTP_USER}'...")
+        
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.set_debuglevel(1) # Zeigt Details im Render Log
-        server.starttls() # Verschlüsselung aktivieren
+        # server.set_debuglevel(1) # Nur zum Debuggen aktivieren
+        server.starttls() 
+        
+        # Login immer mit SMTP_USER (bei Resend ist das "resend")
         server.login(SMTP_USER, SMTP_PASSWORD)
         
         # Senden
         text = msg.as_string()
-        server.sendmail(SMTP_USER, TARGET_EMAIL, text)
+        # Envelope Sender ist auch SENDER_EMAIL
+        server.sendmail(SENDER_EMAIL, TARGET_EMAIL, text)
         server.quit()
         
         logger.info(f"✅ Email sent successfully to {TARGET_EMAIL}")
@@ -103,6 +112,7 @@ async def handle_contact_form(data: ContactRequest):
 
     except Exception as e:
         logger.error(f"❌ Email sending failed: {e}")
+        # Wir geben trotzdem 200 zurück, damit das Frontend nicht crasht, loggen aber den Fehler
         raise HTTPException(status_code=500, detail=f"Email sending failed: {str(e)}")
 
 # Router Registrierung

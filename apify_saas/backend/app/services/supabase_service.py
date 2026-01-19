@@ -1,7 +1,7 @@
 import datetime
 import json
 import os
-import time  # WICHTIG für Throttling
+import time
 from supabase import create_client, Client
 from app.core.config import settings
 import logging
@@ -52,10 +52,8 @@ def deduct_credits(user_id: str, amount: int):
 
         logger.info(f"💰 Deducting {amount}. Old: {current_credits} -> New: {new_balance}")
 
-        # Update durchführen
         client.table("profiles").update({"credits": new_balance}).eq("id", user_id).execute()
         
-        # Ledger Eintrag
         try:
             client.table("credit_ledger").insert({
                 "user_id": user_id, 
@@ -113,13 +111,13 @@ def create_search_record(platform: str, keyword: str, country: str):
 
 def save_search_details(search_id: str, platform: str, results: list):
     """
-    Speichert Ergebnisse extrem schonend, um Server-Crashes zu vermeiden.
+    Speichert Ergebnisse in sehr kleinen Batches mit Pause, um Memory-Crashes zu verhindern.
     """
     if not results or not search_id: return
     client = get_supabase()
     
-    # Batch-Größe massiv reduziert für Stabilität
-    BATCH_SIZE = 20 
+    # Batch-Größe massiv reduziert für Stabilität (Render Free Tier)
+    BATCH_SIZE = 10 
     
     try:
         total_batches = (len(results) + BATCH_SIZE - 1) // BATCH_SIZE
@@ -141,13 +139,11 @@ def save_search_details(search_id: str, platform: str, results: list):
             if len(ad_rows_batch) >= BATCH_SIZE or i == len(results) - 1:
                 try:
                     client.table("ad_results").upsert(ad_rows_batch, on_conflict="platform, platform_id").execute()
-                    ad_rows_batch = [] # Reset Batch
-                    
-                    # WICHTIG: Kurze Pause, damit der Server/Supabase Connection Pool nicht überlastet wird
+                    ad_rows_batch = [] 
+                    # WICHTIG: 0.5 Sekunden Pause, damit die CPU "atmen" kann
                     time.sleep(0.5) 
-                    
                 except Exception as batch_error:
-                    logger.error(f"❌ Error saving batch {i//BATCH_SIZE}: {batch_error}")
+                    logger.error(f"❌ Error saving batch: {batch_error}")
         
         logger.info("✅ All batches saved successfully.")
 
@@ -160,17 +156,15 @@ def get_user_profile_data(user_id: str):
     client = get_supabase()
     try:
         logger.info(f"🔍 Loading Profile for ID: {user_id}")
-        
         p_res = client.table("profiles").select("*").eq("id", user_id).execute()
         
         if not p_res.data:
             logger.warning(f"❌ Profile Data is EMPTY for ID: {user_id}")
             return {"id": user_id, "credits": 0, "plan": "starter", "searchLimit": 100, "name": "Unknown", "savedAds": [], "searchHistory": []}
-        else:
-            logger.info(f"✅ Profile Data Found: {p_res.data[0]}")
-
-        profile = p_res.data[0]
         
+        profile = p_res.data[0]
+        logger.info(f"✅ Profile Data Found: {profile.get('email')}")
+
         s_res = client.table("saved_ads").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
         saved_ads = []
         if s_res and s_res.data:
@@ -185,12 +179,10 @@ def get_user_profile_data(user_id: str):
             elif plan == 'enterprise': limit = 5000
             else: limit = 100
 
-        user_name = profile.get("name") or profile.get("first_name") or "User"
-
         return {
             "id": user_id,
             "email": profile.get("email", ""),
-            "name": user_name,
+            "name": profile.get("name") or profile.get("first_name") or "User",
             "credits": profile.get("credits", 0),
             "plan": plan,
             "searchLimit": limit,

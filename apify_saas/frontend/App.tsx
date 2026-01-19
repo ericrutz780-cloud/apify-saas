@@ -30,10 +30,15 @@ import { LandingPage } from './LandingPage';
 import { EmailConfirmed } from './EmailConfirmed';
 
 // --- STRIPE PRICE IDS ---
+// Monthly Plans
 const PRICE_ID_STARTER_MONTHLY    = "price_1SqYwQ5vTctBPhfeBKjAv4nY";
 const PRICE_ID_PRO_MONTHLY        = "price_1SqYwR5vTctBPhfe7sekjMdK";
+
+// Yearly Plans
 const PRICE_ID_STARTER_YEARLY     = "price_1SqYwQ5vTctBPhfeiVkpek9p";
 const PRICE_ID_PRO_YEARLY         = "price_1SqYwR5vTctBPhfe4mB23SYr";
+
+// Top-Up Credits
 const PRICE_ID_TOPUP_STARTER      = "price_1SqYwS5vTctBPhfeD84iwobm"; 
 const PRICE_ID_TOPUP_PRO          = "price_1SqYwS5vTctBPhfeFljQAEOU"; 
 const PRICE_ID_TOPUP_ENTERPRISE   = "price_1SqYwT5vTctBPhfe7YuJxtVT"; 
@@ -65,12 +70,17 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        console.warn(`LocalStorage write failed for "${key}" (Quota/Error).`);
+        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+            console.warn(`LocalStorage quota exceeded for key "${key}". Data will not be persisted but is available in current session.`);
+        } else {
+            console.error("Error saving to localStorage", e);
+        }
     }
 };
 
 // --- Components ---
 
+// NEU: Contact Modal für Enterprise Anfragen (Updated)
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const [isSending, setIsSending] = useState(false);
 
@@ -86,12 +96,12 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     const message = (form.elements[2] as HTMLTextAreaElement).value;
 
     try {
-        // ECHTER API CALL
+        // Echter API Call
         await api.sendContactForm({ name, email, message });
         alert("Thank you! Your request has been sent successfully.");
         onClose();
     } catch (err) {
-        console.error(err);
+        console.error("Failed to send:", err);
         alert("Failed to send message. Please try again or email us directly.");
     } finally {
         setIsSending(false);
@@ -266,6 +276,8 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: () => Promise<void> }) => {
         </form>
         <div className="text-center mt-4"><span className="text-sm text-gray-500">Don't have an account? </span><Link to="/register" className="text-sm font-medium text-brand-600 hover:text-brand-500">Sign up</Link></div>
       </div>
+
+      {/* Forgot Password Modal */}
       {showResetModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm" onClick={() => setShowResetModal(false)}>
               <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm relative" onClick={e => e.stopPropagation()}>
@@ -349,7 +361,7 @@ const Dashboard = ({ user }: { user: User }) => {
 };
 
 // FIX: Komponente wieder in SearchLogicWrapper umbenannt
-const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
+const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     

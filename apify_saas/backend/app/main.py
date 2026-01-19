@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
+# Deine bestehenden Imports
 from app.core.config import settings
 from app.routers import auth, user, search, demo, payment
 
@@ -35,7 +36,7 @@ app.add_middleware(
 class CheckoutSessionRequest(BaseModel):
     price_id: str
 
-# NEU: Modell für Kontaktformular
+# NEU: Modell für das Kontaktformular
 class ContactRequest(BaseModel):
     name: str
     email: EmailStr
@@ -47,21 +48,15 @@ class ContactRequest(BaseModel):
 def root():
     return {"status": "active", "message": "Ad Spy API is running"}
 
-# NEU: Kontakt-Endpoint
+# NEU: Dieser Endpunkt hat gefehlt -> daher der 404 Fehler
 @app.post("/api/v1/contact")
 async def handle_contact_form(data: ContactRequest):
     """
-    Empfängt Kontaktanfragen und loggt sie in der Server-Konsole.
+    Empfängt Kontaktanfragen vom Frontend.
     """
-    # 1. In den Server-Logs ausgeben (sichtbar in Render)
-    print(f"\n📨 === NEW CONTACT REQUEST === 📨")
-    print(f"From: {data.name} ({data.email})")
-    print(f"Message: {data.message}")
-    print(f"==================================\n")
-    
-    # 2. Hier könnte später echter E-Mail Versand (SMTP/SendGrid) hin.
-    
-    return {"status": "success", "message": "Request received and logged."}
+    logger.info(f"📨 NEW CONTACT REQUEST: {data.name} ({data.email}) - {data.message}")
+    # Hier könnte später eine E-Mail Logik (SMTP/SendGrid) folgen
+    return {"status": "success", "message": "Request received"}
 
 # Router Registrierung
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])

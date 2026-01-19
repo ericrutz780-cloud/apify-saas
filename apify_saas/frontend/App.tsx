@@ -70,11 +70,8 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-            console.warn(`LocalStorage quota exceeded for key "${key}". Data will not be persisted but is available in current session.`);
-        } else {
-            console.error("Error saving to localStorage", e);
-        }
+        // Ignoriere Quota Fehler stillschweigend, da wir eh Fallback haben
+        console.warn(`LocalStorage write failed for "${key}" (Quota/Error).`);
     }
 };
 
@@ -393,12 +390,25 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
             try {
                 // Versuche erst LocalStorage
                 const stored = localStorage.getItem(`search_${id}`);
+                let loadedFromCache = false;
+                
                 if (stored) {
-                    const parsed = JSON.parse(stored);
-                    setResult(parsed);
-                    setQuery(parsed.params.query);
-                    setCountry(parsed.params.country || 'DE');
-                } else {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        // FIX: Nur nutzen, wenn tatsächlich Daten drin sind!
+                        // Wenn wir nur Metadaten gespeichert haben (wegen Quota), müssen wir neu laden.
+                        if (parsed.data && Array.isArray(parsed.data) && parsed.data.length > 0) {
+                            setResult(parsed);
+                            setQuery(parsed.params.query);
+                            setCountry(parsed.params.country || 'DE');
+                            loadedFromCache = true;
+                        }
+                    } catch(e) {
+                        console.warn("Cache parse error", e);
+                    }
+                }
+                
+                if (!loadedFromCache) {
                     // Fallback: API Call (DB via api.getSearchHistory)
                     const historyResult = await api.getSearchHistory(id);
                     setResult(historyResult);
@@ -455,7 +465,15 @@ const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }:
             
             // WICHTIG: Setze das Resultat SOFORT.
             setResult(apiResult);
-            safeLocalStorageSetItem(`search_${apiResult.id}`, JSON.stringify(apiResult));
+            
+            // FIX: LocalStorage Update OHNE riesige Datenmengen
+            // Wir speichern nur die Metadaten, damit der Browser nicht crasht.
+            try {
+                const cacheData = { ...apiResult, data: [] }; // Leeres Data-Array
+                safeLocalStorageSetItem(`search_${apiResult.id}`, JSON.stringify(cacheData));
+            } catch (e) {
+                console.warn("LocalStorage Update failed:", e);
+            }
             
             await refreshUser();
             setLoading(false);

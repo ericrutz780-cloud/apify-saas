@@ -72,7 +72,6 @@ class ApiService {
     }
   }
 
-  // --- NEU: Passwort ändern (Eingeloggt) ---
   async changePassword(oldPassword: string, newPassword: string): Promise<void> {
       if (!this.user) throw new Error("Nicht eingeloggt.");
 
@@ -93,7 +92,6 @@ class ApiService {
       }
   }
 
-  // --- NEU: Passwort vergessen (Ausgeloggt) ---
   async requestPasswordReset(email: string): Promise<void> {
       const response = await fetch(`${API_URL}/auth/reset-password`, {
           method: 'POST',
@@ -102,11 +100,8 @@ class ApiService {
       });
 
       if (!response.ok) {
-          // Wir werfen hier keinen Fehler, um User Enumeration zu verhindern,
-          // oder wir werfen einen generischen Fehler.
           console.error("Reset request failed technically");
       }
-      // Erfolg wird immer simuliert (Security Best Practice)
   }
 
   async getUser(): Promise<User | null> {
@@ -209,19 +204,25 @@ class ApiService {
          cleanedMetaAds = cleanAndTransformData(rowsToTransform, benchmarkMap);
     }
     const tikTokAds = rawAds.filter((ad: any) => ad.platform === 'tiktok');
+    
+    // FIX: Combined Data für TypeScript
+    const combinedData = [...cleanedMetaAds, ...tikTokAds];
 
     return {
         id: cleanId,
+        search_id: cleanId,
         params: { 
-            query: body.meta.query, 
+            query: body.meta?.query || "", 
             platform: 'meta', 
             country: 'DE', 
-            limit: body.meta.count 
+            limit: body.meta?.count || 0
         },
         timestamp: new Date().toISOString(),
         status: 'completed',
         metaAds: cleanedMetaAds,
         tikTokAds: tikTokAds,
+        data: combinedData, // <-- HIER: Das fehlende Feld
+        meta: body.meta,
         cost: 0
     };
   }
@@ -267,8 +268,7 @@ class ApiService {
     }
 
     const responseBody = await response.json();
-    // Falls Backend keine ID liefert, generieren wir eine echte UUID, damit die DB nicht crasht
-    const searchId = responseBody.meta?.search_id || crypto.randomUUID();
+    const searchId = responseBody.meta?.search_id || responseBody.id || Math.random().toString(36).substring(7);
     
     let rawAdList = responseBody.data || [];
     let cleanedMetaAds: any[] = [];
@@ -302,13 +302,19 @@ class ApiService {
         this._saveLocalHistory(newHistoryItem);
     }
 
+    // FIX: Combined Data für TypeScript
+    const combinedData = [...cleanedMetaAds, ...tikTokAds];
+
     return {
       id: searchId,
+      search_id: searchId,
       params,
       timestamp: new Date().toISOString(),
       status: 'completed',
       metaAds: cleanedMetaAds,
       tikTokAds: tikTokAds,
+      data: combinedData, // <-- HIER: Das fehlende Feld
+      meta: responseBody.meta,
       cost: limit
     };
   }

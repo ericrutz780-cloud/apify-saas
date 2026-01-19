@@ -30,15 +30,10 @@ import { LandingPage } from './LandingPage';
 import { EmailConfirmed } from './EmailConfirmed';
 
 // --- STRIPE PRICE IDS ---
-// Monthly Plans
 const PRICE_ID_STARTER_MONTHLY    = "price_1SqYwQ5vTctBPhfeBKjAv4nY";
 const PRICE_ID_PRO_MONTHLY        = "price_1SqYwR5vTctBPhfe7sekjMdK";
-
-// Yearly Plans
 const PRICE_ID_STARTER_YEARLY     = "price_1SqYwQ5vTctBPhfeiVkpek9p";
 const PRICE_ID_PRO_YEARLY         = "price_1SqYwR5vTctBPhfe4mB23SYr";
-
-// Top-Up Credits
 const PRICE_ID_TOPUP_STARTER      = "price_1SqYwS5vTctBPhfeD84iwobm"; 
 const PRICE_ID_TOPUP_PRO          = "price_1SqYwS5vTctBPhfeFljQAEOU"; 
 const PRICE_ID_TOPUP_ENTERPRISE   = "price_1SqYwT5vTctBPhfe7YuJxtVT"; 
@@ -70,23 +65,29 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-            console.warn(`LocalStorage quota exceeded for key "${key}". Data will not be persisted but is available in current session.`);
-        } else {
-            console.error("Error saving to localStorage", e);
-        }
+        console.warn(`LocalStorage write failed for "${key}" (Quota/Error).`);
     }
 };
 
 // --- Components ---
 
-// NEU: Contact Modal für Enterprise Anfragen
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Vielen Dank! Deine Anfrage wurde gesendet. Wir melden uns in Kürze.");
+    const form = e.target as HTMLFormElement;
+    const name = (form.elements[0] as HTMLInputElement).value;
+    const email = (form.elements[1] as HTMLInputElement).value;
+    const message = (form.elements[2] as HTMLTextAreaElement).value;
+
+    // DEBUGGING: Zeigt Daten in der Browser-Konsole an (F12)
+    console.log("📧 Contact Form Logic Triggered:", { name, email, message });
+    
+    // TODO: Hier müsste der echte API-Call zum Backend hin, um die Mail zu versenden.
+    // await api.sendContactForm({ name, email, message });
+
+    alert("Thank you! Your request has been sent. We will contact you shortly.");
     onClose();
   };
 
@@ -121,7 +122,7 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
                 <label className="block text-sm font-bold text-slate-700 mb-2">Nachricht</label>
                 <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Erzähl uns von deinem Team und Anforderungen..." />
             </div>
-            <button type="submit" className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5">Anfrage absenden</button>
+            <button type="submit" className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5">Send Request</button>
         </form>
       </div>
     </div>

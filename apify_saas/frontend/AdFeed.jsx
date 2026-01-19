@@ -4,18 +4,22 @@ import { cleanAndTransformData } from './adAdapter';
 import MetaAdCard from './components/MetaAdCard'; 
 import AdDetailModal from './components/AdDetailModal'; 
 
-const AdFeed = ({ currentSearch }) => { // currentSearch als Prop annehmen!
+const AdFeed = ({ currentSearch }) => {
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAdGroup, setSelectedAdGroup] = useState([]);
 
-  // Wir holen das Limit aus der aktuellen Suche, oder nutzen 100 als Standard
-  const limit = currentSearch?.params?.limit || 100;
-  // Sicherheits-Check: Falls Limit 'undefined' ist, nehmen wir 100
-  const targetCount = limit > 0 ? limit : 100;
+  // 1. LIMIT & ID EXTRAHIEREN
+  // Wir holen das Limit aus den Parametern oder nutzen 100 als Standard.
+  const rawLimit = currentSearch?.params?.limit;
+  const targetCount = (rawLimit && !isNaN(rawLimit)) ? parseInt(rawLimit) : 100;
+  
+  // Die Search ID, falls wir eine haben (wichtig für den DB-Filter)
+  const searchId = currentSearch?.meta?.search_id || currentSearch?.search_id;
 
+  // --- PROGRESS BAR LOGIK (DEINE FORMEL) ---
   useEffect(() => {
     if (!loading) {
       setProgress(100);
@@ -24,23 +28,16 @@ const AdFeed = ({ currentSearch }) => { // currentSearch als Prop annehmen!
     
     setProgress(0);
 
-    // DEINE FORMEL: 40s Startzeit + 0.21s pro Ad
-    // 100 Ads -> ~60s
-    // 1000 Ads -> ~250s
+    // Formel: 40s Startzeit (Apify Cold Start) + 0.21s pro Ad
     const estimatedTotalSeconds = 40 + (targetCount * 0.21); 
     
-    // Wie viel Prozent pro 100ms Schritt?
+    // Prozent pro Tick (100ms)
     const percentPerTick = 100 / (estimatedTotalSeconds * 10);
 
     const interval = setInterval(() => {
       setProgress(prev => {
-        // Langsamer werden gegen Ende (bei 90%), falls es mal länger dauert
-        if (prev >= 90) {
-            return prev + (percentPerTick / 5); 
-        }
-        // Maximal bis 99% laufen lassen
-        if (prev >= 99) return 99;
-        
+        // Bremsen bei 95%, falls Backend länger braucht
+        if (prev >= 95) return 95;
         return prev + percentPerTick;
       });
     }, 100);
@@ -48,23 +45,47 @@ const AdFeed = ({ currentSearch }) => { // currentSearch als Prop annehmen!
     return () => clearInterval(interval);
   }, [loading, targetCount]);
 
+  // --- DATEN LADEN ---
   useEffect(() => {
     const fetchAds = async () => {
+      setLoading(true);
+
       try {
-        setLoading(true);
-        // Wir laden nur so viele, wie wir bestellt haben
-        const { data, error } = await supabase
+        // FALL A: Wir haben die Daten schon direkt vom Backend bekommen (Live Search)
+        // Das ist super schnell und spart den DB-Call.
+        if (currentSearch?.data && Array.isArray(currentSearch.data) && currentSearch.data.length > 0) {
+            console.log("⚡ Using direct data from API response");
+            const safeAds = cleanAndTransformData(currentSearch.data);
+            safeAds.sort((a, b) => (b.efficiency_score || 0) - (a.efficiency_score || 0));
+            setAds(safeAds);
+            setLoading(false);
+            return;
+        }
+
+        // FALL B: Wir müssen aus der DB laden (z.B. History oder Cache)
+        console.log("🔄 Fetching from Supabase...", searchId ? `ID: ${searchId}` : "No ID, loading latest");
+        
+        let query = supabase
           .from('ad_results')
           .select('data')
-          .limit(targetCount)
-          .order('created_at', { ascending: false }); // Neueste zuerst
+          .order('created_at', { ascending: false })
+          .limit(targetCount);
+
+        // WICHTIG: Wenn wir eine Search ID haben, filtern wir danach!
+        // Das fehlte in der "kurzen" Version.
+        if (searchId) {
+            query = query.eq('search_ref', searchId);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
-        const safeAds = cleanAndTransformData(data);
-        // Sortieren nach Score
-        safeAds.sort((a, b) => (b.efficiency_score || 0) - (a.efficiency_score || 0));
-        setAds(safeAds);
+        if (data) {
+            const safeAds = cleanAndTransformData(data);
+            safeAds.sort((a, b) => (b.efficiency_score || 0) - (a.efficiency_score || 0));
+            setAds(safeAds);
+        }
 
       } catch (err) {
         console.error("Ladefehler:", err);
@@ -74,40 +95,42 @@ const AdFeed = ({ currentSearch }) => { // currentSearch als Prop annehmen!
     };
 
     fetchAds();
-  }, [targetCount]); // Neu laden wenn sich targetCount ändert
+  }, [currentSearch, targetCount, searchId]); 
 
   const handleCardClick = (ad) => {
       setSelectedAdGroup([ad]);
       setIsModalOpen(true);
   };
 
-  // LOADING SCREEN
+  // --- LOADING SCREEN ---
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-8 animate-in fade-in duration-500">
-        <div className="relative w-24 h-24">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-6 animate-in fade-in duration-500">
+        <div className="relative w-24 h-24 flex items-center justify-center">
+            {/* Hintergrund Kreis */}
             <div className="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
+            {/* Drehender Spinner */}
             <div className="absolute inset-0 border-4 border-brand-600 rounded-full border-t-transparent animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-bold text-xl text-brand-700">
-                {Math.round(progress)}%
-            </div>
+            {/* Prozentzahl */}
+            <span className="font-bold text-xl text-brand-700">{Math.round(progress)}%</span>
         </div>
         
         <div className="w-full max-w-md space-y-3 px-4">
             <div className="flex justify-between text-sm font-medium text-gray-600">
-                <span>Collecting Ads...</span>
-                <span>Target: {targetCount} items</span>
+                <span>Collecting {targetCount} Ads...</span>
+                <span>~{(40 + targetCount * 0.21).toFixed(0)}s</span>
             </div>
             
+            {/* Fortschrittsbalken */}
             <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
                 <div 
-                    className="h-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-300 ease-linear rounded-full"
+                    className="h-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-300 ease-linear"
                     style={{ width: `${progress}%` }}
                 ></div>
             </div>
             
             <p className="text-xs text-center text-gray-400">
-                AI Analysis & Scoring in progress (~{(40 + targetCount * 0.21).toFixed(0)}s)
+                AI Analysis & Scoring in progress...
             </p>
         </div>
       </div>

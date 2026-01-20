@@ -80,7 +80,7 @@ const safeLocalStorageSetItem = (key: string, value: string) => {
 
 // --- Components ---
 
-// NEU: Contact Modal für Enterprise Anfragen (Updated mit API Call & Englisch)
+// NEU: Contact Modal für Enterprise Anfragen (Updated)
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const [isSending, setIsSending] = useState(false);
 
@@ -96,13 +96,13 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     const message = (form.elements[2] as HTMLTextAreaElement).value;
 
     try {
-        // Echter API Call an das Backend
+        // Echter API Call
         await api.sendContactForm({ name, email, message });
         alert("Thank you! Your request has been sent successfully.");
         onClose();
     } catch (err) {
         console.error("Failed to send:", err);
-        alert("Failed to send message. Please try again or email us directly at info@stellaads.io");
+        alert("Failed to send message. Please try again or email us directly.");
     } finally {
         setIsSending(false);
     }
@@ -122,7 +122,7 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
             </div>
             <div>
                 <h3 className="text-2xl font-bold text-slate-900">Contact Sales</h3>
-                <p className="text-slate-500 text-sm font-medium">For Enterprise & Agency Solutions</p>
+                <p className="text-slate-500 text-sm font-medium">Für Enterprise & Agentur-Lösungen</p>
             </div>
         </div>
 
@@ -132,12 +132,12 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
                 <input required type="text" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="Max Mustermann" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2">E-Mail Adresse</label>
                 <input required type="email" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="name@firma.de" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Message</label>
-                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Tell us about your team and requirements..." />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Nachricht</label>
+                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Erzähl uns von deinem Team und Anforderungen..." />
             </div>
             <button type="submit" disabled={isSending} className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-70">
                 {isSending ? "Sending..." : "Send Request"}
@@ -361,7 +361,7 @@ const Dashboard = ({ user }: { user: User }) => {
 };
 
 // FIX: Komponente wieder in SearchLogicWrapper umbenannt
-const SearchLogicWrapper = ({ user, refreshUser, initialResultId, onOpenModal }: any) => {
+const SearchLogicWrapper = ({ user, refreshUser, onOpenModal }: any) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     
@@ -955,7 +955,13 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                                             className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
                                             disabled={(user.plan === plan.id && billingCycle !== 'topup') || isLoadingCheckout}
                                         >
-                                            {isLoadingCheckout ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : (billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Contact Us'))}
+                                            {isLoadingCheckout ? (
+                                                <Loader2 className="w-4 h-4 animate-spin mx-auto"/>
+                                            ) : (
+                                                billingCycle === 'topup' ? plan.buttonText : 
+                                                plan.id === 'enterprise' ? 'Contact Us' : 
+                                                (user.plan === plan.id ? 'Your Plan' : 'Buy Now')
+                                            )}
                                         </button>
                                     </div>
                                 </div>

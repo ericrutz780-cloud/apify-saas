@@ -955,7 +955,7 @@ const Account = ({ user, refreshUser }: { user: User, refreshUser: () => Promise
                                             className={`w-full py-3 px-4 rounded-xl font-bold text-sm transition-all shadow-md ${user.plan === plan.id && billingCycle !== 'topup' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
                                             disabled={(user.plan === plan.id && billingCycle !== 'topup') || isLoadingCheckout}
                                         >
-                                            {isLoadingCheckout ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : (billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Buy Now'))}
+                                            {isLoadingCheckout ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : (billingCycle === 'topup' ? plan.buttonText : (user.plan === plan.id ? 'Your Plan' : 'Contact Us'))}
                                         </button>
                                     </div>
                                 </div>

@@ -27,6 +27,7 @@ import {
   Coins, 
   Mail 
 } from 'lucide-react';
+import { api } from './services/api';
 
 // --- STRIPE LINKS ---
 const LINK_STARTER_MONTHLY    = "https://buy.stripe.com/cNifZa77xdLaa3644t9k405"; 
@@ -39,7 +40,7 @@ const LINK_PRO_YEARLY         = "https://buy.stripe.com/8x27sE3Vl22s2AE58x9k408"
 const LINK_ENTERPRISE_MONTHLY = "https://buy.stripe.com/fZudR28bB6iI6QUdF39k409"; 
 const LINK_ENTERPRISE_YEARLY  = "https://buy.stripe.com/cNi00c0J96iI0swfNb9k40a";
 
-const ENTERPRISE_MAIL         = "eric.rutz@stellaads.io";
+const ENTERPRISE_MAIL         = "info@stellaads.io";
 
 // --- Components ---
 
@@ -75,12 +76,30 @@ const SectionHeader = ({
 // --- MODALS ---
 
 const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const [isSending, setIsSending] = useState(false);
+
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Vielen Dank! Deine Anfrage wurde gesendet. Wir melden uns in Kürze.");
-    onClose();
+    setIsSending(true);
+    
+    const form = e.target as HTMLFormElement;
+    const name = (form.elements[0] as HTMLInputElement).value;
+    const email = (form.elements[1] as HTMLInputElement).value;
+    const message = (form.elements[2] as HTMLTextAreaElement).value;
+
+    try {
+        // Echter API Call an das Backend
+        await api.sendContactForm({ name, email, message });
+        alert("Thank you! Your request has been sent successfully.");
+        onClose();
+    } catch (err) {
+        console.error("Failed to send:", err);
+        alert("Failed to send message. Please try again or email us directly at info@stellaads.io");
+    } finally {
+        setIsSending(false);
+    }
   };
 
   return (
@@ -97,7 +116,7 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
             </div>
             <div>
                 <h3 className="text-2xl font-bold text-slate-900">Contact Sales</h3>
-                <p className="text-slate-500 text-sm font-medium">Für Enterprise & Agentur-Lösungen</p>
+                <p className="text-slate-500 text-sm font-medium">For Enterprise & Agency Solutions</p>
             </div>
         </div>
 
@@ -107,14 +126,16 @@ const ContactModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
                 <input required type="text" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="Max Mustermann" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">E-Mail Adresse</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
                 <input required type="email" className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 transition-all font-medium" placeholder="name@firma.de" />
             </div>
             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Nachricht</label>
-                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Erzähl uns von deinem Team und Anforderungen..." />
+                <label className="block text-sm font-bold text-slate-700 mb-2">Message</label>
+                <textarea className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none bg-slate-50/50 h-32 resize-none transition-all font-medium" placeholder="Tell us about your team and requirements..." />
             </div>
-            <button type="submit" className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5">Anfrage absenden</button>
+            <button type="submit" disabled={isSending} className="w-full py-4 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-600/20 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-70">
+                {isSending ? "Sending..." : "Send Request"}
+            </button>
         </form>
       </div>
     </div>

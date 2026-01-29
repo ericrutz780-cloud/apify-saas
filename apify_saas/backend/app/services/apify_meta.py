@@ -208,7 +208,7 @@ async def search_meta_ads(query: str, limit: int, country: str = "US", start_dat
             "takeScreenshots": False     # Zusätzlich: Kein Rendering der Ad-Vorschau
         }
 
-        logger.info(f"DEBUG: Start Scrape for '{query}' | Limit={limit}")
+    logger.info(f"DEBUG: Start Scrape for '{query}' | Limit={limit}")
 
     try:
         loop = asyncio.get_event_loop()

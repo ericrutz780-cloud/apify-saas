@@ -50,7 +50,7 @@ def get_advertiser_info(item):
         "facebook_followers": page_info.get("likes"),
         "instagram_handle": page_info.get("ig_username"),
         "instagram_followers": page_info.get("ig_followers"),
-        "about_text": about.get("text"), # FIX: 'about' Variable ist jetzt korrekt definiert
+        "about_text": about.get("text"),
         "category": page_info.get("page_category")
     }
 
@@ -185,7 +185,13 @@ def normalize_meta_ad(item):
 
 # --- MAIN SERVICE FUNCTION ---
 
-async def search_meta_ads(query: str, limit: int, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "all"):
+async def search_meta_ads(query: str, limit: int, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "active"):
+    
+    # -----------------------------------------------------------
+    # ÄNDERUNG: Erzwinge "all", um auch inaktive Ads zu finden
+    active_status = "all"
+    # -----------------------------------------------------------
+
     target_country = country.upper() if country and country != "ALL" else "US"
     
     # URL Konstruktion - Matches User Logs
@@ -194,21 +200,21 @@ async def search_meta_ads(query: str, limit: int, country: str = "US", start_dat
     if start_date_max: search_url += f"&start_date[max]={start_date_max}"
 
     run_input = {
-            "urls": [{"url": search_url}],
-            "count": limit,
-            "maxItems": limit,
-            "pageTimeoutSecs": 60,
-            "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
-            "scrapeAdDetails": True, 
-            "countryCode": target_country,
-            
-            # --- NEUE OPTIMIERUNGEN ---
-            "downloadMedia": False,      # 1. Keine Bilder/Videos speichern (spart Zeit & Speicher)
-            "scrapeLandingPage": False,  # 2. Zielwebseite nicht besuchen (enormer Speed-Boost)
-            "takeScreenshots": False     # Zusätzlich: Kein Rendering der Ad-Vorschau
-        }
+        "urls": [{"url": search_url}],
+        "count": limit,
+        "maxItems": limit,
+        "pageTimeoutSecs": 60,
+        "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
+        "scrapeAdDetails": True, 
+        "countryCode": target_country,
+        
+        # --- NEUE SPEED OPTIMIERUNGEN ---
+        "downloadMedia": False,      # Keine Bilder/Videos speichern (spart Zeit & Speicher)
+        "scrapeLandingPage": False,  # Zielwebseite nicht besuchen (enormer Speed-Boost)
+        "takeScreenshots": False     # Kein Rendering der Ad-Vorschau
+    }
 
-    logger.info(f"DEBUG: Start Scrape for '{query}' | Limit={limit}")
+    logger.info(f"DEBUG: Start Scrape for '{query}' | Limit={limit} | ActiveStatus={active_status}")
 
     try:
         loop = asyncio.get_event_loop()
@@ -217,7 +223,7 @@ async def search_meta_ads(query: str, limit: int, country: str = "US", start_dat
         # Dies verhindert, dass der Server einfriert (Endlosschleife/Timeout)
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=4096, # Etwas mehr RAM für Stabilität
+            memory_mbytes=4096, # <--- SPEICHER ERHÖHT
             timeout_secs=900
         ))
         

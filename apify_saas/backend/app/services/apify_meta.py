@@ -185,7 +185,7 @@ def normalize_meta_ad(item):
 
 # --- MAIN SERVICE FUNCTION ---
 
-async def search_meta_ads(query: str, limit: int, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "active"):
+async def search_meta_ads(query: str, limit: int, country: str = "US", start_date_min: str = None, start_date_max: str = None, active_status: str = "all"):
     target_country = country.upper() if country and country != "ALL" else "US"
     
     # URL Konstruktion - Matches User Logs
@@ -217,7 +217,7 @@ async def search_meta_ads(query: str, limit: int, country: str = "US", start_dat
         # Dies verhindert, dass der Server einfriert (Endlosschleife/Timeout)
         run = await loop.run_in_executor(None, lambda: client.actor("curious_coder/facebook-ads-library-scraper").call(
             run_input=run_input, 
-            memory_mbytes=512, # Etwas mehr RAM für Stabilität
+            memory_mbytes=4096, # Etwas mehr RAM für Stabilität
             timeout_secs=900
         ))
         

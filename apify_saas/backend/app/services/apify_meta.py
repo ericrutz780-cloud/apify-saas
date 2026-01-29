@@ -194,16 +194,21 @@ async def search_meta_ads(query: str, limit: int, country: str = "US", start_dat
     if start_date_max: search_url += f"&start_date[max]={start_date_max}"
 
     run_input = {
-        "urls": [{"url": search_url}],
-        "count": limit,
-        "maxItems": limit,
-        "pageTimeoutSecs": 60,
-        "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
-        "scrapeAdDetails": True, 
-        "countryCode": target_country
-    }
+            "urls": [{"url": search_url}],
+            "count": limit,
+            "maxItems": limit,
+            "pageTimeoutSecs": 60,
+            "proxy": {"useApifyProxy": True, "apifyProxyGroups": ["RESIDENTIAL"]},
+            "scrapeAdDetails": True, 
+            "countryCode": target_country,
+            
+            # --- NEUE OPTIMIERUNGEN ---
+            "downloadMedia": False,      # 1. Keine Bilder/Videos speichern (spart Zeit & Speicher)
+            "scrapeLandingPage": False,  # 2. Zielwebseite nicht besuchen (enormer Speed-Boost)
+            "takeScreenshots": False     # Zusätzlich: Kein Rendering der Ad-Vorschau
+        }
 
-    logger.info(f"DEBUG: Start Scrape for '{query}' | Limit={limit}")
+        logger.info(f"DEBUG: Start Scrape for '{query}' | Limit={limit}")
 
     try:
         loop = asyncio.get_event_loop()
